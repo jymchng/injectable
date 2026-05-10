@@ -11,7 +11,7 @@
 use proc_macro2::TokenStream;
 use quote::quote;
 
-use crate::metadata::{extract_inject_inner, type_to_string};
+use crate::metadata::{extract_arc_inner, extract_inject_inner, type_to_string};
 
 /// How a field should be handled during injection.
 #[derive(Debug, Clone)]
@@ -89,19 +89,26 @@ pub fn generate_field_injection_provider(
         let field_ty = &field.ty;
         match &field.inject_kind {
             FieldInjectKind::Inject => {
-                // Extract this field via Extract::extract(ctx)
-                if let Some(name) = &field.name {
+                // If the field type is Arc<T>, extract via Inject<T> (uses singleton
+                // cache) and take .0 to get the Arc directly. Otherwise use the
+                // normal Extract::extract path.
+                let var_expr = if let Some(inner_ty) = extract_arc_inner(field_ty) {
                     quote! {
-                        let #name = <#field_ty as injectable_runtime::Extract>::extract(ctx).await?;
+                        <injectable_runtime::Inject<#inner_ty> as injectable_runtime::Extract>::extract(ctx).await?.0
                     }
+                } else {
+                    quote! {
+                        <#field_ty as injectable_runtime::Extract>::extract(ctx).await?
+                    }
+                };
+                if let Some(name) = &field.name {
+                    quote! { let #name = #var_expr; }
                 } else {
                     let temp_name = syn::Ident::new(
                         &format!("__field_{}", i),
                         proc_macro2::Span::call_site(),
                     );
-                    quote! {
-                        let #temp_name = <#field_ty as injectable_runtime::Extract>::extract(ctx).await?;
-                    }
+                    quote! { let #temp_name = #var_expr; }
                 }
             }
             FieldInjectKind::Skip => {
@@ -185,6 +192,8 @@ pub fn generate_field_injection_provider(
             let ty_str = &f.ty_string;
             if ty_str.starts_with("Inject<") && ty_str.ends_with('>') {
                 Some(ty_str[7..ty_str.len() - 1].to_string())
+            } else if ty_str.starts_with("Arc<") && ty_str.ends_with('>') {
+                Some(ty_str[4..ty_str.len() - 1].to_string())
             } else {
                 Some(ty_str.clone())
             }
@@ -442,6 +451,8 @@ fn generate_mixed_provider(
             let ty_str = &f.ty_string;
             if ty_str.starts_with("Inject<") && ty_str.ends_with('>') {
                 Some(ty_str[7..ty_str.len() - 1].to_string())
+            } else if ty_str.starts_with("Arc<") && ty_str.ends_with('>') {
+                Some(ty_str[4..ty_str.len() - 1].to_string())
             } else {
                 Some(ty_str.clone())
             }

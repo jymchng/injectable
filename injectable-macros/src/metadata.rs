@@ -82,6 +82,21 @@ pub fn type_to_string(ty: &syn::Type) -> String {
     quote::quote!(#ty).to_string().replace(' ', "")
 }
 
+/// Check if a type path represents `Arc<T>` and return the inner type.
+pub fn extract_arc_inner(ty: &syn::Type) -> Option<syn::Type> {
+    if let syn::Type::Path(type_path) = ty {
+        let segment = type_path.path.segments.last()?;
+        if segment.ident == "Arc" {
+            if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
+                if let Some(syn::GenericArgument::Type(inner_ty)) = args.args.first() {
+                    return Some(inner_ty.clone());
+                }
+            }
+        }
+    }
+    None
+}
+
 /// Check if a type path represents `Inject<T>` and extract T.
 pub fn extract_inject_inner(ty: &syn::Type) -> Option<String> {
     if let syn::Type::Path(type_path) = ty {

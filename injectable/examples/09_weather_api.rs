@@ -362,7 +362,7 @@ async fn main() {
     let app = Router::new()
         .route("/weather", get(weather))
         .route("/weather/history", get(history))
-        .route("/status", get(status))      // ← mixes State<MyAppState> + Inject<T>
+        .route("/status", get(status)) // ← mixes State<MyAppState> + Inject<T>
         .with_state(state);
 
     println!("Listening on http://{addr}");

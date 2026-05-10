@@ -377,7 +377,9 @@ impl SingletonA {
     }
 }
 
-async fn singleton_a_handler(_: Inject<SingletonA>) -> &'static str { "ok" }
+async fn singleton_a_handler(_: Inject<SingletonA>) -> &'static str {
+    "ok"
+}
 
 static CTOR_COUNT_B: AtomicUsize = AtomicUsize::new(0);
 
@@ -393,7 +395,9 @@ impl SingletonB {
     }
 }
 
-async fn singleton_b_handler(_: Inject<SingletonB>) -> &'static str { "ok" }
+async fn singleton_b_handler(_: Inject<SingletonB>) -> &'static str {
+    "ok"
+}
 
 async fn send_n_requests(app: Router, uri: &'static str, n: usize) {
     for _ in 0..n {
@@ -430,7 +434,10 @@ async fn test_singleton_constructed_once_with_custom_state() {
     let container = Arc::new(Container::builder().build().await.unwrap());
     let app = Router::new()
         .route("/s", get(singleton_b_handler))
-        .with_state(CustomAppState { container, version: "v1".to_string() });
+        .with_state(CustomAppState {
+            container,
+            version: "v1".to_string(),
+        });
 
     send_n_requests(app, "/s", 3).await;
 

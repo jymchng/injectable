@@ -180,7 +180,6 @@ impl syn::parse::Parse for InjectArg {
         if ident == "skip" {
             Ok(InjectArg::Skip)
         } else if ident == "use_factory_async" || ident == "use_factory" {
-            // `use_factory` is kept as an alias for `use_factory_async`
             input.parse::<syn::Token![=]>()?;
             let path: syn::Path = input.parse()?;
             Ok(InjectArg::FactoryAsync(path))
