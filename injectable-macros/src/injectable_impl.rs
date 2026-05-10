@@ -77,7 +77,8 @@ pub fn expand_injectable_impl(attrs: TokenStream, item: TokenStream) -> syn::Res
         // #[derive(Injectable)]; this block only generates hook trait impls and
         // an inventory entry so the field-injection provider calls the hooks
         // automatically — no extra struct annotation required.
-        if scan_result.post_construct_hooks.is_empty() && scan_result.pre_destruct_hooks.is_empty() {
+        if scan_result.post_construct_hooks.is_empty() && scan_result.pre_destruct_hooks.is_empty()
+        {
             return Err(syn::Error::new(
                 impl_block.self_ty.span(),
                 "#[injectable_impl] without #[constructor] requires at least one \

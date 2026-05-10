@@ -39,7 +39,7 @@ use axum::http::request::Parts;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 
-use crate::{Inject, Injectable, InjectableError, ResolveContext};
+use crate::{Extract, Inject, InjectableError, ResolveContext};
 
 /// Trait that the Axum state type must implement to enable `Inject<T>` extraction.
 ///
@@ -154,13 +154,19 @@ impl IntoResponse for InjectableRejection {
 impl<S, T> FromRequestParts<S> for Inject<T>
 where
     S: InjectableState + Send + Sync,
-    T: Injectable,
+    T: Send + Sync + 'static,
 {
     type Rejection = InjectableRejection;
 
     async fn from_request_parts(_parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let ctx = state.resolve_context();
-        let value = ctx.resolve::<T>().await.map_err(InjectableRejection::new)?;
-        Ok(Inject::from(Arc::new(value)))
+        // Route through Extract::extract so singleton caching (via
+        // InjectableArcFactory → resolve_singleton_arc) and external-type
+        // resolution (via DynProvider) both work correctly.
+        // Previously this called ctx.resolve::<T>() directly, which bypassed
+        // the cache and recreated singletons on every request.
+        <Inject<T> as Extract>::extract(ctx)
+            .await
+            .map_err(InjectableRejection::new)
     }
 }

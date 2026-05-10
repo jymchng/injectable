@@ -78,9 +78,7 @@ async fn get_sqlite_pool(ctx: &ResolveContext) -> Result<sqlx::SqlitePool, Injec
 
 // ─── reqwest::Client provider ───────────────────────────────────────────────
 
-fn reqwest_client_provider(
-    _ctx: &ResolveContext,
-) -> Result<reqwest::Client, InjectableError> {
+fn reqwest_client_provider(_ctx: &ResolveContext) -> Result<reqwest::Client, InjectableError> {
     println!("  [HTTP] Building reqwest::Client");
     reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(10))
@@ -105,9 +103,11 @@ pub struct WeatherService {
 #[injectable_impl]
 impl WeatherService {
     /// Possible constructor
-    // #[constructor] --- IGNORE ---
-    // async fn new( #[inject(use_factory_async=self::get_sqlite_pool)] pool: sqlx::SqlitePool,
-    // #[inject(use_factory_sync=self::reqwest_client_provider)] client: reqwest::Client) -> Self {
+    // #[constructor] //--- IGNORE ---
+    // async fn new(
+    //     #[inject(use_factory_async=self::get_sqlite_pool)] pool: sqlx::SqlitePool,
+    //     #[inject(use_factory_sync=self::reqwest_client_provider)] client: reqwest::Client,
+    // ) -> Self {
     //     Self { pool, client }
     // }
 
@@ -275,6 +275,35 @@ impl IntoResponse for AppError {
     }
 }
 
+// ─── Custom application state ────────────────────────────────────────────────
+//
+// You don't have to use `AxumState`. Any type that implements `InjectableState`
+// works as the Axum router state — giving you `Inject<T>` extractors for free
+// while also carrying any other data your app needs.
+
+use ::std::sync::Arc;
+use injectable::axum::InjectableState;
+
+/// Application state that bundles the DI container with extra metadata.
+/// `Inject<T>` extractors work automatically because we implement `InjectableState`.
+#[derive(Clone)]
+pub struct MyAppState {
+    container: Arc<Container>,
+    pub api_version: &'static str,
+}
+
+impl InjectableState for MyAppState {
+    fn resolve_context(&self) -> &injectable::ResolveContext {
+        self.container.context()
+    }
+}
+
+#[derive(Serialize)]
+pub struct StatusResponse {
+    pub api_version: &'static str,
+    pub db_pool_size: u32,
+}
+
 // ─── Axum handlers ───────────────────────────────────────────────────────────
 
 /// Fetch current weather for a coordinate and cache it.
@@ -292,26 +321,30 @@ async fn history(
     Ok(Json(svc.history().await?))
 }
 
+/// Demonstrates mixing `State<MyAppState>` with `Inject<WeatherService>`.
+///
+/// The `State` extractor reads fields from our custom state struct;
+/// `Inject<T>` resolves through `InjectableState::resolve_context()`.
+/// Both work together without any special glue.
+async fn status(
+    ::axum::extract::State(app_state): ::axum::extract::State<MyAppState>,
+    Inject(svc): Inject<WeatherService>,
+) -> Json<StatusResponse> {
+    Json(StatusResponse {
+        api_version: app_state.api_version,
+        db_pool_size: svc.pool.size(),
+    })
+}
+
 // ─── Main ────────────────────────────────────────────────────────────────────
 
 #[tokio::main]
 async fn main() {
     println!("=== Weather API (example 09) ===\n");
 
+    // No DynProvider needed — both pool and client come from use_factory_* on
+    // the WeatherService struct fields, resolved inline during provider construction.
     let container = Container::builder()
-        // reqwest::Client is an external type — register it via DynProvider.
-        // WeatherService.pool is provided by the get_sqlite_pool factory
-        // (which reads AppConfig), so no separate SqlitePool registration needed.
-        .register(DynProvider::sync(|| {
-            reqwest::Client::builder()
-                .timeout(std::time::Duration::from_secs(10))
-                .user_agent("injectable-example/0.1")
-                .build()
-                .map_err(|e| InjectableError::ConstructionFailed {
-                    type_name: "reqwest::Client",
-                    reason: e.to_string(),
-                })
-        }))
         .build()
         .await
         .expect("container build failed");
@@ -319,22 +352,27 @@ async fn main() {
     let config = container.resolve::<AppConfig>().await.unwrap();
     let addr = format!("{}:{}", config.host, config.port);
 
+    // Use a CUSTOM state type instead of AxumState.
+    // `Inject<T>` still works because MyAppState implements InjectableState.
+    let state = MyAppState {
+        container: Arc::new(container),
+        api_version: "1.0",
+    };
+
+    let app = Router::new()
+        .route("/weather", get(weather))
+        .route("/weather/history", get(history))
+        .route("/status", get(status))      // ← mixes State<MyAppState> + Inject<T>
+        .with_state(state);
+
     println!("Listening on http://{addr}");
     println!("Try:");
     println!("  curl 'http://{addr}/weather?lat=52.52&lon=13.41'   # Berlin");
     println!("  curl 'http://{addr}/weather?lat=40.71&lon=-74.01'  # New York");
     println!("  curl 'http://{addr}/weather?lat=35.68&lon=139.69'  # Tokyo");
     println!("  curl 'http://{addr}/weather/history'");
+    println!("  curl 'http://{addr}/status'                         # custom state");
     println!();
-
-    // WeatherService is resolved lazily on first request.
-    // Its #[post_construct] migrate() runs once and creates the schema.
-
-    let state = AxumState::new(container);
-    let app = Router::new()
-        .route("/weather", get(weather))
-        .route("/weather/history", get(history))
-        .with_state(state);
 
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
     ::axum::serve(listener, app).await.unwrap();

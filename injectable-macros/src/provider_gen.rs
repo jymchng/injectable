@@ -35,7 +35,10 @@ pub enum FieldInjectKind {
 
 impl FieldInjectKind {
     pub fn is_injected(&self) -> bool {
-        matches!(self, FieldInjectKind::Inject | FieldInjectKind::Factory(_) | FieldInjectKind::Provider(_))
+        matches!(
+            self,
+            FieldInjectKind::Inject | FieldInjectKind::Factory(_) | FieldInjectKind::Provider(_)
+        )
     }
 }
 
@@ -547,8 +550,14 @@ fn factory_wrap_for_field_type(field_ty: &syn::Type) -> TokenStream {
         quote! { injectable_runtime::Inject::new(::std::sync::Arc::new(__v)) }
     } else if ty_str.starts_with("Arc<") || {
         if let syn::Type::Path(p) = field_ty {
-            p.path.segments.last().map(|s| s.ident == "Arc").unwrap_or(false)
-        } else { false }
+            p.path
+                .segments
+                .last()
+                .map(|s| s.ident == "Arc")
+                .unwrap_or(false)
+        } else {
+            false
+        }
     } {
         quote! { ::std::sync::Arc::new(__v) }
     } else {

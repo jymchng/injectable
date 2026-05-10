@@ -325,6 +325,122 @@ async fn test_custom_state_with_injectable_state() {
     assert_eq!(body, "custom state ok");
 }
 
+/// Verify that `State<S>` and `Inject<T>` can be used together in the same
+/// handler when `S` is a custom type implementing `InjectableState`.
+async fn mixed_state_handler(
+    State(app_state): State<CustomAppState>,
+    db: Inject<Database>,
+) -> String {
+    let _ = &*db;
+    format!("version={} db_ok=true", app_state.version)
+}
+
+#[tokio::test]
+async fn test_custom_state_mixed_with_inject() {
+    let container = Arc::new(Container::builder().build().await.unwrap());
+    let state = CustomAppState {
+        container,
+        version: "2.0".to_string(),
+    };
+
+    let app = Router::new()
+        .route("/mixed", get(mixed_state_handler))
+        .with_state(state);
+
+    let (status, body) = send_request(app, "/mixed").await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body, "version=2.0 db_ok=true");
+}
+
+// ─── Singleton Caching via Axum Extractors ─────────────────────────
+//
+// Singletons must be constructed ONCE per container, not once per request.
+// This test hits the same route multiple times and verifies that the
+// service constructor ran exactly once.
+
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+// Each singleton test uses its OWN type + counter so concurrent test runs
+// can't interfere with each other.
+
+static CTOR_COUNT_A: AtomicUsize = AtomicUsize::new(0);
+
+#[derive(Clone)]
+pub struct SingletonA;
+
+#[injectable_impl]
+impl SingletonA {
+    #[constructor]
+    fn new() -> Self {
+        CTOR_COUNT_A.fetch_add(1, Ordering::SeqCst);
+        Self
+    }
+}
+
+async fn singleton_a_handler(_: Inject<SingletonA>) -> &'static str { "ok" }
+
+static CTOR_COUNT_B: AtomicUsize = AtomicUsize::new(0);
+
+#[derive(Clone)]
+pub struct SingletonB;
+
+#[injectable_impl]
+impl SingletonB {
+    #[constructor]
+    fn new() -> Self {
+        CTOR_COUNT_B.fetch_add(1, Ordering::SeqCst);
+        Self
+    }
+}
+
+async fn singleton_b_handler(_: Inject<SingletonB>) -> &'static str { "ok" }
+
+async fn send_n_requests(app: Router, uri: &'static str, n: usize) {
+    for _ in 0..n {
+        let req = Request::builder().uri(uri).body(Body::empty()).unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+}
+
+/// Singletons are constructed once per container — not once per Axum request.
+#[tokio::test]
+async fn test_singleton_constructed_once_across_requests() {
+    let before = CTOR_COUNT_A.load(Ordering::SeqCst);
+
+    let container = Container::builder().build().await.unwrap();
+    let app = Router::new()
+        .route("/s", get(singleton_a_handler))
+        .with_state(AxumState::new(container));
+
+    send_n_requests(app, "/s", 3).await;
+
+    assert_eq!(
+        CTOR_COUNT_A.load(Ordering::SeqCst) - before,
+        1,
+        "singleton should be constructed exactly once, not once per request"
+    );
+}
+
+/// Singleton caching works with custom `InjectableState` implementations too.
+#[tokio::test]
+async fn test_singleton_constructed_once_with_custom_state() {
+    let before = CTOR_COUNT_B.load(Ordering::SeqCst);
+
+    let container = Arc::new(Container::builder().build().await.unwrap());
+    let app = Router::new()
+        .route("/s", get(singleton_b_handler))
+        .with_state(CustomAppState { container, version: "v1".to_string() });
+
+    send_n_requests(app, "/s", 3).await;
+
+    assert_eq!(
+        CTOR_COUNT_B.load(Ordering::SeqCst) - before,
+        1,
+        "singleton should be constructed once even with custom InjectableState"
+    );
+}
+
 // ─── External Type Registration ────────────────────────────────────
 
 #[tokio::test]
