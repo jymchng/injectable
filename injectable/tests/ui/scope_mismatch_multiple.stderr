@@ -1,0 +1,23 @@
+error: scope mismatch: `ServiceA` (singleton) depends on `TransientCache` (transient); wider-scope types cannot depend on narrower-scope types
+ --> tests/ui/scope_mismatch_multiple.rs
+  |
+  | / container! {
+  | |     ServiceA { deps: [TransientCache], scope: "singleton" },
+  | |     ServiceB { deps: [TransientCache], scope: "singleton" },
+  | |     TransientCache { scope: "transient" },
+  | | }
+  | |_^
+  |
+  = note: this error originates in the macro `container` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: scope mismatch: `ServiceB` (singleton) depends on `TransientCache` (transient); wider-scope types cannot depend on narrower-scope types
+ --> tests/ui/scope_mismatch_multiple.rs
+  |
+  | / container! {
+  | |     ServiceA { deps: [TransientCache], scope: "singleton" },
+  | |     ServiceB { deps: [TransientCache], scope: "singleton" },
+  | |     TransientCache { scope: "transient" },
+  | | }
+  | |_^
+  |
+  = note: this error originates in the macro `container` (in Nightly builds, run with -Z macro-backtrace for more info)

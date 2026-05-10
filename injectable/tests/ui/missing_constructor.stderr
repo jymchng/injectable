@@ -1,0 +1,5 @@
+error: #[injectable_impl] without #[constructor] requires at least one #[post_construct] or #[pre_destruct] method. For field injection without lifecycle hooks, use #[derive(Injectable)] alone.
+ --> tests/ui/missing_constructor.rs
+  |
+  | impl MyService {
+  |      ^^^^^^^^^

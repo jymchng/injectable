@@ -1,0 +1,5 @@
+error: unknown injectable attribute: `bad_attribute`
+ --> tests/ui/unknown_attribute.rs
+  |
+  | #[injectable(bad_attribute)]
+  |              ^^^^^^^^^^^^^

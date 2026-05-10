@@ -1,0 +1,10 @@
+error: circular dependency detected: A -> B -> A
+ --> tests/ui/circular_dependency.rs
+  |
+  | / container! {
+  | |     A { deps: [B], scope: "singleton" },
+  | |     B { deps: [A], scope: "singleton" },
+  | | }
+  | |_^
+  |
+  = note: this error originates in the macro `container` (in Nightly builds, run with -Z macro-backtrace for more info)

@@ -1,0 +1,13 @@
+error: #[injectable_impl] requires exactly one #[constructor] method, but found multiple
+ --> tests/ui/multiple_constructors.rs
+  |
+  |     pub fn from_name(name: String) -> Self {
+  |            ^^^^^^^^^
+
+warning: unused import: `constructor`
+ --> tests/ui/multiple_constructors.rs
+  |
+  | use injectable::{injectable_impl, constructor};
+  |                                   ^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default

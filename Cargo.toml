@@ -1,0 +1,25 @@
+[workspace]
+resolver = "2"
+members = [
+    "injectable",
+    "injectable-macros",
+    "injectable-runtime",
+    "injectable-graph",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+rust-version = "1.75"
+
+[workspace.dependencies]
+# Internal crates
+injectable-macros = { path = "injectable-macros" }
+injectable-runtime = { path = "injectable-runtime" }
+injectable-graph = { path = "injectable-graph" }
+
+# Shared dependencies
+async-trait = "0.1"
+tokio = { version = "1", features = ["full"] }
+thiserror = "2"

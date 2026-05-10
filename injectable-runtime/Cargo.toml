@@ -1,0 +1,16 @@
+[package]
+name = "injectable-runtime"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "Runtime types and traits for the injectable DI framework"
+
+[features]
+axum = ["dep:axum"]
+
+[dependencies]
+async-trait.workspace = true
+tokio = { workspace = true, features = ["sync"] }
+thiserror.workspace = true
+axum = { version = "0.7", optional = true }
+inventory = "0.3.24"

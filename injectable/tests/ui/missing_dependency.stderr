@@ -1,0 +1,9 @@
+error: `UserService` depends on `Database`, which is not registered in the container
+ --> tests/ui/missing_dependency.rs
+  |
+  | / container! {
+  | |     UserService { deps: [Database], scope: "singleton" },
+  | | }
+  | |_^
+  |
+  = note: this error originates in the macro `container` (in Nightly builds, run with -Z macro-backtrace for more info)

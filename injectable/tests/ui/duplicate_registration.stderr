@@ -1,0 +1,10 @@
+error: duplicate type `Database` registered in the container
+ --> tests/ui/duplicate_registration.rs
+  |
+  | / container! {
+  | |     Database,
+  | |     Database,
+  | | }
+  | |_^
+  |
+  = note: this error originates in the macro `container` (in Nightly builds, run with -Z macro-backtrace for more info)

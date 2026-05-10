@@ -1,0 +1,14 @@
+[package]
+name = "injectable-macros"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "Proc macros for the injectable DI framework"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = { version = "2", features = ["full", "visit", "visit-mut", "parsing", "extra-traits"] }
+quote = "1"
+proc-macro2 = "1"

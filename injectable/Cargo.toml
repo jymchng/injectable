@@ -1,0 +1,77 @@
+[package]
+name = "injectable"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "A compile-time dependency injection framework for Rust using extractor-based DI"
+
+[features]
+axum = ["injectable-runtime/axum", "dep:axum"]
+
+[dependencies]
+injectable-macros.workspace = true
+injectable-runtime.workspace = true
+injectable-graph.workspace = true
+async-trait.workspace = true
+tokio = { workspace = true, features = ["sync"] }
+thiserror.workspace = true
+axum = { version = "0.7", optional = true }
+inventory = "0.3"
+futures-util = "0.3.32"
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full"] }
+axum = "0.7"
+tower = "0.5"
+http-body-util = "0.1"
+hyper = "1"
+serde = { version = "1", features = ["derive"] }
+trybuild = "1"
+sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite"] }
+reqwest = { version = "0.12", features = ["json"] }
+
+[[test]]
+name = "axum_integration"
+required-features = ["axum"]
+
+# ─── Examples ────────────────────────────────────────────────────────
+# Run standalone examples:
+#   cargo run --example 01_basic_field_injection
+#   cargo run --example 02_constructor_injection
+#   cargo run --example 03_external_types
+#   cargo run --example 04_lifecycle_hooks
+#   cargo run --example 05_dependency_graph
+#   cargo run --example 06_scopes
+#
+# Run Axum example (requires --features axum):
+#   cargo run --example 07_axum_integration --features axum
+
+[[example]]
+name = "01_basic_field_injection"
+
+[[example]]
+name = "02_constructor_injection"
+
+[[example]]
+name = "03_external_types"
+
+[[example]]
+name = "04_lifecycle_hooks"
+
+[[example]]
+name = "05_dependency_graph"
+
+[[example]]
+name = "06_scopes"
+
+[[example]]
+name = "07_axum_integration"
+required-features = ["axum"]
+
+[[example]]
+name = "08_realistic_web_app"
+required-features = ["axum"]
+
+[[example]]
+name = "09_weather_api"
+required-features = ["axum"]

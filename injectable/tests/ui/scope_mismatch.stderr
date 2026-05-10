@@ -1,0 +1,10 @@
+error: scope mismatch: `SingletonService` (singleton) depends on `TransientService` (transient); wider-scope types cannot depend on narrower-scope types
+ --> tests/ui/scope_mismatch.rs
+  |
+  | / container! {
+  | |     SingletonService { deps: [TransientService], scope: "singleton" },
+  | |     TransientService { scope: "transient" },
+  | | }
+  | |_^
+  |
+  = note: this error originates in the macro `container` (in Nightly builds, run with -Z macro-backtrace for more info)
