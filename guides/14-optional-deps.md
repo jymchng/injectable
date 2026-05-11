@@ -7,19 +7,22 @@ When a dependency may or may not be registered (e.g., a metrics backend that's w
 ```rust
 use injectable::*;
 
-#[derive(Injectable, Default, Debug)]
+#[injectable
+#[derive(, Default, Debug)]
 pub struct MetricsCollector;
 impl MetricsCollector {
     pub fn increment(&self, key: &str) { println!("[metrics] {key} += 1"); }
 }
 
-#[derive(Injectable, Default, Debug)]
+#[injectable
+#[derive(, Default, Debug)]
 pub struct TraceExporter;
 impl TraceExporter {
     pub fn export(&self, span: &str) { println!("[trace] {span}"); }
 }
 
-#[derive(Injectable, Debug)]
+#[injectable
+#[derive(, Debug)]
 pub struct ApiHandler {
     // Always required
     db: Inject<Database>,
@@ -29,7 +32,8 @@ pub struct ApiHandler {
     trace: Option<Inject<TraceExporter>>,
 }
 
-#[derive(Injectable, Default, Debug)]
+#[injectable
+#[derive(, Default, Debug)]
 pub struct Database;
 
 impl ApiHandler {
@@ -67,9 +71,9 @@ pub struct NotificationService {
     sms: Option<Inject<TwilioClient>>,
 }
 
-#[injectable_impl]
+#[injectable]
 impl NotificationService {
-    #[constructor]
+    #[injectable_ctor]
     pub fn new(
         email: Option<Inject<SmtpClient>>,
         sms:   Option<Inject<TwilioClient>>,

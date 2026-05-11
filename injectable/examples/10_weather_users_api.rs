@@ -14,15 +14,15 @@
 //! **AFTER (injectable):**
 //!
 //! ```text
-//! #[derive(Injectable)]
+//! #[injectable]
 //! pub struct WeatherService {
 //!     #[inject(use_factory_async = self::make_pool)]
 //!     pool:   sqlx::Pool<Sqlite>,
-//!     #[inject(use_factory_sync = self::make_http_client)]
+//!     #[inject(use_factory_async = self::make_http_client)]
 //!     client: reqwest::Client,
 //! }
 //!
-//! #[derive(Injectable)]
+//! #[injectable]
 //! pub struct UserService {
 //!     #[inject(use_factory_async = self::make_pool)]
 //!     pool:            sqlx::Pool<Sqlite>,
@@ -34,7 +34,7 @@
 //!   • `use_factory_async` — shared async factory called once per singleton
 //!   • `use_factory_sync`  — sync factory (no `.await`)
 //!   • `Arc<WeatherService>` plain field — resolved via singleton cache automatically
-//!   • `#[injectable_impl]` (no constructor) — lifecycle hooks without boilerplate
+//!   • `#[injectable]` (no constructor) — lifecycle hooks without boilerplate
 //!   • Custom `AppState` implementing `InjectableState` — no forced `AxumState`
 //!
 //! Run: cargo run --example 10_weather_users_api --features axum
@@ -65,9 +65,9 @@ pub struct AppConfig {
     pub port: u16,
 }
 
-#[injectable_impl]
+#[injectable]
 impl AppConfig {
-    #[constructor]
+    #[injectable_ctor]
     fn new() -> Self {
         Self {
             database_url: std::env::var("DATABASE_URL")
@@ -102,7 +102,7 @@ async fn make_pool(ctx: &ResolveContext) -> Result<Pool<Sqlite>, InjectableError
 }
 
 /// Sync factory: builds a reqwest client (no async needed).
-fn make_http_client(_ctx: &ResolveContext) -> Result<reqwest::Client, InjectableError> {
+async fn make_http_client(_ctx: &ResolveContext) -> Result<reqwest::Client, InjectableError> {
     println!("  [HTTP] Building reqwest::Client");
     reqwest::Client::builder()
         .timeout(Duration::from_secs(5))
@@ -120,15 +120,15 @@ fn make_http_client(_ctx: &ResolveContext) -> Result<reqwest::Client, Injectable
 ///
 /// Both `pool` and `client` come from inline factories — no DynProvider
 /// registration is needed in the container builder.
-#[derive(Injectable)]
+#[injectable]
 pub struct WeatherService {
     #[inject(use_factory_async = self::make_pool)]
     pool: Pool<Sqlite>,
-    #[inject(use_factory_sync = self::make_http_client)]
+    #[inject(use_factory_async = self::make_http_client)]
     client: reqwest::Client,
 }
 
-#[injectable_impl]
+#[injectable]
 impl WeatherService {
     #[post_construct]
     async fn migrate(&self) -> Result<(), sqlx::Error> {
@@ -211,15 +211,15 @@ impl WeatherService {
 /// `weather_service: Arc<WeatherService>` is a plain `Arc<T>` field —
 /// injectable resolves it from the singleton cache automatically.
 /// No `Inject<T>` wrapper needed.
-#[derive(Injectable)]
+#[injectable]
 pub struct UserService {
     #[inject(use_factory_async = self::make_pool)]
     pool: Pool<Sqlite>,
-    /// Plain Arc<T> — injectable detects this and extracts via Inject<T>.0
+    #[inject]
     weather_service: Arc<WeatherService>,
 }
 
-#[injectable_impl]
+#[injectable]
 impl UserService {
     #[post_construct]
     async fn migrate(&self) -> Result<(), sqlx::Error> {
@@ -440,7 +440,7 @@ async fn api_info(
 #[tokio::main]
 async fn main() {
     println!("=== Weather + Users API (example 10) ===\n");
-    println!("Services declared with #[derive(Injectable)], zero manual wiring.\n");
+    println!("Services declared with #[injectable], zero manual wiring.\n");
 
     // Container builder needs NO .register() calls — all deps come from
     // use_factory_async / use_factory_sync on the struct fields.

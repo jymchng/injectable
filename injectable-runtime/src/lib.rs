@@ -37,7 +37,7 @@ pub use registry::{
     PostConstructFnPtr, ProviderRegistry,
 };
 pub use resolve::ResolveContext;
-pub use singleton::{EmptySingletonStore, SingletonStore};
+pub use singleton::{EmptySingletonStore, RequestScoped, Singleton, SingletonStore, Transient};
 
 #[cfg(feature = "axum")]
 pub use axum::{InjectableRejection, InjectableState};

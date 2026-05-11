@@ -1,6 +1,49 @@
-# Guide 03 — Constructor Injection with `#[injectable_impl]`
+# Guide 03 — Constructor Injection with `#[injectable_ctor]`
 
-Constructor injection gives you full control over how a type is built. Annotate an `impl` block with `#[injectable_impl]` and mark one method with `#[constructor]`. The macro rewrites constructor parameters to use the DI resolution machinery, while keeping your constructor's public signature intact so it remains callable outside of DI too.
+Constructor injection gives you full control over how a type is built. Annotate
+an `impl` block with `#[injectable]` and mark one method with `#[injectable_ctor]`.
+The framework calls that method with resolved dependencies and registers the result.
+
+## The Core Rule: No `Inject<T>` in Struct Fields
+
+When you use `#[injectable_ctor]`, **struct fields should be plain types** —
+`Arc<T>`, `T`, `sqlx::SqlitePool`, etc. The constructor is the DI boundary: it
+receives dependencies (as `Inject<T>` params or with `#[inject]`) and stores them
+however is natural for the struct. The `Inject<T>` wrapper is an implementation
+detail of field injection, not a required storage type.
+
+```rust
+// ✓ Correct — constructor controls how dependencies are stored
+pub struct UserService {
+    db:          Arc<Database>,  // plain Arc, not Inject<T>
+    max_retries: u32,
+}
+
+#[injectable]
+impl UserService {
+    #[injectable_ctor]
+    pub fn new(#[inject] db: Arc<Database>) -> Self {
+        Self { db, max_retries: 3 }
+    }
+}
+
+// ✗ Avoid — mixing constructor injection with Inject<T> fields is redundant
+pub struct UserService {
+    db: Inject<Database>,   // unnecessary wrapper when using a constructor
+}
+```
+
+## Parameter Injection Rules
+
+Only `Inject<T>` parameters are auto-injected. All other parameter types require
+an explicit `#[inject]` annotation; omitting it is a compile error.
+
+| Parameter type | Annotation needed | What the macro generates | What you receive |
+|---|---|---|---|
+| `Inject<T>` | None | `Inject<T>::extract(ctx)` | `Inject<T>` (Arc wrapper) |
+| `Arc<T>` | `#[inject]` | `Inject<T>::extract(ctx)` → `.0` | `Arc<T>` |
+| `T` (owned) | `#[inject]` | `Inject<T>::extract(ctx)` → `unwrap_or_clone` | Owned `T` (requires `T: Clone`) |
+| External type | `#[inject(use_factory_*=path)]` | factory called with `ctx` | `T` from factory |
 
 ## Basic Usage
 
@@ -8,106 +51,78 @@ Constructor injection gives you full control over how a type is built. Annotate 
 use std::sync::Arc;
 use injectable::*;
 
-#[derive(Injectable, Default, Debug)]
+#[injectable]
+#[derive(Default, Debug)]
 pub struct Database;
 
-#[derive(Injectable, Default, Debug)]
+#[injectable]
+#[derive(Default, Debug)]
 pub struct Cache;
 
 pub struct UserService {
-    db: Arc<Database>,
-    cache: Arc<Cache>,
+    db:          Arc<Database>,
+    cache:       Arc<Cache>,
     max_retries: u32,
 }
 
-#[injectable_impl]
+#[injectable]
 impl UserService {
-    #[constructor]
-    pub fn new(db: Arc<Database>, cache: Arc<Cache>) -> Self {
-        Self {
-            db,
-            cache,
-            max_retries: 3,         // set manually — not injected
-        }
+    #[injectable_ctor]
+    pub fn new(#[inject] db: Arc<Database>, #[inject] cache: Arc<Cache>) -> Self {
+        Self { db, cache, max_retries: 3 }
     }
 }
 ```
 
-The framework calls `UserService::new(...)` with resolved `Arc<Database>` and `Arc<Cache>` automatically. `max_retries` is set by your code, not injected.
-
-## Parameter Rewriting Rules
-
-The macro inspects each constructor parameter's type and generates different resolution code:
-
-| Declared type   | What the macro generates        | What you receive           |
-|-----------------|---------------------------------|----------------------------|
-| `Inject<T>`     | `Inject<T>::extract(ctx)`       | `Inject<T>` (Arc wrapper)  |
-| `Arc<T>`        | `Inject<T>::extract(ctx)` → `.0`| `Arc<T>`                   |
-| `T` (owned)     | `Inject<T>::extract(ctx)` → unwrap | Owned `T` (requires `T: Clone`) |
-
-This means your constructor is callable with plain values in unit tests:
-
-```rust
-// DI wires this automatically
-let svc = container.resolve::<UserService>().await?;
-
-// You can still call the constructor directly in tests
-let db = Arc::new(Database::default());
-let cache = Arc::new(Cache::default());
-let svc = UserService::new(db, cache);
-```
-
-## All Parameter Type Patterns
+## All Parameter Patterns
 
 ```rust
 use std::sync::Arc;
 use injectable::*;
 
-#[derive(Injectable, Default, Clone, Debug)]
+#[injectable]
+#[derive(Default, Clone, Debug)]
 pub struct Config;
 
-#[derive(Injectable, Default, Debug)]
+#[injectable]
+#[derive(Default, Debug)]
 pub struct Database;
 
-// A: Inject<T> — framework passes Inject<T> directly
+// A: Inject<T> param — auto-injected, no annotation needed
 pub struct ServiceA { db: Inject<Database> }
 
-#[injectable_impl]
+#[injectable]
 impl ServiceA {
-    #[constructor]
+    #[injectable_ctor]
     pub fn new(db: Inject<Database>) -> Self { Self { db } }
 }
 
-// B: Arc<T> — framework resolves and passes Arc<T>
+// B: Arc<T> param — #[inject] required
 pub struct ServiceB { db: Arc<Database> }
 
-#[injectable_impl]
+#[injectable]
 impl ServiceB {
-    #[constructor]
-    pub fn new(db: Arc<Database>) -> Self { Self { db } }
+    #[injectable_ctor]
+    pub fn new(#[inject] db: Arc<Database>) -> Self { Self { db } }
 }
 
-// C: owned T — framework resolves and unwraps (requires T: Clone)
+// C: owned T param — #[inject] required; T must be Clone
 pub struct ServiceC { config: Config }
 
-#[injectable_impl]
+#[injectable]
 impl ServiceC {
-    #[constructor]
-    pub fn new(config: Config) -> Self { Self { config } }
+    #[injectable_ctor]
+    pub fn new(#[inject] config: Config) -> Self { Self { config } }
 }
 
-// D: mixed — combine all three
-pub struct ServiceD {
-    db: Inject<Database>,
-    config: Config,
-    secondary: Arc<Database>,
-}
+// D: mixed
+pub struct ServiceD { db: Arc<Database>, config: Config }
 
-#[injectable_impl]
+#[injectable]
 impl ServiceD {
-    #[constructor]
-    pub fn new(db: Inject<Database>, config: Config, secondary: Arc<Database>) -> Self {
-        Self { db, config, secondary }
+    #[injectable_ctor]
+    pub fn new(#[inject] db: Arc<Database>, #[inject] config: Config) -> Self {
+        Self { db, config }
     }
 }
 ```
@@ -118,132 +133,34 @@ Mark the constructor `async` for any async initialization:
 
 ```rust
 pub struct DbPool {
-    inner: Arc<sqlx::SqlitePool>,
+    inner: sqlx::SqlitePool,
 }
 
-#[injectable_impl]
+#[injectable]
 impl DbPool {
-    #[constructor]
+    #[injectable_ctor]
     pub async fn new() -> Self {
         let pool = sqlx::SqlitePool::connect("sqlite::memory:")
             .await
             .expect("in-memory sqlite always works");
-        Self { inner: Arc::new(pool) }
+        Self { inner: pool }
     }
 }
-```
-
-## Zero-Argument Constructor
-
-Useful for types that need custom initialization logic but no dependencies:
-
-```rust
-pub struct Clock {
-    started: std::time::Instant,
-}
-
-#[injectable_impl]
-impl Clock {
-    #[constructor]
-    pub fn new() -> Self {
-        Self { started: std::time::Instant::now() }
-    }
-
-    pub fn elapsed(&self) -> std::time::Duration {
-        self.started.elapsed()
-    }
-}
-```
-
-## Lifecycle Hooks in `#[injectable_impl]`
-
-The macro auto-detects `#[post_construct]` and `#[pre_destruct]` methods and generates the `PostConstruct`/`PreDestruct` trait implementations for you. No separate `impl` block required.
-
-```rust
-use std::sync::atomic::{AtomicBool, Ordering};
-use injectable::*;
-
-pub struct WorkerPool {
-    running: AtomicBool,
-    workers: u32,
-}
-
-#[injectable_impl]
-impl WorkerPool {
-    #[constructor]
-    pub fn new() -> Self {
-        Self {
-            running: AtomicBool::new(false),
-            workers: 0,
-        }
-    }
-
-    #[post_construct]
-    pub async fn start(&self) {
-        self.running.store(true, Ordering::SeqCst);
-        println!("WorkerPool started");
-    }
-
-    #[pre_destruct]
-    pub async fn stop(&self) {
-        self.running.store(false, Ordering::SeqCst);
-        println!("WorkerPool drained and stopped");
-    }
-}
-
-// pre_destruct requires Clone
-impl Clone for WorkerPool {
-    fn clone(&self) -> Self {
-        Self {
-            running: AtomicBool::new(self.running.load(Ordering::SeqCst)),
-            workers: self.workers,
-        }
-    }
-}
-```
-
-## Combining with External Types
-
-`#[injectable_impl]` is the right tool when a constructor takes an external type (one registered via `DynProvider`). Declare the parameter as `Arc<ExternalType>` and the framework resolves it from the registry:
-
-```rust
-use std::sync::Arc;
-use injectable::*;
-
-pub struct Database {
-    pool: Arc<sqlx::SqlitePool>,
-}
-
-#[injectable_impl]
-impl Database {
-    #[constructor]
-    pub fn new(pool: Arc<sqlx::SqlitePool>) -> Self {
-        Self { pool }
-    }
-}
-
-// In main:
-// Container::builder()
-//     .register(DynProvider::new(|| async {
-//         Ok(sqlx::SqlitePool::connect("sqlite:./app.db").await?)
-//     }))
-//     .build().await?;
 ```
 
 ## Returning Errors from the Constructor
 
-If construction can fail, return `Result<Self, _>` where the error implements `std::error::Error`:
+Return `Result<Self, E>` where `E: std::error::Error + Send + Sync` (or directly
+`Result<Self, InjectableError>`):
 
 ```rust
-use injectable::*;
-
 pub struct ValidatedConfig {
     pub api_key: String,
 }
 
-#[injectable_impl]
+#[injectable]
 impl ValidatedConfig {
-    #[constructor]
+    #[injectable_ctor]
     pub fn new() -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let api_key = std::env::var("API_KEY")
             .map_err(|_| "API_KEY env var is required")?;
@@ -255,11 +172,99 @@ impl ValidatedConfig {
 }
 ```
 
-Construction errors surface as `InjectableError::ConstructionFailed` at resolve time.
+Errors surface as `InjectableError::ConstructionFailed` at resolve time.
+
+## Lifecycle Hooks
+
+`#[post_construct]` and `#[pre_destruct]` methods are auto-detected in the same
+impl block. No separate `impl PostConstruct for …` needed:
+
+```rust
+pub struct WorkerPool {
+    running: std::sync::atomic::AtomicBool,
+}
+
+#[injectable]
+impl WorkerPool {
+    #[injectable_ctor]
+    pub fn new() -> Self {
+        Self { running: std::sync::atomic::AtomicBool::new(false) }
+    }
+
+    #[post_construct]
+    pub async fn start(&self) {
+        self.running.store(true, std::sync::atomic::Ordering::SeqCst);
+        println!("[WorkerPool] started");
+    }
+
+    #[pre_destruct]
+    pub async fn stop(&self) {
+        self.running.store(false, std::sync::atomic::Ordering::SeqCst);
+        println!("[WorkerPool] stopped");
+    }
+}
+```
+
+## Lifecycle Hooks Without a Constructor
+
+If your struct uses field injection (`#[injectable]` on the struct) but you still
+want lifecycle hooks, put them in a separate `#[injectable]` impl block without
+`#[injectable_ctor]`:
+
+```rust
+#[injectable]
+pub struct Cache {
+    db: Inject<Database>,
+}
+
+#[injectable]                  // no #[injectable_ctor] — lifecycle only
+impl Cache {
+    #[post_construct]
+    async fn warm_up(&self) {
+        println!("[Cache] warmed up");
+    }
+}
+```
+
+## Injecting External Types
+
+For constructor parameters that are external types (third-party crates), use
+`#[inject(use_factory_async/sync = path)]`:
+
+```rust
+pub struct WeatherService {
+    pool:   sqlx::SqlitePool,
+    client: reqwest::Client,
+}
+
+async fn make_pool(_ctx: &ResolveContext) -> Result<sqlx::SqlitePool, sqlx::Error> {
+    sqlx::SqlitePool::connect("sqlite:./weather.db").await
+}
+
+fn make_client(_ctx: &ResolveContext) -> reqwest::Client {
+    reqwest::Client::new()
+}
+
+#[injectable]
+impl WeatherService {
+    #[injectable_ctor]
+    pub async fn new(
+        #[inject(use_factory_async = self::make_pool)]   pool:   sqlx::SqlitePool,
+        #[inject(use_factory_sync  = self::make_client)] client: reqwest::Client,
+    ) -> Self {
+        Self { pool, client }
+    }
+}
+```
+
+See the 3-ways-to-inject-external-types guide for all options.
 
 ## Key Rules
 
-- Only **one** method may be marked `#[constructor]` per `impl` block.
+- Only **one** method per impl block may be marked `#[injectable_ctor]`.
 - The constructor's return type must be `Self` or `Result<Self, E>`.
-- The `#[injectable_impl]` attribute goes on the `impl` block, not the struct.
-- The struct does NOT also need `#[derive(Injectable)]` — the macro generates that impl.
+- `#[injectable]` goes on the **impl block**, not the struct.
+- The struct does **not** also need `#[injectable]` — the constructor impl
+  generates the `Injectable` + `Provider` impls.
+- Struct fields should be **plain types**, not `Inject<T>`. The constructor
+  receives `Inject<T>` params and can unwrap them before storage.

@@ -16,31 +16,24 @@ use crate::metadata::{
 };
 
 /// How a field should be handled during injection.
+///
+/// `Inject<T>` fields are auto-injected.  All other field types require an
+/// explicit `#[inject]` or `#[inject(use_factory_*=…)]` annotation; omitting
+/// the annotation is a compile error.
 #[derive(Debug, Clone)]
 pub enum FieldInjectKind {
     /// Extract the field via `Extract::extract(ctx)`.
-    /// This is the default for fields in a non-`default` struct,
-    /// or for fields explicitly marked with `#[inject]` in a `default` struct.
+    /// Applied automatically to `Inject<T>` fields, or explicitly via `#[inject]`.
     Inject,
-    /// Use `Default::default()` for this field.
-    /// This is the default for fields in a `#[injectable(default)]` struct
-    /// (unless the field is explicitly marked with `#[inject]`),
-    /// or for fields explicitly marked with `#[inject(skip)]` in a non-default struct.
-    Skip,
     /// Call the given **async** factory `async fn(ctx: &ResolveContext) -> Result<T, E>`.
-    /// The return value is wrapped in `Arc::new` + `Inject::new` to produce `Inject<T>`.
     Factory(syn::Path),
-    /// Call the given **sync** factory `fn(ctx: &ResolveContext) -> Result<T, E>` (no `.await`).
-    /// The return value is wrapped in `Arc::new` + `Inject::new` to produce `Inject<T>`.
+    /// Call the given **sync** factory `fn(ctx: &ResolveContext) -> FieldType` (no `.await`).
     Provider(syn::Path),
 }
 
 impl FieldInjectKind {
     pub fn is_injected(&self) -> bool {
-        matches!(
-            self,
-            FieldInjectKind::Inject | FieldInjectKind::Factory(_) | FieldInjectKind::Provider(_)
-        )
+        true  // all remaining variants represent some form of injection
     }
 }
 
@@ -59,25 +52,21 @@ pub struct FieldInfo {
 
 /// Generate a provider that auto-wires from struct fields.
 ///
-/// When a struct has `#[derive(Injectable)]` but no `#[injectable(default)]`,
+/// When a struct has `#[injectable]` but no `#[injectable(default)]`,
 /// all fields must implement `Extract`. The generated provider:
 /// 1. Extracts each field via `<FieldType as Extract>::extract(ctx).await?`
 ///    (unless the field is marked with `#[inject(skip)]`, which uses `Default::default()`)
 /// 2. Constructs the struct using a struct literal
 /// 3. Calls `PostConstruct::post_construct()` if `has_post_construct` is true
 ///
-/// When `#[injectable(default)]` is specified, all fields use `Default::default()`
-/// UNLESS a field is marked with `#[inject]`, in which case it is extracted.
-///
 /// # Rules
 ///
-/// - Fields with `FieldInjectKind::Inject` must implement `Extract` (enforced at compile time)
-/// - For `Inject<T>` fields, this resolves via `Inject<T>::extract(ctx)` → `Arc<T>`
-/// - For bare `T` fields (where `T: Injectable`), this resolves via
-///   `T::extract(ctx)` → owned `T` (via the blanket `Extract` impl)
-/// - For `Option<Inject<T>>` fields, this resolves optionally
+/// - `Inject<T>` fields are auto-injected; all other fields require `#[inject]`
+///   (error is emitted at macro-expansion time, not here)
+/// - `FieldInjectKind::Inject` → `<FieldType as Extract>::extract(ctx).await?`
+/// - `FieldInjectKind::Factory` → async factory called with `ctx`
+/// - `FieldInjectKind::Provider` → sync factory called with `&extracted_value`
 /// - Unit structs (no fields) are constructed without extraction
-/// - Fields with `FieldInjectKind::Skip` use `Default::default()`
 pub fn generate_field_injection_provider(
     type_name: &syn::Ident,
     fields: &[FieldInfo],
@@ -111,39 +100,15 @@ pub fn generate_field_injection_provider(
                         quote! { let #temp_name = #var_expr; }
                     }
                 }
-                FieldInjectKind::Skip => {
-                    // Use Default::default() for this field
-                    if let Some(name) = &field.name {
-                        quote! {
-                            let #name = <#field_ty as std::default::Default>::default();
-                        }
-                    } else {
-                        let temp_name = syn::Ident::new(
-                            &format!("__field_{}", i),
-                            proc_macro2::Span::call_site(),
-                        );
-                        quote! {
-                            let #temp_name = <#field_ty as std::default::Default>::default();
-                        }
-                    }
-                }
-                FieldInjectKind::Factory(factory_path)
-                | FieldInjectKind::Provider(factory_path) => {
+                FieldInjectKind::Factory(factory_path) => {
+                    // use_factory_async: context-based factory.
+                    // Signature: async fn(ctx: &ResolveContext) -> Result<T, E>
+                    // For creating new values from scratch (external types, DB pools, etc.).
                     let ty_str = &field.ty_string;
-                    let is_async = matches!(&field.inject_kind, FieldInjectKind::Factory(_));
-                    let await_tok = if is_async {
-                        quote! { .await }
-                    } else {
-                        quote! {}
-                    };
-                    // Wrap the factory result to match the declared field type:
-                    //   Inject<T>   → Inject::new(Arc::new(__v))
-                    //   Arc<T>      → Arc::new(__v)
-                    //   T (plain)   → __v  (no wrapping)
                     let wrap = factory_wrap_for_field_type(&field.ty);
                     let var_expr = quote! {
                         {
-                            let __v = #factory_path(ctx)#await_tok.map_err(|e|
+                            let __v = #factory_path(ctx).await.map_err(|e|
                                 injectable_runtime::InjectableError::ConstructionFailed {
                                     type_name: #ty_str,
                                     reason: e.to_string(),
@@ -151,6 +116,20 @@ pub fn generate_field_injection_provider(
                             #wrap
                         }
                     };
+                    if let Some(name) = &field.name {
+                        quote! { let #name = #var_expr; }
+                    } else {
+                        let temp_name = syn::Ident::new(
+                            &format!("__field_{}", i),
+                            proc_macro2::Span::call_site(),
+                        );
+                        quote! { let #temp_name = #var_expr; }
+                    }
+                }
+                FieldInjectKind::Provider(factory_path) => {
+                    // use_factory_sync: context-based sync factory.
+                    // Signature: fn(ctx: &ResolveContext) -> FieldType
+                    let var_expr = quote! { #factory_path(ctx) };
                     if let Some(name) = &field.name {
                         quote! { let #name = #var_expr; }
                     } else {
@@ -190,10 +169,12 @@ pub fn generate_field_injection_provider(
         quote! { #type_name(#(#field_refs),*) }
     };
 
-    // Generate dependency names for graph metadata (only from injected fields)
+    // Generate dependency names for graph metadata.
+    // Factory fields (use_factory_async/sync) are NOT DI dependencies — the factory
+    // creates the value itself. Only Inject and plain-#[inject] fields contribute.
     let dep_strings: Vec<String> = fields
         .iter()
-        .filter(|f| f.inject_kind.is_injected())
+        .filter(|f| matches!(f.inject_kind, FieldInjectKind::Inject))
         .filter_map(|f| {
             let ty_str = &f.ty_string;
             // Use AST-based detection so all path forms are handled:
@@ -210,17 +191,11 @@ pub fn generate_field_injection_provider(
 
     let graph_metadata = generate_graph_metadata_from_strings(type_name, &dep_strings, scope);
     let is_singleton: bool = scope != "transient";
-    let arc_factory_submit = generate_arc_factory_submit(type_name);
-    let owned_extract_impl = generate_owned_extract_impl(type_name);
+    let arc_factory_submit = generate_arc_factory_submit(type_name, is_singleton);
     let hooks_dispatch = generate_inventory_hooks_dispatch(type_name);
-    // Backward compat: has_post_construct submits a legacy hooks entry via inventory.
     let legacy_hooks_submit = generate_legacy_hooks_submit(type_name, has_post_construct, false);
 
     quote! {
-        /// Auto-generated provider for the injectable type (field injection).
-        ///
-        /// Each field type must implement `Extract`. This is enforced at
-        /// compile time by the generated extraction code.
         pub struct #provider_name;
 
         #[async_trait::async_trait]
@@ -241,32 +216,7 @@ pub fn generate_field_injection_provider(
 
         #graph_metadata
         #arc_factory_submit
-        #owned_extract_impl
         #legacy_hooks_submit
-    }
-}
-
-/// Generate `impl Extract for TypeName` for an Injectable type.
-///
-/// This replaces the old blanket `impl<T: Injectable> Extract for T` which had
-/// to be removed to make room for `impl<T: Injectable> Extract for Arc<T>` in
-/// `injectable_runtime` (the two blankets overlapped under coherence).
-///
-/// A per-type concrete impl `impl Extract for ConcreteStruct` never conflicts
-/// with any blanket because `ConcreteStruct ≠ Arc<U>` for any U (a user-defined
-/// struct and `Arc<_>` are definitively distinct types).
-pub(crate) fn generate_owned_extract_impl(type_name: &syn::Ident) -> TokenStream {
-    quote! {
-        #[async_trait::async_trait]
-        impl injectable_runtime::Extract for #type_name {
-            async fn extract(
-                ctx: &injectable_runtime::ResolveContext,
-            ) -> injectable_runtime::InjectableResult<Self> {
-                // Use ctx.resolve() which dispatches through the Provider trait
-                // internally — avoids needing Provider in scope in user crates.
-                ctx.resolve::<#type_name>().await
-            }
-        }
     }
 }
 
@@ -277,7 +227,7 @@ pub(crate) fn generate_owned_extract_impl(type_name: &syn::Ident) -> TokenStream
 ///
 /// Uses named `fn` helpers (not closures) so the factory entry is
 /// `const`-constructible for `inventory::submit!` static initializers.
-pub(crate) fn generate_arc_factory_submit(type_name: &syn::Ident) -> TokenStream {
+pub(crate) fn generate_arc_factory_submit(type_name: &syn::Ident, is_singleton: bool) -> TokenStream {
     let type_id_fn_name = syn::Ident::new(
         &format!("__injectable_type_id_{}", type_name),
         proc_macro2::Span::call_site(),
@@ -286,6 +236,19 @@ pub(crate) fn generate_arc_factory_submit(type_name: &syn::Ident) -> TokenStream
         &format!("__injectable_provide_{}", type_name),
         proc_macro2::Span::call_site(),
     );
+
+    // Singleton: return the cached Arc. Transient: create a fresh Arc each time.
+    let resolve_expr = if is_singleton {
+        quote! {
+            ctx.resolve_singleton_arc::<#type_name>().await
+        }
+    } else {
+        quote! {
+            <#type_name as injectable_runtime::Injectable>::Provider::provide(&ctx)
+                .await
+                .map(::std::sync::Arc::new)
+        }
+    };
 
     quote! {
         #[doc(hidden)]
@@ -303,233 +266,18 @@ pub(crate) fn generate_arc_factory_submit(type_name: &syn::Ident) -> TokenStream
             Output = injectable_runtime::InjectableResult<Box<dyn ::std::any::Any + Send>>
         > + Send + 'static>> {
             Box::pin(async move {
-                // Resolve via the singleton cache, return Arc<T> as Box<dyn Any + Send>.
-                ctx.resolve_singleton_arc::<#type_name>()
-                    .await
+                #resolve_expr
                     .map(|arc| -> Box<dyn ::std::any::Any + Send> { Box::new(arc) })
             })
         }
 
         injectable_runtime::inventory::submit! {
             injectable_runtime::InjectableArcFactory::new_const(
+                stringify!(#type_name),
                 #type_id_fn_name,
                 #provide_fn_name,
             )
         }
-    }
-}
-
-/// Generate a default constructor provider.
-///
-/// Used when `#[injectable(default)]` is specified. By default all fields
-/// use `Default::default()`, but individual fields marked with `#[inject]`
-/// will be extracted via `Extract::extract(ctx)` instead.
-///
-/// This is the escape hatch for structs with non-Injectable fields
-/// (like `u16`, `String`) that provide a `Default` impl, while still
-/// allowing some fields to be injected.
-pub fn generate_default_provider(
-    type_name: &syn::Ident,
-    fields: &[FieldInfo],
-    scope: &str,
-    has_post_construct: bool,
-) -> TokenStream {
-    let provider_name = provider_ident(type_name);
-
-    // Check if any fields are marked with #[inject] or use_factory
-    let has_injected_fields = fields.iter().any(|f| f.inject_kind.is_injected());
-
-    if has_injected_fields {
-        // Mixed mode: some fields defaulted, some injected
-        return generate_mixed_provider(type_name, fields, scope, has_post_construct);
-    }
-
-    // Pure default mode: all fields use Default::default()
-    let graph_metadata = generate_graph_metadata_from_strings(type_name, &[], scope);
-    let arc_factory_submit = generate_arc_factory_submit(type_name);
-    let is_singleton: bool = scope != "transient";
-    let owned_extract_impl = generate_owned_extract_impl(type_name);
-    let hooks_dispatch = generate_inventory_hooks_dispatch(type_name);
-    let legacy_hooks_submit = generate_legacy_hooks_submit(type_name, has_post_construct, false);
-
-    quote! {
-        /// Auto-generated provider for the injectable type (default constructor).
-        pub struct #provider_name;
-
-        #[async_trait::async_trait]
-        impl injectable_runtime::Provider<#type_name> for #provider_name {
-            async fn provide(
-                ctx: &injectable_runtime::ResolveContext,
-            ) -> injectable_runtime::InjectableResult<#type_name> {
-                let instance = #type_name::default();
-                #hooks_dispatch
-            }
-        }
-
-        impl injectable_runtime::Injectable for #type_name {
-            type Provider = #provider_name;
-            const IS_SINGLETON: bool = #is_singleton;
-        }
-
-        #graph_metadata
-        #arc_factory_submit
-        #owned_extract_impl
-        #legacy_hooks_submit
-    }
-}
-
-/// Generate a provider that mixes Default and Extract for individual fields.
-///
-/// This is used when `#[injectable(default)]` is specified but some fields
-/// are marked with `#[inject]`. Those fields are extracted, while the rest
-/// use `Default::default()`.
-fn generate_mixed_provider(
-    type_name: &syn::Ident,
-    fields: &[FieldInfo],
-    scope: &str,
-    has_post_construct: bool,
-) -> TokenStream {
-    let provider_name = provider_ident(type_name);
-
-    // Generate statements for each field: either extract, factory, or default
-    let field_statements: Vec<TokenStream> = fields.iter().enumerate().map(|(i, field)| {
-        let field_ty = &field.ty;
-        match &field.inject_kind {
-            FieldInjectKind::Inject => {
-                if let Some(name) = &field.name {
-                    quote! {
-                        let #name = <#field_ty as injectable_runtime::Extract>::extract(ctx).await?;
-                    }
-                } else {
-                    let temp_name = syn::Ident::new(
-                        &format!("__field_{}", i),
-                        proc_macro2::Span::call_site(),
-                    );
-                    quote! {
-                        let #temp_name = <#field_ty as injectable_runtime::Extract>::extract(ctx).await?;
-                    }
-                }
-            }
-            FieldInjectKind::Skip => {
-                if let Some(name) = &field.name {
-                    quote! {
-                        let #name = <#field_ty as std::default::Default>::default();
-                    }
-                } else {
-                    let temp_name = syn::Ident::new(
-                        &format!("__field_{}", i),
-                        proc_macro2::Span::call_site(),
-                    );
-                    quote! {
-                        let #temp_name = <#field_ty as std::default::Default>::default();
-                    }
-                }
-            }
-            FieldInjectKind::Factory(factory_path) | FieldInjectKind::Provider(factory_path) => {
-                let ty_str = &field.ty_string;
-                let is_async = matches!(&field.inject_kind, FieldInjectKind::Factory(_));
-                let await_tok = if is_async { quote! { .await } } else { quote! {} };
-                // Wrap the factory result to match the declared field type:
-                //   Inject<T>   → Inject::new(Arc::new(__v))
-                //   Arc<T>      → Arc::new(__v)
-                //   T (plain)   → __v  (no wrapping)
-                let wrap = factory_wrap_for_field_type(&field.ty);
-                let var_expr = quote! {
-                    {
-                        let __v = #factory_path(ctx)#await_tok.map_err(|e|
-                            injectable_runtime::InjectableError::ConstructionFailed {
-                                type_name: #ty_str,
-                                reason: e.to_string(),
-                            })?;
-                        #wrap
-                    }
-                };
-                if let Some(name) = &field.name {
-                    quote! { let #name = #var_expr; }
-                } else {
-                    let temp_name = syn::Ident::new(
-                        &format!("__field_{}", i),
-                        proc_macro2::Span::call_site(),
-                    );
-                    quote! { let #temp_name = #var_expr; }
-                }
-            }
-        }
-    }).collect();
-
-    // Generate the struct construction
-    let construction = if fields.is_empty() {
-        quote! { #type_name }
-    } else if fields[0].name.is_some() {
-        let field_names: Vec<_> = fields
-            .iter()
-            .map(|f| f.name.as_ref().unwrap().clone())
-            .collect();
-        quote! { #type_name { #(#field_names),* } }
-    } else {
-        let field_refs: Vec<_> = fields
-            .iter()
-            .enumerate()
-            .map(|(i, _)| {
-                let temp_name =
-                    syn::Ident::new(&format!("__field_{}", i), proc_macro2::Span::call_site());
-                temp_name
-            })
-            .collect();
-        quote! { #type_name(#(#field_refs),*) }
-    };
-
-    // Generate dependency names for graph metadata (only from injected fields)
-    let dep_strings: Vec<String> = fields
-        .iter()
-        .filter(|f| f.inject_kind.is_injected())
-        .filter_map(|f| {
-            let ty_str = &f.ty_string;
-            // Use AST-based detection so all path forms are handled:
-            // Inject<T>, injectable::Inject<T>, Arc<T>, std::sync::Arc<T>, etc.
-            if let Some(inner) = extract_inject_inner(&f.ty) {
-                Some(inner)
-            } else if let Some(inner) = extract_arc_inner_str(&f.ty) {
-                Some(inner)
-            } else {
-                Some(ty_str.clone())
-            }
-        })
-        .collect();
-
-    let graph_metadata = generate_graph_metadata_from_strings(type_name, &dep_strings, scope);
-    let arc_factory_submit = generate_arc_factory_submit(type_name);
-    let is_singleton: bool = scope != "transient";
-    let owned_extract_impl = generate_owned_extract_impl(type_name);
-    let hooks_dispatch = generate_inventory_hooks_dispatch(type_name);
-    let legacy_hooks_submit = generate_legacy_hooks_submit(type_name, has_post_construct, false);
-
-    quote! {
-        /// Auto-generated provider for the injectable type (mixed default + inject).
-        ///
-        /// Fields marked with `#[inject]` are extracted; others use `Default::default()`.
-        pub struct #provider_name;
-
-        #[async_trait::async_trait]
-        impl injectable_runtime::Provider<#type_name> for #provider_name {
-            async fn provide(
-                ctx: &injectable_runtime::ResolveContext,
-            ) -> injectable_runtime::InjectableResult<#type_name> {
-                #(#field_statements)*
-                let instance = #construction;
-                #hooks_dispatch
-            }
-        }
-
-        impl injectable_runtime::Injectable for #type_name {
-            type Provider = #provider_name;
-            const IS_SINGLETON: bool = #is_singleton;
-        }
-
-        #graph_metadata
-        #arc_factory_submit
-        #owned_extract_impl
-        #legacy_hooks_submit
     }
 }
 
@@ -595,6 +343,7 @@ fn generate_graph_metadata_from_strings(
 /// - `Inject<T>` field  → `Inject::new(Arc::new(__v))`
 /// - `Arc<T>` field     → `Arc::new(__v)`
 /// - plain `T` field    → `__v` (no wrapping)
+
 /// Determine how to wrap the raw factory result `__v: T` to match the field type.
 ///
 /// Detection uses the AST-based `extract_inject_inner` / `extract_arc_inner`
@@ -625,14 +374,14 @@ fn provider_ident(type_name: &syn::Ident) -> syn::Ident {
 /// Generate the runtime inventory hooks dispatch block for field-injection providers.
 ///
 /// Scans `InjectableHooksEntry` inventory at runtime and calls the `post_construct`
-/// hook if one is registered for this type. This enables `#[injectable_impl]` (no
-/// constructor) to add `#[post_construct]` hooks to a `#[derive(Injectable)]` type
+/// hook if one is registered for this type. This enables `#[injectable]` (no
+/// constructor) to add `#[post_construct]` hooks to a `#[injectable]` type
 /// without any extra struct annotations.
 ///
 /// Only **post_construct** is dispatched here (no `T: Clone` required).
 /// **pre_destruct** in the field-injection path is NOT supported via inventory;
 /// use `#[injectable(has_pre_destruct)]` + manual `impl PreDestruct`, or use
-/// `#[injectable_impl]` with `#[constructor]`.
+/// `#[injectable]` with `#[injectable_ctor]`.
 pub(crate) fn generate_inventory_hooks_dispatch(type_name: &syn::Ident) -> TokenStream {
     let type_str = type_name.to_string();
     quote! {

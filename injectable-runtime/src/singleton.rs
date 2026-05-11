@@ -57,6 +57,20 @@ pub trait SingletonStore: Send + Sync + 'static {
 /// A minimal empty singleton store for containers with no singletons.
 pub struct EmptySingletonStore;
 
+// ─── Type-safe scope markers ─────────────────────────────────────────────────
+//
+// Use these as the `scope=` argument in `#[injectable(scope=Singleton)]`.
+// They are zero-sized marker types — no runtime overhead.
+
+/// One instance per container (the default scope).
+pub struct Singleton;
+
+/// A fresh instance is created on every resolution.
+pub struct Transient;
+
+/// One instance per request/task (reserved for future use).
+pub struct RequestScoped;
+
 impl SingletonStore for EmptySingletonStore {
     fn len(&self) -> usize {
         0

@@ -79,3 +79,7 @@ required-features = ["axum"]
 [[example]]
 name = "10_weather_users_api"
 required-features = ["axum"]
+
+[[example]]
+name = "11_url_shortener"
+required-features = ["axum"]

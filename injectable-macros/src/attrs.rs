@@ -5,13 +5,10 @@
 pub struct InjectableAttrs {
     /// The scope of this injectable.
     pub scope: Scope,
-    /// Whether to use `Default::default()` instead of field injection.
-    /// Set by `#[injectable(default)]`.
-    pub use_default: bool,
-    /// Whether this type has a `#[post_construct]` hook.
+    /// Whether this type has a `#[post_construct]` hook (manual impl).
     /// Set by `#[injectable(has_post_construct)]`.
     pub has_post_construct: bool,
-    /// Whether this type has a `#[pre_destruct]` hook.
+    /// Whether this type has a `#[pre_destruct]` hook (manual impl).
     /// Set by `#[injectable(has_pre_destruct)]`.
     pub has_pre_destruct: bool,
 }
@@ -20,7 +17,6 @@ impl Default for InjectableAttrs {
     fn default() -> Self {
         Self {
             scope: Scope::Singleton,
-            use_default: false,
             has_post_construct: false,
             has_pre_destruct: false,
         }
@@ -32,10 +28,8 @@ impl Default for InjectableAttrs {
 /// Supported forms:
 /// - `#[injectable(scope = "singleton")]` — set scope
 /// - `#[injectable(scope = "transient")]` — set scope
-/// - `#[injectable(default)]` — use `Default::default()` instead of field injection
-/// - `#[injectable(has_post_construct)]` — type implements PostConstruct
-/// - `#[injectable(has_pre_destruct)]` — type implements PreDestruct
-/// - `#[injectable(scope = "transient", default)]` — combined
+/// - `#[injectable(has_post_construct)]` — type manually implements PostConstruct
+/// - `#[injectable(has_pre_destruct)]` — type manually implements PreDestruct
 ///
 /// Returns an error if any unknown attribute key is encountered.
 pub fn parse_attrs(attrs: &[syn::Attribute]) -> syn::Result<InjectableAttrs> {
@@ -43,7 +37,6 @@ pub fn parse_attrs(attrs: &[syn::Attribute]) -> syn::Result<InjectableAttrs> {
 
     for attr in attrs {
         if attr.path().is_ident("injectable") {
-            // Parse the attribute content as a comma-separated token stream
             let args: syn::punctuated::Punctuated<InjectableArg, syn::Token![,]> =
                 attr.parse_args_with(syn::punctuated::Punctuated::parse_terminated)?;
 
@@ -56,9 +49,6 @@ pub fn parse_attrs(attrs: &[syn::Attribute]) -> syn::Result<InjectableAttrs> {
                             "request" => Scope::Request,
                             other => Scope::Custom(other.to_string()),
                         };
-                    }
-                    InjectableArg::Default => {
-                        result.use_default = true;
                     }
                     InjectableArg::HasPostConstruct => {
                         result.has_post_construct = true;
@@ -78,8 +68,6 @@ pub fn parse_attrs(attrs: &[syn::Attribute]) -> syn::Result<InjectableAttrs> {
 enum InjectableArg {
     /// `scope = "value"`
     Scope(String),
-    /// `default`
-    Default,
     /// `has_post_construct`
     HasPostConstruct,
     /// `has_pre_destruct`
@@ -91,9 +79,7 @@ impl syn::parse::Parse for InjectableArg {
         let lookahead = input.lookahead1();
         if lookahead.peek(syn::Ident) {
             let ident: syn::Ident = input.parse()?;
-            if ident == "default" {
-                Ok(InjectableArg::Default)
-            } else if ident == "scope" {
+            if ident == "scope" {
                 input.parse::<syn::Token![=]>()?;
                 let lit: syn::LitStr = input.parse()?;
                 Ok(InjectableArg::Scope(lit.value()))

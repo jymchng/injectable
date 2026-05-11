@@ -1,159 +1,141 @@
-# Guide 04 — External Types with `DynProvider`
+# Guide 04 — External Types
 
-You can't add `#[derive(Injectable)]` to types from third-party crates. `DynProvider` is the bridge: a closure-based provider you register with the container at build time.
+External types are types from crates you don't control. You cannot annotate them
+with `#[injectable]`, so the framework provides three complementary mechanisms.
+For a quick side-by-side comparison see `3-ways-to-inject-external-types.md`.
 
-## Three Variants
+## Mechanism 1 — Constructor factory parameters
 
-### `DynProvider::sync` — synchronous, no dependencies
+The most co-located option. Factory functions live next to the service that uses
+them and are called via `#[inject(use_factory_async/sync = path)]` on a
+constructor parameter.
+
+```rust
+use injectable::*;
+
+// factory: async fn(&ResolveContext) -> Result<T, E>
+async fn make_pool(_ctx: &ResolveContext) -> Result<sqlx::SqlitePool, sqlx::Error> {
+    sqlx::SqlitePool::connect("sqlite:./app.db").await
+}
+
+// factory: fn(&ResolveContext) -> T
+fn make_client(_ctx: &ResolveContext) -> reqwest::Client {
+    reqwest::Client::new()
+}
+
+pub struct Database {
+    pool:   sqlx::SqlitePool,
+    client: reqwest::Client,
+}
+
+#[injectable]
+impl Database {
+    #[injectable_ctor]
+    pub async fn new(
+        #[inject(use_factory_async = self::make_pool)]   pool:   sqlx::SqlitePool,
+        #[inject(use_factory_sync  = self::make_client)] client: reqwest::Client,
+    ) -> Self {
+        Self { pool, client }
+    }
+}
+```
+
+## Mechanism 2 — Field factory annotations
+
+Use the declarative `#[injectable]`-on-struct style. Every non-`Inject<T>` field
+must carry `#[inject]` or a factory annotation.
+
+```rust
+use injectable::*;
+
+async fn make_pool(_ctx: &ResolveContext) -> Result<sqlx::SqlitePool, sqlx::Error> {
+    sqlx::SqlitePool::connect("sqlite:./app.db").await
+}
+
+#[injectable]
+pub struct Database {
+    #[inject(use_factory_async = self::make_pool)]
+    pool: sqlx::SqlitePool,
+}
+```
+
+## Mechanism 3 — `DynProvider` in the container builder
+
+Register a closure-based provider at container build time. Any injectable
+constructor that declares an `Arc<T>` parameter (with `#[inject]`) for the
+registered type will receive a shared `Arc` to the same instance.
+
+### Three provider variants
 
 ```rust
 use injectable::*;
 
 let container = Container::builder()
+
+    // Sync, no deps
     .register(DynProvider::sync(|| {
         Ok(reqwest::Client::new())
     }))
-    .build()
-    .await?;
 
-let client = container.resolve_external::<reqwest::Client>().await?;
-```
-
-### `DynProvider::new` — async, no dependencies
-
-```rust
-let container = Container::builder()
+    // Async, no deps
     .register(DynProvider::new(|| async {
-        let pool = sqlx::SqlitePool::connect("sqlite:./app.db").await
-            .map_err(|e| InjectableError::ConstructionFailed {
-                type_name: "SqlitePool",
-                reason: e.to_string(),
-            })?;
-        Ok(pool)
+        Ok(sqlx::SqlitePool::connect("sqlite:./app.db").await?)
     }))
-    .build()
-    .await?;
 
-let pool = container.resolve_external::<sqlx::SqlitePool>().await?;
-```
-
-### `DynProvider::with_ctx` — async, with access to other resolved types
-
-```rust
-let container = Container::builder()
+    // Async, with access to other resolved types
     .register(DynProvider::with_ctx(|ctx| async move {
-        // Resolve an Injectable type from the DI context
         let config = ctx.resolve::<AppConfig>().await?;
-        // Resolve another external type from the registry
-        let credentials = ctx.resolve_external::<Credentials>().await?;
-
-        let pool = sqlx::SqlitePool::connect(&config.database_url).await
+        let pool = sqlx::SqlitePool::connect(&config.db_url)
+            .await
             .map_err(|e| InjectableError::ConstructionFailed {
                 type_name: "SqlitePool",
                 reason: e.to_string(),
             })?;
         Ok(pool)
     }))
+
     .build()
     .await?;
 ```
 
-## Capture Variables by Move
-
-DynProvider closures are `Fn` (called once per resolution). Capture config or derived values by move:
+### Consuming a `DynProvider`-registered type
 
 ```rust
-let database_url = std::env::var("DATABASE_URL")
-    .unwrap_or_else(|_| "sqlite:./app.db".to_string());
-
-let container = Container::builder()
-    .register(DynProvider::new(move || {
-        let url = database_url.clone();
-        async move {
-            let pool = sqlx::SqlitePool::connect(&url).await?;
-            Ok(pool)
-        }
-    }))
-    .build()
-    .await?;
-```
-
-## Injecting External Types into Injectable Services
-
-Once a type is registered via `DynProvider`, an `#[injectable_impl]` constructor can take it as `Arc<T>`:
-
-```rust
-use std::sync::Arc;
-use injectable::*;
-
 pub struct UserRepository {
     pool: Arc<sqlx::SqlitePool>,
 }
 
-#[injectable_impl]
+#[injectable]
 impl UserRepository {
-    #[constructor]
-    pub fn new(pool: Arc<sqlx::SqlitePool>) -> Self {
+    #[injectable_ctor]
+    pub fn new(#[inject] pool: Arc<sqlx::SqlitePool>) -> Self {
         Self { pool }
     }
-
-    pub async fn find(&self, id: i64) -> Option<String> {
-        let row = sqlx::query_scalar::<_, String>(
-            "SELECT name FROM users WHERE id = ?",
-        )
-        .bind(id)
-        .fetch_optional(&*self.pool)
-        .await
-        .unwrap_or(None);
-        row
-    }
 }
-
-// In main, register SqlitePool so UserRepository can receive it:
-let container = Container::builder()
-    .register(DynProvider::new(|| async {
-        Ok(sqlx::SqlitePool::connect("sqlite:./app.db").await?)
-    }))
-    .build()
-    .await?;
-
-let repo = container.resolve::<UserRepository>().await?;
 ```
 
-## Chaining External Providers
+The framework resolves `Arc<sqlx::SqlitePool>` from the registry and passes it
+to the constructor. Multiple services share the same `Arc`.
 
-External providers can depend on each other through `DynProvider::with_ctx`:
+## Resolving External Types Directly
 
-```rust
-let container = Container::builder()
-    // First: an HTTP client
-    .register(DynProvider::sync(|| {
-        Ok(reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(30))
-            .build()?)
-    }))
-    // Second: a typed API client that wraps the HTTP client
-    .register(DynProvider::with_ctx(|ctx| async move {
-        let http = ctx.resolve_external::<reqwest::Client>().await?;
-        Ok(MyApiClient::new(http, "https://api.example.com"))
-    }))
-    .build()
-    .await?;
-```
+| Method | When to use |
+|---|---|
+| `container.resolve_external::<T>()` | Top-level resolution from the container |
+| `ctx.resolve_external::<T>()` | Inside a `DynProvider::with_ctx` closure |
+| `ctx.try_resolve_external::<T>()` | Optional — returns `Option<Result<T>>` |
 
 ## Error Handling in DynProvider
 
-Return `InjectableError::ConstructionFailed` for any failure:
-
 ```rust
 .register(DynProvider::new(|| async {
-    let redis_url = std::env::var("REDIS_URL")
+    let url = std::env::var("REDIS_URL")
         .map_err(|_| InjectableError::ConstructionFailed {
             type_name: "redis::Client",
             reason: "REDIS_URL env var not set".to_string(),
         })?;
 
-    let client = redis::Client::open(redis_url.as_str())
+    let client = redis::Client::open(url.as_str())
         .map_err(|e| InjectableError::ConstructionFailed {
             type_name: "redis::Client",
             reason: e.to_string(),
@@ -163,35 +145,44 @@ Return `InjectableError::ConstructionFailed` for any failure:
 }))
 ```
 
-## Resolving External Types
+## Capture by Move
 
-| Method | When to use |
-|---|---|
-| `container.resolve_external::<T>()` | Top-level resolution from the container |
-| `ctx.resolve_external::<T>()` | Inside a `DynProvider::with_ctx` closure |
-| `ctx.try_resolve_external::<T>()` | Optional — returns `Option<Result<T>>` |
-
-## Multiple External Registrations
-
-Register as many types as you need. Each type is keyed by its `TypeId`, so registering the same type twice replaces the first:
+DynProvider closures must be `Fn + Send + Sync`. Capture config at build time
+by move:
 
 ```rust
-let container = Container::builder()
-    .register(DynProvider::sync(|| Ok(reqwest::Client::new())))
-    .register(DynProvider::new(|| async {
-        Ok(sqlx::SqlitePool::connect("sqlite:./app.db").await?)
-    }))
-    .register(DynProvider::sync(|| Ok(redis::Client::open("redis://localhost")?)))
-    .build()
-    .await?;
+let db_url = std::env::var("DATABASE_URL")
+    .unwrap_or_else(|_| "sqlite:./app.db".to_string());
+
+.register(DynProvider::new(move || {
+    let url = db_url.clone();
+    async move {
+        Ok(sqlx::SqlitePool::connect(&url).await?)
+    }
+}))
 ```
 
-## When to Use `DynProvider` vs `#[derive(Injectable)]`
+## Chaining External Providers
+
+```rust
+.register(DynProvider::sync(|| {
+    Ok(reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()?)
+}))
+.register(DynProvider::with_ctx(|ctx| async move {
+    let http = ctx.resolve_external::<reqwest::Client>().await?;
+    Ok(MyApiClient::new(http, "https://api.example.com"))
+}))
+```
+
+## Decision Guide
 
 | Situation | Solution |
 |---|---|
-| Type is in your crate | `#[derive(Injectable)]` |
-| Type is in a third-party crate | `DynProvider` |
-| Type needs env var config | `#[injectable_impl]` with zero-arg constructor that reads env |
-| Type needs async init | `DynProvider::new` or `#[injectable_impl]` async constructor |
-| Type depends on both owned and external types | `DynProvider::with_ctx` |
+| External type used by one service, factory logic local | Mechanism 1 (ctor factory params) |
+| Declarative struct, all fields expressible as factories | Mechanism 2 (field factory annotations) |
+| External type shared by many services | Mechanism 3 (DynProvider) |
+| Type needs env var or complex async setup | Mechanism 3 with `DynProvider::new` / `with_ctx` |
+| Type depends on another resolved type | `DynProvider::with_ctx` or factory with `ctx.resolve` |
+| Type is in your crate | `#[injectable]` — no DynProvider needed |

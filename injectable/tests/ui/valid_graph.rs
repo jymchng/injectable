@@ -3,15 +3,17 @@
 //! This graph has no cycles, no scope mismatches, no missing
 //! dependencies, and no duplicates. It should compile successfully.
 
-use injectable::{container, Injectable, Inject};
+use injectable::{container, injectable, Inject};
 
-#[derive(Injectable, Default, Clone)]
+#[injectable]
+#[derive(Default, Clone)]
 pub struct Database;
 
-#[derive(Injectable, Default, Clone)]
+#[injectable]
+#[derive(Default, Clone)]
 pub struct Config;
 
-#[derive(Injectable)]
+#[injectable]
 pub struct UserService {
     db: Inject<Database>,
     config: Inject<Config>,

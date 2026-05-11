@@ -1,15 +1,13 @@
-//! Compile-fail test: #[injectable_impl] without #[constructor].
+//! Compile-fail test: #[injectable] without #[injectable_ctor].
 //!
-//! The #[injectable_impl] attribute requires exactly one method
-//! annotated with #[constructor]. Omitting it is a compile error.
-
-use injectable::injectable_impl;
+//! The #[injectable] attribute on an impl block requires either a
+//! #[injectable_ctor] method or at least one lifecycle hook.
 
 pub struct MyService {
     name: String,
 }
 
-#[injectable_impl]
+#[injectable]
 impl MyService {
     pub fn new() -> Self {
         Self { name: "default".to_string() }

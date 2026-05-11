@@ -1,19 +1,19 @@
-//! The `#[injectable_impl]` attribute macro for constructor-based injection.
+//! The `#[injectable]` attribute macro for constructor-based injection.
 //!
-//! This macro processes an impl block, finds the `#[constructor]` method,
+//! This macro processes an impl block, finds the `#[injectable_ctor]` method,
 //! and generates the `Provider`, `Injectable`, and lifecycle hook impls.
 //!
-//! # Parameter Rewriting
+//! # Parameter Injection Rules
 //!
-//! The key design: parameters of type `T` are auto-rewritten to extract via
-//! `Inject<T>`, then converted back to the declared type. This allows users
-//! to write natural method signatures and call them outside of DI.
+//! `Inject<T>` parameters are auto-injected. All other types require an explicit
+//! `#[inject]` annotation (or a factory variant); omitting it is a compile error.
 //!
-//! | Constructor Parameter | DI Extraction           | Conversion              |
-//! |-----------------------|--------------------------|-------------------------|
-//! | `Inject<T>`          | `Inject<T>::extract(ctx)`| Pass directly           |
-//! | `Arc<T>`             | `Inject<T>::extract(ctx)`| `.0` (inner Arc)        |
-//! | `T` (other)          | `Inject<T>::extract(ctx)`| `Arc::unwrap_or_clone` |
+//! | Constructor Parameter | Annotation     | DI Extraction            | Conversion              |
+//! |-----------------------|----------------|--------------------------|-------------------------|
+//! | `Inject<T>`          | (none needed)  | `Inject<T>::extract(ctx)`| Pass directly           |
+//! | `Arc<T>`             | `#[inject]`    | `Inject<T>::extract(ctx)`| `.0` (inner Arc)        |
+//! | `T` (other)          | `#[inject]`    | `Inject<T>::extract(ctx)`| `Arc::unwrap_or_clone`  |
+//! | any                  | `#[inject(use_factory_*=path)]` | factory fn | as declared |
 //!
 //! # Auto-detected Lifecycle Hooks
 //!
@@ -40,7 +40,7 @@ use crate::metadata::{extract_arc_inner_str, extract_inject_inner, type_to_strin
 
 // ─── Public Entry Point ──────────────────────────────────────────────
 
-/// Expand the `#[injectable_impl]` attribute macro.
+/// Expand the `#[injectable]` attribute macro.
 ///
 /// `attrs` contains the attribute arguments (e.g., `scope = "transient"`).
 /// `item` contains the impl block token stream.
@@ -54,7 +54,7 @@ pub fn expand_injectable_impl(attrs: TokenStream, item: TokenStream) -> syn::Res
     // Extract the type name from the impl block
     let type_name = extract_type_name(&impl_block)?;
 
-    // Scan methods for #[constructor], #[post_construct], #[pre_destruct]
+    // Scan methods for #[injectable_ctor], #[post_construct], #[pre_destruct]
     let scan_result = scan_impl_methods(&impl_block)?;
 
     // Strip lifecycle attributes from methods in the output impl block
@@ -74,16 +74,16 @@ pub fn expand_injectable_impl(attrs: TokenStream, item: TokenStream) -> syn::Res
         // ── No-constructor path ─────────────────────────────────────────────
         // Valid when at least one lifecycle hook (#[post_construct] or
         // #[pre_destruct]) is present. The struct handles field injection via
-        // #[derive(Injectable)]; this block only generates hook trait impls and
+        // #[injectable]; this block only generates hook trait impls and
         // an inventory entry so the field-injection provider calls the hooks
         // automatically — no extra struct annotation required.
         if scan_result.post_construct_hooks.is_empty() && scan_result.pre_destruct_hooks.is_empty()
         {
             return Err(syn::Error::new(
                 impl_block.self_ty.span(),
-                "#[injectable_impl] without #[constructor] requires at least one \
+                "#[injectable] without #[injectable_ctor] requires at least one \
                  #[post_construct] or #[pre_destruct] method. \
-                 For field injection without lifecycle hooks, use #[derive(Injectable)] alone.",
+                 For field injection without lifecycle hooks, use #[injectable] alone.",
             ));
         }
         let post_impl = generate_post_construct_impl(&type_name, &scan_result.post_construct_hooks);
@@ -209,23 +209,8 @@ struct ParamInfo {
     name: syn::Ident,
     ty: syn::Type,
     ty_string: String,
-    /// The inner type `T` if the param is `Inject<T>` or `Arc<T>`.
-    inner_type: Option<String>,
-    /// What kind of parameter this is.
-    kind: ParamKind,
     /// Optional factory function from `#[inject(use_factory_async/sync = path)]`.
     factory_fn: Option<FactoryFn>,
-}
-
-/// How a constructor parameter should be handled for DI extraction.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ParamKind {
-    /// `Inject<T>` — extract as `Inject<T>`, pass directly.
-    Inject,
-    /// `Arc<T>` — extract as `Inject<T>`, pass `.0`.
-    Arc,
-    /// `T` (other) — extract as `Inject<T>`, convert via `Arc::unwrap_or_clone`.
-    Owned,
 }
 
 /// Information about a lifecycle hook method.
@@ -256,7 +241,7 @@ fn scan_impl_methods(impl_block: &syn::ItemImpl) -> syn::Result<ScanResult> {
             let has_constructor = method
                 .attrs
                 .iter()
-                .any(|a| a.path().is_ident("constructor"));
+                .any(|a| a.path().is_ident("injectable_ctor"));
             let has_post_construct = method
                 .attrs
                 .iter()
@@ -270,7 +255,7 @@ fn scan_impl_methods(impl_block: &syn::ItemImpl) -> syn::Result<ScanResult> {
                 if result.constructor.is_some() {
                     return Err(syn::Error::new(
                         method.sig.ident.span(),
-                        "#[injectable_impl] requires exactly one #[constructor] method, but found multiple",
+                        "#[injectable] requires exactly one #[injectable_ctor] method, but found multiple",
                     ));
                 }
 
@@ -357,18 +342,26 @@ fn extract_params(sig: &syn::Signature) -> syn::Result<Vec<ParamInfo>> {
             let ty = (*pat_type.ty).clone();
             let ty_string = type_to_string(&ty);
 
-            // Determine parameter kind
-            let (kind, inner_type) = classify_param(&ty, &ty_string);
+            // Parse optional #[inject] / #[inject(use_factory_*=path)] from parameter attrs
+            let (has_inject, factory_fn) = parse_param_inject(&pat_type.attrs)?;
 
-            // Parse optional #[inject(use_factory = path)] from parameter attrs
-            let factory_fn = extract_param_factory(&pat_type.attrs)?;
+            // Non-Inject<T> params require an explicit #[inject] annotation
+            if extract_inject_inner(&ty).is_none() && !has_inject {
+                return Err(syn::Error::new(
+                    ty.span(),
+                    format!(
+                        "parameter `{}: {}` is not auto-injectable; \
+                         only `Inject<T>` parameters are injected automatically — \
+                         annotate with `#[inject]` to extract this from the container",
+                        name, ty_string
+                    ),
+                ));
+            }
 
             params.push(ParamInfo {
                 name,
                 ty,
                 ty_string,
-                inner_type,
-                kind,
                 factory_fn,
             });
         }
@@ -378,11 +371,25 @@ fn extract_params(sig: &syn::Signature) -> syn::Result<Vec<ParamInfo>> {
     Ok(params)
 }
 
-/// Parse `#[inject(use_factory_async/sync = path)]` from a parameter's attributes.
-fn extract_param_factory(attrs: &[syn::Attribute]) -> syn::Result<Option<FactoryFn>> {
+/// Parse `#[inject]` / `#[inject(use_factory_async/sync = path)]` from a parameter's attributes.
+///
+/// Returns `(has_inject_annotation, optional_factory)`:
+/// - `#[inject]` (no args)            → `(true, None)`
+/// - `#[inject(use_factory_async=…)]` → `(true, Some(FactoryFn::Async(…)))`
+/// - `#[inject(use_factory_sync=…)]`  → `(true, Some(FactoryFn::Sync(…)))`
+/// - no `#[inject]` attr              → `(false, None)`
+fn parse_param_inject(attrs: &[syn::Attribute]) -> syn::Result<(bool, Option<FactoryFn>)> {
     for attr in attrs {
         if attr.path().is_ident("inject") {
+            // Bare #[inject] with no parentheses / args
+            if matches!(attr.meta, syn::Meta::Path(_)) {
+                return Ok((true, None));
+            }
             let factory = attr.parse_args_with(|input: syn::parse::ParseStream| {
+                if input.is_empty() {
+                    // #[inject()] — treat same as bare #[inject]
+                    return Ok(None);
+                }
                 let ident: syn::Ident = input.parse()?;
                 let is_async = if ident == "use_factory_async" || ident == "use_factory" {
                     true
@@ -400,33 +407,15 @@ fn extract_param_factory(attrs: &[syn::Attribute]) -> syn::Result<Option<Factory
                 input.parse::<syn::Token![=]>()?;
                 let path: syn::Path = input.parse()?;
                 if is_async {
-                    Ok(FactoryFn::Async(path))
+                    Ok(Some(FactoryFn::Async(path)))
                 } else {
-                    Ok(FactoryFn::Sync(path))
+                    Ok(Some(FactoryFn::Sync(path)))
                 }
             })?;
-            return Ok(Some(factory));
+            return Ok((true, factory));
         }
     }
-    Ok(None)
-}
-
-/// Classify a parameter type to determine how it should be extracted.
-fn classify_param(ty: &syn::Type, _ty_string: &str) -> (ParamKind, Option<String>) {
-    // Check if it's Inject<T>
-    if let Some(inner) = extract_inject_inner(ty) {
-        return (ParamKind::Inject, Some(inner));
-    }
-
-    // Check if it's Arc<T> — uses metadata::extract_arc_inner_str which
-    // checks segments.last().ident and handles all path prefix forms.
-    if let Some(inner) = extract_arc_inner_str(ty) {
-        return (ParamKind::Arc, Some(inner));
-    }
-
-    // Otherwise, it's a plain T — will be extracted via Inject<T>
-    // and converted using Arc::unwrap_or_clone (requires T: Clone)
-    (ParamKind::Owned, None)
+    Ok((false, None))
 }
 
 // ─── Type Name Extraction ────────────────────────────────────────────
@@ -447,21 +436,21 @@ fn extract_type_name(impl_block: &syn::ItemImpl) -> syn::Result<syn::Ident> {
             }),
         _ => Err(syn::Error::new(
             impl_block.self_ty.span(),
-            "#[injectable_impl] can only be used on impl blocks for named types",
+            "#[injectable] can only be used on impl blocks for named types",
         )),
     }
 }
 
 // ─── Attribute Stripping ─────────────────────────────────────────────
 
-/// Visitor that strips `#[constructor]`, `#[post_construct]`, and
+/// Visitor that strips `#[injectable_ctor]`, `#[post_construct]`, and
 /// `#[pre_destruct]` attributes from methods in the output impl block.
 struct AttrStripper;
 
 impl VisitMut for AttrStripper {
     fn visit_impl_item_fn_mut(&mut self, node: &mut syn::ImplItemFn) {
         node.attrs.retain(|a| {
-            !a.path().is_ident("constructor")
+            !a.path().is_ident("injectable_ctor")
                 && !a.path().is_ident("post_construct")
                 && !a.path().is_ident("pre_destruct")
         });
@@ -550,8 +539,7 @@ fn generate_provider(
     let scope_str = attrs.scope.as_str();
     let graph_metadata = generate_graph_metadata(type_name, &dep_strings, scope_str);
     let is_singleton: bool = attrs.scope != crate::attrs::Scope::Transient;
-    let arc_factory_submit = crate::provider_gen::generate_arc_factory_submit(type_name);
-    let owned_extract_impl = crate::provider_gen::generate_owned_extract_impl(type_name);
+    let arc_factory_submit = crate::provider_gen::generate_arc_factory_submit(type_name, is_singleton);
 
     // Generate PostConstruct impl if there are hooks
     let post_construct_impl = generate_post_construct_impl(type_name, post_construct_hooks);
@@ -582,11 +570,15 @@ fn generate_provider(
         #pre_destruct_impl
         #graph_metadata
         #arc_factory_submit
-        #owned_extract_impl
     })
 }
 
 /// Generate the extraction statements and constructor call arguments.
+///
+/// Every parameter uses `<ParamType as Extract>::extract(ctx).await?`.
+/// For `Inject<T>` this is direct; for `Arc<T>` it uses the blanket
+/// `impl<T: Injectable> Extract for Arc<T>`.  No AST-level type detection
+/// is needed — the Rust compiler verifies `ParamType: Extract`.
 fn generate_extraction_code(
     constructor: &ConstructorInfo,
 ) -> syn::Result<(Vec<TokenStream>, Vec<TokenStream>, Vec<String>)> {
@@ -595,76 +587,45 @@ fn generate_extraction_code(
     let mut dep_strings = Vec::new();
 
     for param in &constructor.params {
-        let param_name = &param.name;
-        let inject_var = syn::Ident::new(
-            &format!("__inject_{}", param_name),
-            proc_macro2::Span::call_site(),
-        );
+        let name   = &param.name;
+        let ty     = &param.ty;
+        let ty_str = &param.ty_string;
 
-        // If the parameter has #[inject(use_factory_async/sync = path)], call
-        // the factory instead of going through the normal Extract path.
+        // ── factory param ─────────────────────────────────────────────────
         if let Some(factory) = &param.factory_fn {
-            let factory_path = factory.path();
-            let ty_str = &param.ty_string;
-            let await_token = if factory.is_async() {
-                quote! { .await }
-            } else {
-                quote! {}
-            };
-            extract_statements.push(quote! {
-                let #inject_var = {
-                    let __v = #factory_path(ctx)#await_token.map_err(|e|
+            let path = factory.path();
+            if factory.is_async() {
+                extract_statements.push(quote! {
+                    let #name: #ty = #path(ctx).await.map_err(|e|
                         injectable_runtime::InjectableError::ConstructionFailed {
                             type_name: #ty_str,
                             reason: e.to_string(),
                         })?;
-                    injectable_runtime::Inject::new(std::sync::Arc::new(__v))
-                };
-            });
-            let call_arg = match param.kind {
-                ParamKind::Arc => quote! { #inject_var.0 },
-                ParamKind::Inject => quote! { #inject_var },
-                ParamKind::Owned => quote! { std::sync::Arc::unwrap_or_clone(#inject_var.0) },
-            };
-            call_args.push(call_arg);
-            // Factory params are external; don't add to dep_strings graph metadata.
+                });
+            } else {
+                extract_statements.push(quote! {
+                    let #name: #ty = #path(ctx);
+                });
+            }
+            call_args.push(quote! { #name });
+            // Factory params are external — not added to dep_strings.
             continue;
         }
 
-        match param.kind {
-            ParamKind::Inject => {
-                // Parameter is Inject<T> — extract Inject<T> directly, pass it through
-                let inner_ty_str = param.inner_type.as_ref().unwrap();
-                let inner_ty: syn::Type = syn::parse_str(inner_ty_str)?;
+        // ── standard: <T as Extract>::extract(ctx) ────────────────────────
+        extract_statements.push(quote! {
+            let #name: #ty =
+                <#ty as injectable_runtime::Extract>::extract(ctx).await?;
+        });
+        call_args.push(quote! { #name });
 
-                extract_statements.push(quote! {
-                    let #inject_var = <injectable_runtime::Inject<#inner_ty> as injectable_runtime::Extract>::extract(ctx).await?;
-                });
-                call_args.push(quote! { #inject_var });
-                dep_strings.push(inner_ty_str.clone());
-            }
-            ParamKind::Arc => {
-                // Parameter is Arc<T> — extract Inject<T>, pass .0 (the inner Arc)
-                let inner_ty_str = param.inner_type.as_ref().unwrap();
-                let inner_ty: syn::Type = syn::parse_str(inner_ty_str)?;
-
-                extract_statements.push(quote! {
-                    let #inject_var = <injectable_runtime::Inject<#inner_ty> as injectable_runtime::Extract>::extract(ctx).await?;
-                });
-                call_args.push(quote! { #inject_var.0 });
-                dep_strings.push(inner_ty_str.clone());
-            }
-            ParamKind::Owned => {
-                // Parameter is T — extract Inject<T>, convert to owned via Arc::unwrap_or_clone
-                let ty = &param.ty;
-                let ty_str = &param.ty_string;
-
-                extract_statements.push(quote! {
-                    let #inject_var = <injectable_runtime::Inject<#ty> as injectable_runtime::Extract>::extract(ctx).await?;
-                });
-                call_args.push(quote! { std::sync::Arc::unwrap_or_clone(#inject_var.0) });
-                dep_strings.push(ty_str.clone());
-            }
+        // dep_strings for graph metadata: unwrap inner type from Inject<T> or Arc<T>
+        if let Some(inner) = extract_inject_inner(ty) {
+            dep_strings.push(inner);
+        } else if let Some(inner) = extract_arc_inner_str(ty) {
+            dep_strings.push(inner);
+        } else {
+            dep_strings.push(ty_str.clone());
         }
     }
 
@@ -803,12 +764,12 @@ fn generate_pre_destruct_impl(type_name: &syn::Ident, hooks: &[HookInfo]) -> Tok
     }
 }
 
-/// Generate an `InjectableHooksEntry` inventory submit for `#[injectable_impl]`
-/// blocks that have NO `#[constructor]`.
+/// Generate an `InjectableHooksEntry` inventory submit for `#[injectable]`
+/// blocks that have NO `#[injectable_ctor]`.
 ///
 /// Called from the no-constructor path of `expand_injectable_impl`. Submits a
 /// type-erased entry so the field-injection provider (generated by
-/// `#[derive(Injectable)]`) can call these hooks at runtime without any extra
+/// `#[injectable]`) can call these hooks at runtime without any extra
 /// struct annotation.
 fn generate_hooks_entry_submit(
     type_name: &syn::Ident,

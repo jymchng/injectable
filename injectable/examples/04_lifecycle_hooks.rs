@@ -7,17 +7,18 @@
 //!
 //! There are two ways to use lifecycle hooks:
 //!
-//! 1. With `#[derive(Injectable)]` + `#[injectable(has_post_construct)]`:
+//! 1. With `#[injectable]` + `#[injectable(has_post_construct)]`:
 //!    You implement the `PostConstruct` / `PreDestruct` traits yourself.
 //!
-//! 2. With `#[injectable_impl]`:
+//! 2. With `#[injectable]`:
 //!    The macro auto-detects `#[post_construct]` and `#[pre_destruct]`
 //!    annotated methods and generates the trait implementations for you.
 //!
 //! Run with: cargo run --example 04_lifecycle_hooks
 
-use injectable::*;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use injectable::*;
 
 // ─── Shared counters for tracking hook calls ────────────────────────
 
@@ -34,29 +35,39 @@ static IMPL_CLEANUP_COUNT: AtomicUsize = AtomicUsize::new(0);
 // The framework then calls PostConstruct/PreDestruct after construction.
 
 /// A database service with lifecycle hooks.
-/// Uses #[injectable(default)] because AtomicUsize is not Injectable.
-#[derive(Injectable, Default, Debug)]
-#[injectable(has_post_construct, has_pre_destruct, default)]
+/// Uses #[injectable] with explicit constructor — replaces the old
+/// #[injectable(default)] pattern for non-Injectable field types.
+/// Wrap AtomicUsize in Arc so the struct can implement Clone
+/// (required by the pre_destruct registration mechanism).
+#[derive(Debug, Clone)]
 pub struct Database {
-    pub connection_count: AtomicUsize,
+    pub connection_count: Arc<AtomicUsize>,
 }
 
-#[async_trait::async_trait]
-impl PostConstruct for Database {
-    async fn post_construct(&self) -> HookResult {
+impl Default for Database {
+    fn default() -> Self {
+        Self { connection_count: Arc::new(AtomicUsize::new(0)) }
+    }
+}
+
+#[injectable]
+impl Database {
+    #[injectable_ctor]
+    fn new() -> Self {
+        Self::default()
+    }
+
+    #[post_construct]
+    async fn on_start(&self) -> HookResult {
         DB_INIT_COUNT.fetch_add(1, Ordering::SeqCst);
-        // Simulate connection pool warmup
         self.connection_count.store(10, Ordering::SeqCst);
         println!("  [Database] post_construct: warmed up connection pool to 10");
         Ok(())
     }
-}
 
-#[async_trait::async_trait]
-impl PreDestruct for Database {
-    async fn pre_destruct(&self) -> HookResult {
+    #[pre_destruct]
+    async fn on_stop(&self) -> HookResult {
         DB_SHUTDOWN_COUNT.fetch_add(1, Ordering::SeqCst);
-        // Simulate graceful shutdown
         let remaining = self.connection_count.swap(0, Ordering::SeqCst);
         println!("  [Database] pre_destruct: closed {remaining} connections");
         Ok(())
@@ -64,25 +75,34 @@ impl PreDestruct for Database {
 }
 
 /// A service with lifecycle hooks.
-#[derive(Injectable, Default, Debug)]
-#[injectable(has_post_construct, has_pre_destruct, default)]
+#[derive(Debug, Clone)]
 pub struct OrderService {
-    pub ready: AtomicUsize,
+    pub ready: Arc<AtomicUsize>,
 }
 
-#[async_trait::async_trait]
-impl PostConstruct for OrderService {
-    async fn post_construct(&self) -> HookResult {
+impl Default for OrderService {
+    fn default() -> Self {
+        Self { ready: Arc::new(AtomicUsize::new(0)) }
+    }
+}
+
+#[injectable]
+impl OrderService {
+    #[injectable_ctor]
+    fn new() -> Self {
+        Self::default()
+    }
+
+    #[post_construct]
+    async fn on_start(&self) -> HookResult {
         SERVICE_READY_COUNT.fetch_add(1, Ordering::SeqCst);
         self.ready.store(1, Ordering::SeqCst);
         println!("  [OrderService] post_construct: service is now ready");
         Ok(())
     }
-}
 
-#[async_trait::async_trait]
-impl PreDestruct for OrderService {
-    async fn pre_destruct(&self) -> HookResult {
+    #[pre_destruct]
+    async fn on_stop(&self) -> HookResult {
         SERVICE_CLEANUP_COUNT.fetch_add(1, Ordering::SeqCst);
         self.ready.store(0, Ordering::SeqCst);
         println!("  [OrderService] pre_destruct: draining in-flight requests");
@@ -90,22 +110,22 @@ impl PreDestruct for OrderService {
     }
 }
 
-// ─── Approach 2: #[injectable_impl] with auto-detected hooks ────────
+// ─── Approach 2: #[injectable] with auto-detected hooks ────────
 // This is the most ergonomic approach. The macro auto-detects
 // #[post_construct] and #[pre_destruct] methods and generates
 // the trait implementations. You can have non-Injectable fields
 // because the constructor sets them directly.
 
-/// A cache service using `#[injectable_impl]` with auto-detected
+/// A cache service using `#[injectable]` with auto-detected
 /// lifecycle hooks.
 pub struct CacheService {
     entries: AtomicUsize,
     is_warm: AtomicUsize,
 }
 
-#[injectable_impl]
+#[injectable]
 impl CacheService {
-    #[constructor]
+    #[injectable_ctor]
     fn new() -> Self {
         println!("  [CacheService] constructor: creating cache");
         Self {
@@ -202,8 +222,8 @@ async fn main() {
         SERVICE_CLEANUP_COUNT.load(Ordering::SeqCst)
     );
 
-    // ── Part 2: #[injectable_impl] with auto-detected hooks ─────────
-    println!("--- Part 2: #[injectable_impl] auto-detected hooks ---\n");
+    // ── Part 2: #[injectable] with auto-detected hooks ─────────
+    println!("--- Part 2: #[injectable] auto-detected hooks ---\n");
 
     IMPL_INIT_COUNT.store(0, Ordering::SeqCst);
     IMPL_CLEANUP_COUNT.store(0, Ordering::SeqCst);

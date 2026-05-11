@@ -20,7 +20,8 @@ use injectable::*;
 use injectable::axum::AxumState;
 use serde::Serialize;
 
-#[derive(Injectable, Default, Debug)]
+#[injectable
+#[derive(, Default, Debug)]
 pub struct GreetingService;
 
 impl GreetingService {
@@ -69,9 +70,11 @@ use axum::{Json, extract::Path};
 use injectable::*;
 use serde::{Deserialize, Serialize};
 
-#[derive(Injectable, Default)]
+#[injectable
+#[derive(, Default)]
 pub struct UserRepository;
-#[derive(Injectable, Default)]
+#[injectable
+#[derive(, Default)]
 pub struct AuditLogger;
 
 #[derive(Serialize)]
@@ -151,8 +154,10 @@ use injectable::*;
 use injectable::axum::AxumState;
 use serde::{Deserialize, Serialize};
 
-#[derive(Injectable, Default)] pub struct UserService;
-#[derive(Injectable, Default)] pub struct OrderService;
+#[injectable
+#[derive(, Default)] pub struct UserService;
+#[injectable
+#[derive(, Default)] pub struct OrderService;
 
 impl UserService {
     pub fn list(&self) -> Vec<String> { vec!["Alice".into(), "Bob".into()] }

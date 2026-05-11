@@ -1,5 +1,7 @@
-error: #[injectable_impl] without #[constructor] requires at least one #[post_construct] or #[pre_destruct] method. For field injection without lifecycle hooks, use #[derive(Injectable)] alone.
+error: cannot find attribute `injectable` in this scope
  --> tests/ui/missing_constructor.rs
   |
-  | impl MyService {
-  |      ^^^^^^^^^
+  | #[injectable]
+  |   ^^^^^^^^^^
+  |
+  = note: `injectable` is in scope, but it is a crate, not an attribute

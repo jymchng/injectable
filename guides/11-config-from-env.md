@@ -1,6 +1,6 @@
 # Guide 11 — Config from Environment Variables
 
-A common pattern: read environment variables once at startup, validate them, and inject the resulting config into every service that needs it. `#[injectable_impl]` with a zero-argument constructor is the cleanest way to do this.
+A common pattern: read environment variables once at startup, validate them, and inject the resulting config into every service that needs it. `#[injectable]` with a zero-argument constructor is the cleanest way to do this.
 
 ## Basic Pattern
 
@@ -15,11 +15,11 @@ pub struct AppConfig {
     pub debug: bool,
 }
 
-#[injectable_impl]
+#[injectable]
 impl AppConfig {
     /// Reads env vars at construction time.
     /// The container builds this once; all dependents share the same instance.
-    #[constructor]
+    #[injectable_ctor]
     pub fn new() -> Self {
         Self {
             database_url: std::env::var("DATABASE_URL")
@@ -51,9 +51,9 @@ pub struct Database {
     pool: Arc<sqlx::SqlitePool>,
 }
 
-#[injectable_impl]
+#[injectable]
 impl Database {
-    #[constructor]
+    #[injectable_ctor]
     pub async fn new(config: Arc<AppConfig>) -> Self {
         let pool = sqlx::SqlitePool::connect(&config.database_url)
             .await
@@ -66,9 +66,9 @@ pub struct EmailService {
     config: Arc<AppConfig>,
 }
 
-#[injectable_impl]
+#[injectable]
 impl EmailService {
-    #[constructor]
+    #[injectable_ctor]
     pub fn new(config: Arc<AppConfig>) -> Self {
         Self { config }
     }
@@ -97,9 +97,9 @@ pub struct SecureConfig {
     pub allowed_origins: Vec<String>,
 }
 
-#[injectable_impl]
+#[injectable]
 impl SecureConfig {
-    #[constructor]
+    #[injectable_ctor]
     pub fn new() -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let api_key = std::env::var("API_KEY")
             .map_err(|_| "API_KEY is required")?;
@@ -143,9 +143,9 @@ pub struct CacheConfig {
     pub ttl_secs: u64,
 }
 
-#[injectable_impl]
+#[injectable]
 impl DatabaseConfig {
-    #[constructor]
+    #[injectable_ctor]
     pub fn new() -> Self {
         Self {
             url: std::env::var("DATABASE_URL")
@@ -158,9 +158,9 @@ impl DatabaseConfig {
     }
 }
 
-#[injectable_impl]
+#[injectable]
 impl CacheConfig {
-    #[constructor]
+    #[injectable_ctor]
     pub fn new() -> Self {
         Self {
             redis_url: std::env::var("REDIS_URL")
@@ -178,15 +178,15 @@ Services depend only on the config slice they need:
 pub struct DatabaseService { config: Arc<DatabaseConfig> }
 pub struct CacheService    { config: Arc<CacheConfig>    }
 
-#[injectable_impl]
+#[injectable]
 impl DatabaseService {
-    #[constructor]
+    #[injectable_ctor]
     pub fn new(config: Arc<DatabaseConfig>) -> Self { Self { config } }
 }
 
-#[injectable_impl]
+#[injectable]
 impl CacheService {
-    #[constructor]
+    #[injectable_ctor]
     pub fn new(config: Arc<CacheConfig>) -> Self { Self { config } }
 }
 ```
@@ -242,7 +242,7 @@ async fn server_info(
 
 | Config requirement | Pattern |
 |---|---|
-| Simple key-value from env | Zero-arg `#[constructor]` with `std::env::var` |
+| Simple key-value from env | Zero-arg `#[injectable_ctor]` with `std::env::var` |
 | Validation at startup | Return `Result<Self, _>` from constructor |
 | Multiple services, different config | Split into focused config structs |
 | `.env` file | `dotenvy::dotenv()` before `Container::builder().build()` |

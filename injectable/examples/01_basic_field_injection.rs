@@ -2,7 +2,7 @@
 //! Basic Field Injection Example
 //!
 //! This example demonstrates the simplest form of dependency injection
-//! using `#[derive(Injectable)]` with field injection. When a struct's
+//! using `#[injectable]` with field injection. When a struct's
 //! fields all implement `Injectable`, the framework automatically wires
 //! them together without any constructor.
 //!
@@ -11,15 +11,16 @@
 //! - `T` where T: Injectable — owned value (fresh copy each resolution)
 //! - Non-Injectable fields require `#[injectable(default)]` to use Default
 //!
-//! ## New: `#[inject]` and `#[inject(skip)]` attributes
+//! ## `#[inject]` annotation
 //!
-//! - In a `#[injectable(default)]` struct, mark individual fields with
-//!   `#[inject]` to have them extracted instead of defaulted.
-//! - In a normal struct, mark individual fields with `#[inject(skip)]`
-//!   to have them use `Default::default()` instead of extracted.
+//! - `Inject<T>` fields are auto-injected — no annotation needed.
+//! - All other field types (`Arc<T>`, plain `T`, …) must be explicitly
+//!   annotated with `#[inject]` or a factory variant to be injected.
+//! - Fields with no DI dependency belong in a `#[injectable_ctor]` constructor.
 //!
 //! Run with: cargo run --example 01_basic_field_injection
 
+use std::sync::Arc;
 use injectable::*;
 
 // ─── Leaf Types ─────────────────────────────────────────────────────
@@ -29,15 +30,18 @@ use injectable::*;
 // Primitive types (String, usize, etc.) are NOT Injectable.
 
 /// Application configuration — a singleton with no dependencies.
-#[derive(Injectable, Default, Clone, Debug)]
+#[injectable]
+#[derive(Default, Clone, Debug)]
 pub struct Config;
 
 /// Database connection — a singleton with no dependencies.
-#[derive(Injectable, Default, Debug)]
+#[injectable]
+#[derive(Default, Clone, Debug)]
 pub struct Database;
 
 /// Cache layer — a singleton with no dependencies.
-#[derive(Injectable, Default, Debug)]
+#[injectable]
+#[derive(Default, Clone, Debug)]
 pub struct Cache;
 
 // ─── Service Types (Field Injection) ────────────────────────────────
@@ -45,7 +49,8 @@ pub struct Cache;
 // automatically resolves each field when the service is requested.
 
 /// A repository that depends on the Database via shared reference.
-#[derive(Injectable, Debug)]
+#[injectable]
+#[derive(Debug)]
 pub struct UserRepository {
     db: Inject<Database>,
 }
@@ -57,7 +62,8 @@ impl UserRepository {
 }
 
 /// A service that depends on multiple injectable types.
-#[derive(Injectable, Debug)]
+#[injectable]
+#[derive(Debug)]
 pub struct UserService {
     repo: Inject<UserRepository>,
     cache: Inject<Cache>,
@@ -71,41 +77,56 @@ impl UserService {
 
 /// A service using bare Injectable fields (owned values).
 /// Each resolution creates fresh copies of the field types.
-#[derive(Injectable, Debug)]
+#[injectable]
+#[derive(Debug)]
 pub struct OwnedService {
-    db: Database,
-    cache: Cache,
+    #[inject]
+    db: Arc<Database>,
+    #[inject]
+    cache: Arc<Cache>,
 }
 
 /// A service mixing Inject<T> and bare T fields.
-#[derive(Injectable, Debug)]
+#[injectable]
+#[derive(Debug)]
 pub struct MixedService {
     db: Inject<Database>, // shared Arc<Database>
-    config: Config,       // owned Config (fresh copy each resolution)
-}
-
-/// A struct with non-Injectable fields (like String, usize)
-/// must use `#[injectable(default)]` — the framework will use
-/// Default::default() instead of auto-wiring fields.
-///
-/// Individual fields can opt IN to injection with `#[inject]`:
-#[derive(Injectable, Debug)]
-#[injectable(default)]
-pub struct ConfigWithPort {
     #[inject]
-    pub db: Inject<Database>, // Injected! (overrides default behavior)
-    pub port: u16,    // Defaulted via Default::default()
-    pub host: String, // Defaulted via Default::default()
+    config: Arc<Config>,
 }
 
-/// A struct where some fields use `#[inject(skip)]` to opt out of
-/// injection in a normal (non-default) Injectable struct.
-#[derive(Injectable, Debug)]
+/// A struct with non-Injectable fields. Use #[injectable] with
+/// an explicit constructor — the replacement for #[injectable(default)].
+#[derive(Debug)]
+pub struct ConfigWithPort {
+    pub db: Inject<Database>,
+    pub port: u16,
+    pub host: String,
+}
+
+#[injectable]
+impl ConfigWithPort {
+    #[injectable_ctor]
+    fn new(db: Inject<Database>) -> Self {
+        Self { db, port: 0, host: String::new() }
+    }
+}
+
+/// A struct with a non-injectable field — uses a constructor to set it.
+/// Non-`Inject<T>` fields that have no DI dependency belong in the constructor.
+#[derive(Debug)]
 pub struct PartialInjectService {
-    db: Inject<Database>, // Injected (default for non-default struct)
-    #[inject(skip)]
-    name: String, // NOT injected — uses Default::default()
-    cache: Inject<Cache>, // Injected (default for non-default struct)
+    db: Inject<Database>,
+    name: String,
+    cache: Inject<Cache>,
+}
+
+#[injectable]
+impl PartialInjectService {
+    #[injectable_ctor]
+    fn new(db: Inject<Database>, cache: Inject<Cache>) -> Self {
+        Self { db, name: String::new(), cache }
+    }
 }
 
 // ─── Main ───────────────────────────────────────────────────────────
@@ -169,16 +190,16 @@ async fn main() {
     println!("  port field was defaulted: {}", config.port);
     println!("  host field was defaulted: {:?}", config.host);
 
-    // Resolve a type using #[inject(skip)] in a normal struct
-    println!("\n--- #[inject(skip)] in normal struct ---");
+    // Resolve a type with a non-injectable field set by the constructor
+    println!("\n--- Non-injectable field via constructor ---");
     let partial = container
         .resolve::<PartialInjectService>()
         .await
         .expect("resolve PartialInjectService");
     println!("PartialInjectService: {partial:?}");
-    println!("  db field was INJECTED");
-    println!("  name field was SKIPPED (defaulted): {:?}", partial.name);
-    println!("  cache field was INJECTED");
+    println!("  db field was INJECTED via Inject<T>");
+    println!("  name field was set by constructor: {:?}", partial.name);
+    println!("  cache field was INJECTED via Inject<T>");
 
     // Demonstrate destructuring pattern
     println!("\n--- Destructuring Pattern ---");

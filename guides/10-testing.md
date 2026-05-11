@@ -10,7 +10,8 @@ Call the constructor directly with test doubles:
 use std::sync::Arc;
 use injectable::*;
 
-#[derive(Injectable, Default, Debug)]
+#[injectable
+#[derive(, Default, Debug)]
 pub struct Database;
 
 impl Database {
@@ -23,9 +24,9 @@ pub struct UserService {
     db: Arc<Database>,
 }
 
-#[injectable_impl]
+#[injectable]
 impl UserService {
-    #[constructor]
+    #[injectable_ctor]
     pub fn new(db: Arc<Database>) -> Self { Self { db } }
 
     pub async fn list_users(&self) -> Vec<String> {
@@ -86,9 +87,9 @@ pub struct ApiService {
     http: Arc<FakeHttpClient>,
 }
 
-#[injectable_impl]
+#[injectable]
 impl ApiService {
-    #[constructor]
+    #[injectable_ctor]
     pub fn new(http: Arc<FakeHttpClient>) -> Self { Self { http } }
 
     pub fn fetch_data(&self) -> String {
@@ -126,7 +127,8 @@ pub trait UserStore: Send + Sync + 'static {
 }
 
 // Production implementation
-#[derive(Injectable, Default)]
+#[injectable
+#[derive(, Default)]
 pub struct PgUserStore;
 
 #[async_trait]
@@ -143,9 +145,9 @@ pub struct UserService {
     store: Arc<dyn UserStore>,
 }
 
-#[injectable_impl]
+#[injectable]
 impl UserService {
-    #[constructor]
+    #[injectable_ctor]
     pub fn new(store: Arc<PgUserStore>) -> Self {
         Self { store: store as Arc<dyn UserStore> }
     }
@@ -189,9 +191,9 @@ static PRE_DESTRUCT_CALLED: AtomicBool = AtomicBool::new(false);
 
 pub struct TrackedService;
 
-#[injectable_impl]
+#[injectable]
 impl TrackedService {
-    #[constructor]
+    #[injectable_ctor]
     pub fn new() -> Self { Self }
 
     #[post_construct]
@@ -231,7 +233,8 @@ use tower::ServiceExt;
 use injectable::*;
 use injectable::axum::AxumState;
 
-#[derive(Injectable, Default)]
+#[injectable
+#[derive(, Default)]
 pub struct Greeter;
 impl Greeter { pub fn greet(&self) -> &str { "hello" } }
 

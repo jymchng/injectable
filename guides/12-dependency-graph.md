@@ -4,7 +4,8 @@ Injectable validates your dependency graph at **container build time** — befor
 
 ## When Validation Runs
 
-`Container::builder().build().await` collects all `GraphNode` entries submitted via `inventory::submit!` by the `#[derive(Injectable)]` and `#[injectable_impl]` macros, then validates the whole graph at once.
+`Container::builder().build().await` collects all `GraphNode` entries submitted via `inventory::submit!` by the `#[injectable
+#[derive()]` and `#[injectable]` macros, then validates the whole graph at once.
 
 ```rust
 let container = Container::builder()
@@ -22,10 +23,12 @@ let container = Container::builder()
 use injectable::*;
 
 // This won't even reach runtime:
-#[derive(Injectable, Debug)]
+#[injectable
+#[derive(, Debug)]
 pub struct A { b: Inject<B> }
 
-#[derive(Injectable, Debug)]
+#[injectable
+#[derive(, Debug)]
 pub struct B { a: Inject<A> }
 
 // Container::builder().build().await  →  Err(CircularDependency { chain: ["A", "B", "A"] })
@@ -38,13 +41,15 @@ The error message names the exact cycle chain, so you can fix it immediately.
 If a type declares a dependency that has no `Injectable` impl and is also not registered via `DynProvider`, the build fails:
 
 ```rust
-#[derive(Injectable, Debug)]
+#[injectable
+#[derive(, Debug)]
 pub struct UserService {
     repo: Inject<UserRepository>,    // UserRepository must be Injectable
 }
 ```
 
-If `UserRepository` is missing `#[derive(Injectable)]`, the build returns:
+If `UserRepository` is missing `#[injectable
+#[derive()]`, the build returns:
 ```
 MissingDependency { source: "UserService", missing: "UserRepository" }
 ```
@@ -57,7 +62,8 @@ MissingDependency { source: "UserService", missing: "UserRepository" }
 
 ## Duplicate Registrations — Detected at Build Time
 
-If two `#[derive(Injectable)]` impls generate the same type name, the build fails with `DuplicateNode`.
+If two `#[injectable
+#[derive()]` impls generate the same type name, the build fails with `DuplicateNode`.
 
 ## Running Validation Manually
 

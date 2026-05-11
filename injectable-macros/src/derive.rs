@@ -4,10 +4,10 @@ use proc_macro2::TokenStream;
 use quote::quote;
 
 use crate::attrs;
-use crate::metadata::type_to_string;
+use crate::metadata::{self, type_to_string};
 use crate::provider_gen::{self, FieldInfo, FieldInjectKind};
 
-/// Expand the `#[derive(Injectable)]` macro.
+/// Expand the `#[injectable]` macro.
 ///
 /// # Field Injection (default behavior)
 ///
@@ -35,45 +35,28 @@ use crate::provider_gen::{self, FieldInfo, FieldInjectKind};
 /// - `#[inject(skip)]` on a field → use `Default::default()` (in a non-default struct)
 pub fn expand_derive_injectable(input: syn::DeriveInput) -> syn::Result<TokenStream> {
     let type_name = &input.ident;
-
-    // Parse all #[injectable(...)] attributes
     let injectable_attrs = attrs::parse_attrs(&input.attrs)?;
 
-    let provider_code = if injectable_attrs.use_default {
-        // Use Default::default() by default — but fields with #[inject] are extracted
-        let fields = parse_struct_fields(&input.data, true);
-        provider_gen::generate_default_provider(
-            type_name,
-            &fields,
-            injectable_attrs.scope.as_str(),
-            injectable_attrs.has_post_construct,
-        )
-    } else {
-        // Parse struct fields for field injection (fields with #[inject(skip)] are defaulted)
-        let fields = parse_struct_fields(&input.data, false);
-        provider_gen::generate_field_injection_provider(
-            type_name,
-            &fields,
-            injectable_attrs.scope.as_str(),
-            injectable_attrs.has_post_construct,
-        )
-    };
+    let fields = parse_struct_fields(&input.data)?;
+    let provider_code = provider_gen::generate_field_injection_provider(
+        type_name,
+        &fields,
+        injectable_attrs.scope.as_str(),
+        injectable_attrs.has_post_construct,
+    );
 
     Ok(provider_code)
 }
 
 /// Parse the fields from a struct definition.
 ///
-/// Returns a list of `FieldInfo` containing each field's name, type, and
-/// injection kind. For unit structs, returns an empty vec. For tuple structs,
-/// fields have `None` as the name.
-///
-/// The `struct_is_default` parameter controls the default injection kind:
-/// - If `true` (the struct has `#[injectable(default)]`): fields default to
-///   `FieldInjectKind::Skip`, unless marked with `#[inject]`
-/// - If `false`: fields default to `FieldInjectKind::Inject`, unless marked
-///   with `#[inject(skip)]`
-fn parse_struct_fields(data: &syn::Data, struct_is_default: bool) -> Vec<FieldInfo> {
+/// Field injection rules:
+/// - `Inject<T>` field, no annotation → auto-injected
+/// - Any other type, no annotation → compile error
+/// - `#[inject]` → explicitly injected (extract via DI)
+/// - `#[inject(use_factory_async = path)]` → async factory call
+/// - `#[inject(use_factory_sync = path)]` → sync factory call
+fn parse_struct_fields(data: &syn::Data) -> syn::Result<Vec<FieldInfo>> {
     match data {
         syn::Data::Struct(data_struct) => match &data_struct.fields {
             syn::Fields::Named(named_fields) => named_fields
@@ -83,60 +66,38 @@ fn parse_struct_fields(data: &syn::Data, struct_is_default: bool) -> Vec<FieldIn
                     let name = field.ident.clone();
                     let ty = field.ty.clone();
                     let ty_string = type_to_string(&ty);
-                    let inject_kind = parse_field_inject_kind(&field.attrs, struct_is_default);
-                    FieldInfo {
-                        name,
-                        ty,
-                        ty_string,
-                        inject_kind,
-                    }
+                    let inject_kind = parse_field_inject_kind(&field.attrs, &ty)?;
+                    Ok(FieldInfo { name, ty, ty_string, inject_kind })
                 })
                 .collect(),
             syn::Fields::Unnamed(unnamed_fields) => unnamed_fields
                 .unnamed
                 .iter()
-                .enumerate()
-                .map(|(_i, field)| {
-                    let name = None;
+                .map(|field| {
                     let ty = field.ty.clone();
                     let ty_string = type_to_string(&ty);
-                    let inject_kind = parse_field_inject_kind(&field.attrs, struct_is_default);
-                    FieldInfo {
-                        name,
-                        ty,
-                        ty_string,
-                        inject_kind,
-                    }
+                    let inject_kind = parse_field_inject_kind(&field.attrs, &ty)?;
+                    Ok(FieldInfo { name: None, ty, ty_string, inject_kind })
                 })
                 .collect(),
-            syn::Fields::Unit => Vec::new(),
+            syn::Fields::Unit => Ok(Vec::new()),
         },
-        syn::Data::Enum(_) => {
-            // Enums cannot use field injection; they must use #[injectable(default)]
-            // or provide a constructor via a different mechanism
-            Vec::new()
-        }
-        syn::Data::Union(_) => {
-            // Unions are not supported
-            Vec::new()
-        }
+        syn::Data::Enum(_) | syn::Data::Union(_) => Ok(Vec::new()),
     }
 }
 
-/// Determine the injection kind for a field based on its `#[inject]` attributes.
+/// Determine the injection kind for a field based on its `#[inject]` attributes and type.
 ///
-/// # Rules
-///
-/// In a non-`default` struct:
-/// - No `#[inject]` attribute → `FieldInjectKind::Inject` (the default)
-/// - `#[inject]` → `FieldInjectKind::Inject` (explicit, no change)
-/// - `#[inject(skip)]` → `FieldInjectKind::Skip` (use Default::default())
-///
-/// In a `#[injectable(default)]` struct:
-/// - No `#[inject]` attribute → `FieldInjectKind::Skip` (the default)
-/// - `#[inject]` → `FieldInjectKind::Inject` (override: extract instead of default)
-/// - `#[inject(skip)]` → `FieldInjectKind::Skip` (explicit, no change)
-fn parse_field_inject_kind(attrs: &[syn::Attribute], struct_is_default: bool) -> FieldInjectKind {
+/// Rules:
+/// - `Inject<T>` with no annotation → `Inject` (auto-inject)
+/// - Any type with `#[inject]` (no args) → `Inject`
+/// - Any type with `#[inject(use_factory_async = path)]` → `Factory(path)`
+/// - Any type with `#[inject(use_factory_sync = path)]` → `Provider(path)`
+/// - Non-`Inject<T>` with no annotation → compile error
+fn parse_field_inject_kind(
+    attrs: &[syn::Attribute],
+    ty: &syn::Type,
+) -> syn::Result<FieldInjectKind> {
     for attr in attrs {
         if attr.path().is_ident("inject") {
             let parsed: Result<syn::punctuated::Punctuated<InjectArg, syn::Token![,]>, _> =
@@ -145,29 +106,30 @@ fn parse_field_inject_kind(attrs: &[syn::Attribute], struct_is_default: bool) ->
             if let Ok(args) = parsed {
                 for arg in args {
                     match arg {
-                        InjectArg::Skip => return FieldInjectKind::Skip,
-                        InjectArg::FactoryAsync(path) => return FieldInjectKind::Factory(path),
-                        InjectArg::FactorySync(path) => return FieldInjectKind::Provider(path),
+                        InjectArg::FactoryAsync(path) => return Ok(FieldInjectKind::Factory(path)),
+                        InjectArg::FactorySync(path) => return Ok(FieldInjectKind::Provider(path)),
                     }
                 }
             }
-            // #[inject] with no args → always inject
-            return FieldInjectKind::Inject;
+            // #[inject] with no args → explicit inject
+            return Ok(FieldInjectKind::Inject);
         }
     }
-
-    // No #[inject] attribute — use the struct's default
-    if struct_is_default {
-        FieldInjectKind::Skip
+    // No annotation: only Inject<T> is auto-injected
+    if metadata::extract_inject_inner(ty).is_some() {
+        Ok(FieldInjectKind::Inject)
     } else {
-        FieldInjectKind::Inject
+        use syn::spanned::Spanned;
+        Err(syn::Error::new(
+            ty.span(),
+            "non-`Inject<T>` fields require an explicit `#[inject]` annotation; \
+             if this field has no DI dependency, use a `#[injectable_ctor]` constructor instead",
+        ))
     }
 }
 
 /// A single argument within `#[inject(...)]`.
 enum InjectArg {
-    /// `skip` — use Default::default() for this field
-    Skip,
     /// `use_factory_async = path` — call the given async factory function
     FactoryAsync(syn::Path),
     /// `use_factory_sync = path` — call the given sync factory function (no .await)
@@ -177,9 +139,7 @@ enum InjectArg {
 impl syn::parse::Parse for InjectArg {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let ident: syn::Ident = input.parse()?;
-        if ident == "skip" {
-            Ok(InjectArg::Skip)
-        } else if ident == "use_factory_async" || ident == "use_factory" {
+        if ident == "use_factory_async" || ident == "use_factory" {
             input.parse::<syn::Token![=]>()?;
             let path: syn::Path = input.parse()?;
             Ok(InjectArg::FactoryAsync(path))
@@ -192,7 +152,7 @@ impl syn::parse::Parse for InjectArg {
                 ident.span(),
                 format!(
                     "unknown inject attribute: `{ident}`; \
-                     expected `skip`, `use_factory_async = path`, or `use_factory_sync = path`"
+                     expected `use_factory_async = path` or `use_factory_sync = path`"
                 ),
             ))
         }

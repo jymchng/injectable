@@ -60,7 +60,7 @@ pub type HookResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
 /// }
 ///
 /// impl Database {
-///     #[constructor]
+///     #[injectable_ctor]
 ///     pub async fn new() -> Self { Self { pool_size: 10 } }
 ///
 ///     #[post_construct]

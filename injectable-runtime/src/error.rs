@@ -44,6 +44,19 @@ pub enum InjectableError {
     },
     /// Container has not been built yet.
     ContainerNotBuilt,
+    /// The dependency graph is structurally invalid.
+    ///
+    /// Returned only from `Container::builder().build()` when circular
+    /// dependencies, missing dependencies, scope mismatches, or duplicate
+    /// registrations are detected at build time.
+    ///
+    /// Semantically distinct from `ConstructionFailed` (which is a runtime
+    /// provider error): `GraphValidationFailed` means the type wiring is wrong
+    /// and must be fixed in code, not retried.
+    GraphValidationFailed {
+        /// Human-readable description of each validation error.
+        errors: Vec<String>,
+    },
 }
 
 impl fmt::Display for InjectableError {
@@ -90,6 +103,13 @@ impl fmt::Display for InjectableError {
                 Ok(())
             }
             Self::ContainerNotBuilt => write!(f, "container has not been built"),
+            Self::GraphValidationFailed { errors } => {
+                write!(f, "dependency graph validation failed:")?;
+                for err in errors {
+                    write!(f, "\n  - {err}")?;
+                }
+                Ok(())
+            }
         }
     }
 }

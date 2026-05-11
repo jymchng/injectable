@@ -1,194 +1,205 @@
-# Guide 02 — Field Injection with `#[derive(Injectable)]`
+# Guide 02 — Field Injection with `#[injectable]`
 
-Field injection is the simplest form of DI in injectable. Annotate a struct with `#[derive(Injectable)]` and the framework auto-wires every field whose type implements `Injectable`. No constructor needed.
+Field injection is the declarative form of DI. Annotate a struct with
+`#[injectable]` and the framework generates a provider that extracts each field
+from the resolve context.
 
-## The Three Field Patterns
+## Injection Rules
 
-### Pattern A — `Inject<T>` (Shared Arc)
+- **`Inject<T>` fields** — auto-injected. No annotation needed.
+- **All other fields** (`Arc<T>`, plain `T`, external types) — require an explicit
+  `#[inject]` annotation or a factory variant. Omitting the annotation is a
+  compile error.
 
-The most common pattern. Each resolution returns an `Arc<T>`, so all consumers share the same instance cheaply.
+This keeps the DI surface explicit: only `Inject<T>` is wired silently; everything
+else requires you to opt in.
+
+## Pattern A — `Inject<T>` (Shared Arc, auto-injected)
+
+The most common pattern. Resolves a shared `Arc<T>` from the singleton cache.
 
 ```rust
 use injectable::*;
 
-#[derive(Injectable, Default, Debug)]
+#[injectable]
+#[derive(Default, Debug)]
 pub struct Database;
 
-#[derive(Injectable, Debug)]
+#[injectable]
 pub struct UserRepository {
-    db: Inject<Database>,   // Arc<Database> — shared, cheap to clone
+    db: Inject<Database>,   // auto-injected — no #[inject] needed
 }
 
 impl UserRepository {
-    pub fn db_ref(&self) -> &Database {
-        &self.db  // Deref through Inject<T>
-    }
-
-    pub fn db_arc(&self) -> std::sync::Arc<Database> {
-        self.db.arc()  // Clone the Arc
+    pub fn find(&self, id: u32) -> String {
+        // Deref through Inject<T> to call methods directly
+        format!("User #{id} via {:?}", &*self.db)
     }
 }
 ```
 
-`Inject<T>` implements `Deref<Target = T>`, so you can use `self.db.some_method()` directly.
+`Inject<T>` implements `Deref<Target = T>`, so you can call `self.db.method()`
+directly.
 
-### Pattern B — Owned `T`
+## Pattern B — `Arc<T>` (Shared Arc, explicit)
 
-Each resolution produces an independent owned copy. Requires `T: Clone` under the hood (the framework clones the Arc-wrapped value). Use this when a service needs to own its dependency outright.
+Same singleton cache as `Inject<T>`, but the field holds a raw `Arc<T>`.
+Requires `#[inject]`.
 
 ```rust
-#[derive(Injectable, Default, Clone, Debug)]
+#[injectable]
+pub struct OwnedRepo {
+    #[inject]
+    db: Arc<Database>,  // explicit #[inject] required
+}
+```
+
+Use `Arc<T>` over `Inject<T>` when you need to pass the `Arc` to code that
+doesn't know about `Inject<T>`, or when you prefer the standard library type.
+
+## Pattern C — Owned `T` (requires `T: Clone`)
+
+The framework resolves the singleton `Arc<T>` and calls `Arc::unwrap_or_clone`
+to give you an owned copy. Requires `#[inject]`.
+
+```rust
+#[injectable]
+#[derive(Default, Clone)]
 pub struct Config {
     pub debug: bool,
 }
 
-#[derive(Injectable, Debug)]
+#[injectable]
 pub struct Mailer {
-    config: Config,   // owned — fresh copy each resolution
+    #[inject]
+    config: Config,   // owned copy — requires Config: Clone
 }
 ```
 
-### Pattern C — `Option<Inject<T>>`
+## Pattern D — Factory (`#[inject(use_factory_async/sync = path)]`)
 
-Optional dependency — resolves to `None` if `T` is not registered, `Some(Inject<T>)` otherwise. Use this for optional integrations (e.g., a metrics client that may not be wired in tests).
+Inject a value that cannot be resolved via the normal DI machinery — external
+types, values from env vars, or anything requiring custom construction logic.
 
 ```rust
-#[derive(Injectable, Debug)]
-pub struct Analytics {
-    metrics: Option<Inject<MetricsClient>>,  // OK if not registered
+async fn make_pool(_ctx: &ResolveContext) -> Result<sqlx::SqlitePool, sqlx::Error> {
+    sqlx::SqlitePool::connect("sqlite:./app.db").await
 }
 
-impl Analytics {
-    pub fn record(&self, event: &str) {
-        if let Some(m) = &self.metrics {
-            m.track(event);
-        }
-    }
+#[injectable]
+pub struct Database {
+    #[inject(use_factory_async = self::make_pool)]
+    pool: sqlx::SqlitePool,
 }
 ```
+
+The factory function receives `&ResolveContext` and may call
+`ctx.resolve::<T>()` or `ctx.resolve_external::<T>()` to pull in other
+dependencies.
 
 ## Structs with Non-Injectable Fields
 
-`String`, `u16`, `bool`, and other primitives are not `Injectable`. If your struct has them, use `#[injectable(default)]`:
+If a field has no DI dependency at all (a constant, a computed value, etc.),
+it does not belong in a field-injected struct. Use a constructor instead:
 
 ```rust
-#[derive(Injectable, Default, Debug)]
-#[injectable(default)]      // all fields use Default::default() by default
-pub struct AppConfig {
-    pub host: String,       // ""      — from Default
-    pub port: u16,          // 0       — from Default
-    pub debug: bool,        // false   — from Default
+// Wrong: `max_retries` has no DI dep, but #[injectable] on struct requires
+// every field to be annotated or be Inject<T>.
+
+// Right: put non-DI fields in the constructor
+pub struct UserService {
+    db:          Inject<Database>,
+    max_retries: u32,    // set by constructor, not by DI
 }
-```
 
-The container calls `AppConfig::default()` to create the instance. To read env vars or do custom init, use `#[injectable_impl]` instead (Guide 03).
-
-## Mixing Injectable and Non-Injectable Fields
-
-Use `#[inject]` to opt individual fields INTO injection inside a `#[injectable(default)]` struct, and `#[inject(skip)]` to opt fields OUT in a normal struct.
-
-### `#[inject]` — opt in (inside `#[injectable(default)]`)
-
-```rust
-#[derive(Injectable, Default, Debug)]
-#[injectable(default)]
-pub struct OrderService {
-    #[inject]                           // this field IS injected
-    pub db: Inject<Database>,
-    pub retry_count: u32,               // this uses Default (0)
-    pub service_name: String,           // this uses Default ("")
-}
-```
-
-### `#[inject(skip)]` — opt out (inside a normal struct)
-
-```rust
-#[derive(Injectable, Debug, Default)]
-pub struct AuditLogger {
-    db: Inject<Database>,               // injected (normal for non-default)
-    #[inject(skip)]
-    prefix: String,                     // NOT injected — uses Default ("")
-    cache: Inject<Cache>,               // injected
+#[injectable]
+impl UserService {
+    #[injectable_ctor]
+    fn new(db: Inject<Database>) -> Self {
+        Self { db, max_retries: 3 }
+    }
 }
 ```
 
 ## Lifecycle Hooks with Field Injection
 
-Add `#[injectable(has_post_construct)]` or `#[injectable(has_pre_destruct)]` and implement the corresponding traits yourself:
+Annotate methods in a **separate** `#[injectable]` impl block with
+`#[post_construct]` or `#[pre_destruct]`:
 
 ```rust
-use injectable::*;
-
-#[derive(Injectable, Default)]
-#[injectable(has_post_construct, has_pre_destruct, default)]
+#[injectable]
 pub struct ConnectionPool {
-    pub size: std::sync::atomic::AtomicUsize,
+    db: Inject<Database>,
 }
 
-#[async_trait::async_trait]
-impl PostConstruct for ConnectionPool {
-    async fn post_construct(&self) -> HookResult {
-        self.size.store(10, std::sync::atomic::Ordering::SeqCst);
-        println!("Pool warmed up with 10 connections");
+#[injectable]              // no #[injectable_ctor] — lifecycle only
+impl ConnectionPool {
+    #[post_construct]
+    async fn warm_up(&self) -> HookResult {
+        println!("Warming up pool…");
         Ok(())
     }
-}
 
-#[async_trait::async_trait]
-impl PreDestruct for ConnectionPool {
-    async fn pre_destruct(&self) -> HookResult {
-        let n = self.size.swap(0, std::sync::atomic::Ordering::SeqCst);
-        println!("Closed {n} connections");
+    #[pre_destruct]
+    async fn drain(&self) -> HookResult {
+        println!("Draining pool…");
         Ok(())
     }
 }
 ```
 
-Call `container.shutdown().await` to trigger `pre_destruct` on every registered instance in reverse construction order.
+Call `container.shutdown().await` to trigger `pre_destruct` on every registered
+instance in reverse construction order.
+
+## Scopes
+
+Default scope is singleton. Override with `scope`:
+
+```rust
+#[injectable(scope = Singleton)]   // default — one instance per container
+pub struct SharedCache { db: Inject<Database> }
+
+#[injectable(scope = Transient)]   // fresh instance on every resolution
+pub struct RequestLogger { db: Inject<Database> }
+```
+
+Type-safe idents (`Singleton`, `Transient`, `RequestScoped`) are preferred.
+String form (`scope = "transient"`) also works.
 
 ## Full Example
 
 ```rust
 use injectable::*;
 
-#[derive(Injectable, Default, Clone, Debug)]
+#[injectable]
+#[derive(Default, Clone, Debug)]
 pub struct Config;
 
-#[derive(Injectable, Default, Debug)]
+#[injectable]
+#[derive(Default, Debug)]
 pub struct Database;
 
-#[derive(Injectable, Default, Debug)]
+#[injectable]
+#[derive(Default, Debug)]
 pub struct Cache;
 
-#[derive(Injectable, Debug)]
+#[injectable]
 pub struct UserRepository {
     db: Inject<Database>,
 }
 
-#[derive(Injectable, Debug)]
+#[injectable]
 pub struct UserService {
-    repo: Inject<UserRepository>,
+    repo:  Inject<UserRepository>,
     cache: Inject<Cache>,
-}
-
-#[derive(Injectable, Default, Debug)]
-#[injectable(default)]
-pub struct ServerConfig {
     #[inject]
-    db: Inject<Database>,
-    pub port: u16,
-    pub host: String,
+    db:    Arc<Database>,   // Arc<T> field — explicit #[inject]
 }
 
 #[tokio::main]
 async fn main() {
     let container = Container::builder().build().await.unwrap();
-
-    let svc = container.resolve::<UserService>().await.unwrap();
-    println!("{svc:?}");
-
-    let cfg = container.resolve::<ServerConfig>().await.unwrap();
-    println!("port={}, host={:?}", cfg.port, cfg.host);
+    let _svc = container.resolve::<UserService>().await.unwrap();
 }
 ```
 
@@ -196,8 +207,8 @@ async fn main() {
 
 | Situation | Use |
 |---|---|
-| All fields are Injectable types | `#[derive(Injectable)]` |
-| Need non-injectable fields with custom logic | `#[injectable_impl]` (Guide 03) |
-| Need async initialization | `#[injectable_impl]` with async constructor |
-| Need lifecycle hooks with custom logic | `#[injectable_impl]` with `#[post_construct]` |
-| Simple structs with only `Inject<T>` fields | Field injection — it's the least boilerplate |
+| All dependencies are `Inject<T>` or `Arc<T>`/`T` | Field injection |
+| Need a non-DI field (constant, computed value) | Constructor injection (Guide 03) |
+| Need async initialization | Constructor injection with `async fn` |
+| Need to inject external types (not in your crate) | Factory field annotation or `DynProvider` (Guide 04) |
+| Simple structs with only `Inject<T>` fields | Field injection — least boilerplate |

@@ -16,60 +16,73 @@ use std::sync::Arc;
 // These have no fields and no dependencies.
 
 /// A simple leaf injectable with no dependencies.
-#[derive(Injectable, Default, Clone)]
+#[injectable]
+#[derive(Default, Clone)]
 pub struct Config;
 
 /// An injectable with no dependencies.
-#[derive(Injectable, Default)]
+#[injectable]
+#[derive(Default, Clone)]
 pub struct Database;
 
 /// Another leaf injectable.
-#[derive(Injectable, Default)]
+#[injectable]
+#[derive(Default, Clone)]
 pub struct Cache;
 
 // ─── Field Injection: All fields implement Injectable ───────────────
 
 /// A service that depends on Database and Cache via field injection.
 /// All fields are `Inject<T>` (shared Arc references).
-#[derive(Injectable)]
+#[injectable]
 pub struct UserService {
     db: Inject<Database>,
     cache: Inject<Cache>,
 }
 
 /// A service with a single Inject dependency.
-#[derive(Injectable)]
+#[injectable]
 pub struct Repository {
     db: Inject<Database>,
 }
 
 /// A service using bare Injectable types as fields (owned values).
-#[derive(Injectable)]
+#[injectable]
 pub struct OwnedService {
-    db: Database,
-    cache: Cache,
+    #[inject]
+    db: Arc<Database>,
+    #[inject]
+    cache: Arc<Cache>,
 }
 
 /// A service mixing Inject<T> and bare T fields.
-#[derive(Injectable)]
+#[injectable]
 pub struct MixedService {
     db: Inject<Database>, // shared Arc<Database>
-    config: Config,       // owned Config
+    #[inject]
+    config: Arc<Config>,
 }
 
 // ─── Constructor-based Injection ────────────────────────────────────
 
-/// A struct with non-Injectable fields that uses `Default::default()`
-/// via the `#[injectable(default)]` escape hatch.
-#[derive(Injectable, Default)]
-#[injectable(default)]
+/// A struct with non-Injectable fields. Uses #[injectable] with
+/// an explicit constructor (replaces the old #[injectable(default)] pattern).
+#[derive(Default)]
 pub struct ConfigWithPort {
     pub port: u16,
 }
 
+#[injectable]
+impl ConfigWithPort {
+    #[injectable_ctor]
+    fn new() -> Self {
+        Self::default()
+    }
+}
+
 // ─── External Types ─────────────────────────────────────────────
 // These are real third-party types that you DON'T control
-// and therefore can't add #[derive(Injectable)] to.
+// and therefore can't add #[injectable] to.
 // They come from dev-dependencies (reqwest, sqlx).
 
 // Use real reqwest::Client from the dev-dependency
@@ -1111,8 +1124,8 @@ fn test_scope_no_mismatch_when_dependency_not_in_graph() {
 // generated provider automatically calls it.
 
 /// A service with a post_construct hook that tracks when it's called.
-#[derive(Injectable, Default)]
 #[injectable(has_post_construct)]
+#[derive(Default)]
 pub struct ServiceWithPostConstruct;
 
 #[async_trait::async_trait]
@@ -1183,19 +1196,21 @@ async fn test_post_construct_called_every_resolution() {
     );
 }
 
-/// A service with post_construct that tracks state via an atomic,
-/// demonstrating that the hook runs AFTER construction (so it can
-/// observe the constructed state).
-#[derive(Injectable, Default)]
-#[injectable(has_post_construct, default)]
+/// A service with post_construct that tracks state via an atomic.
+#[derive(Default)]
 pub struct ServiceWithStatefulPostConstruct {
     pub initialized: std::sync::atomic::AtomicBool,
 }
 
-#[async_trait::async_trait]
-impl PostConstruct for ServiceWithStatefulPostConstruct {
-    async fn post_construct(&self) -> HookResult {
-        // This runs after construction, so we can modify state
+#[injectable]
+impl ServiceWithStatefulPostConstruct {
+    #[injectable_ctor]
+    fn new() -> Self {
+        Self::default()
+    }
+
+    #[post_construct]
+    async fn on_ready(&self) -> HookResult {
         self.initialized.store(true, Ordering::SeqCst);
         STATEFUL_POST_CONSTRUCT_RAN.store(true, Ordering::SeqCst);
         Ok(())
@@ -1237,7 +1252,8 @@ async fn test_post_construct_runs_after_construction() {
 
 /// A type WITHOUT has_post_construct — resolving it should NOT call
 /// any post_construct hook (since the trait is not implemented).
-#[derive(Injectable, Default)]
+#[injectable]
+#[derive(Default)]
 pub struct ServiceWithoutPostConstruct;
 
 #[tokio::test]
@@ -1259,7 +1275,6 @@ async fn test_no_post_construct_without_attribute() {
 
 /// A service with field injection AND a post_construct hook,
 /// verifying that dependencies are resolved before the hook runs.
-#[derive(Injectable)]
 #[injectable(has_post_construct)]
 pub struct ServiceWithDepsAndHook {
     _db: Inject<Database>,
@@ -1564,9 +1579,9 @@ fn test_scope_topological_order_with_scopes() {
     );
 }
 
-// ─── #[injectable_impl] Constructor Injection Tests ────────────────────
+// ─── #[injectable] Constructor Injection Tests ────────────────────
 //
-// These tests verify the #[injectable_impl] attribute macro which
+// These tests verify the #[injectable] attribute macro which
 // enables constructor-based injection with automatic parameter
 // rewriting: T → Inject<T> extraction, Arc<T> → Inject<T>.0, etc.
 //
@@ -1579,9 +1594,9 @@ pub struct CtorServiceWithInject {
     db: Inject<Database>,
 }
 
-#[injectable_impl]
+#[injectable]
 impl CtorServiceWithInject {
-    #[constructor]
+    #[injectable_ctor]
     fn new(db: Inject<Database>) -> Self {
         Self { db }
     }
@@ -1597,7 +1612,7 @@ async fn test_injectable_impl_with_inject_param() {
     let service = container.resolve::<CtorServiceWithInject>().await;
     assert!(
         service.is_ok(),
-        "should resolve CtorServiceWithInject via #[injectable_impl]"
+        "should resolve CtorServiceWithInject via #[injectable]"
     );
 
     let service = service.unwrap();
@@ -1611,10 +1626,10 @@ pub struct CtorServiceWithArc {
     db: Arc<Database>,
 }
 
-#[injectable_impl]
+#[injectable]
 impl CtorServiceWithArc {
-    #[constructor]
-    fn new(db: Arc<Database>) -> Self {
+    #[injectable_ctor]
+    fn new(#[inject] db: Arc<Database>) -> Self {
         Self { db }
     }
 }
@@ -1629,7 +1644,7 @@ async fn test_injectable_impl_with_arc_param() {
     let service = container.resolve::<CtorServiceWithArc>().await;
     assert!(
         service.is_ok(),
-        "should resolve CtorServiceWithArc via #[injectable_impl]"
+        "should resolve CtorServiceWithArc via #[injectable]"
     );
 
     let service = service.unwrap();
@@ -1637,27 +1652,29 @@ async fn test_injectable_impl_with_arc_param() {
     let _db = &*service.db;
 }
 
-/// A service using constructor injection with plain T parameters.
-/// The macro extracts Inject<T> and uses Arc::unwrap_or_clone()
-/// to convert to owned T. This requires T: Clone.
-/// CloneableConfig is both Injectable and Clone, so it can be used as a
-/// plain T parameter in constructors (the macro extracts via Inject<T>
-/// and then uses Arc::unwrap_or_clone).
-#[derive(Injectable, Default, Clone)]
-#[injectable(default)]
+/// A simple config value type used as a constructor parameter.
+#[derive(Default, Clone)]
 pub struct CloneableConfig {
     pub value: u32,
 }
 
+#[injectable]
+impl CloneableConfig {
+    #[injectable_ctor]
+    fn new() -> Self {
+        Self::default()
+    }
+}
+
 pub struct CtorServiceWithOwned {
-    config: CloneableConfig,
+    config: Arc<CloneableConfig>,
     db: Arc<Database>,
 }
 
-#[injectable_impl]
+#[injectable]
 impl CtorServiceWithOwned {
-    #[constructor]
-    fn new(config: CloneableConfig, db: Arc<Database>) -> Self {
+    #[injectable_ctor]
+    fn new(#[inject] config: Arc<CloneableConfig>, #[inject] db: Arc<Database>) -> Self {
         Self { config, db }
     }
 }
@@ -1689,9 +1706,9 @@ pub struct CtorServiceMultiDeps {
     config: Inject<Config>,
 }
 
-#[injectable_impl]
+#[injectable]
 impl CtorServiceMultiDeps {
-    #[constructor]
+    #[injectable_ctor]
     fn new(db: Inject<Database>, cache: Inject<Cache>, config: Inject<Config>) -> Self {
         Self { db, cache, config }
     }
@@ -1711,14 +1728,14 @@ async fn test_injectable_impl_with_multiple_deps() {
     );
 }
 
-/// A service using async constructor with #[injectable_impl].
+/// A service using async constructor with #[injectable].
 pub struct CtorServiceAsync {
     db: Inject<Database>,
 }
 
-#[injectable_impl]
+#[injectable]
 impl CtorServiceAsync {
-    #[constructor]
+    #[injectable_ctor]
     async fn new(db: Inject<Database>) -> Self {
         // Simulate async initialization
         Self { db }
@@ -1744,9 +1761,9 @@ pub struct CtorServiceNoDeps {
     initialized: bool,
 }
 
-#[injectable_impl]
+#[injectable]
 impl CtorServiceNoDeps {
-    #[constructor]
+    #[injectable_ctor]
     fn new() -> Self {
         Self { initialized: true }
     }
@@ -1771,10 +1788,10 @@ async fn test_injectable_impl_with_no_deps() {
     );
 }
 
-// ─── #[injectable_impl] with Lifecycle Hooks ──────────────────────────
+// ─── #[injectable] with Lifecycle Hooks ──────────────────────────
 //
 // These tests verify that #[post_construct] and #[pre_destruct]
-// annotations inside #[injectable_impl] impl blocks are auto-detected
+// annotations inside #[injectable] impl blocks are auto-detected
 // and generate the corresponding trait implementations.
 
 static IMPL_POST_CONSTRUCT_COUNT: AtomicUsize = AtomicUsize::new(0);
@@ -1785,9 +1802,9 @@ pub struct CtorServiceWithPostConstruct {
     initialized: std::sync::atomic::AtomicBool,
 }
 
-#[injectable_impl]
+#[injectable]
 impl CtorServiceWithPostConstruct {
-    #[constructor]
+    #[injectable_ctor]
     fn new() -> Self {
         Self {
             initialized: std::sync::atomic::AtomicBool::new(false),
@@ -1840,9 +1857,9 @@ pub struct CtorServiceWithPreDestruct {
     name: &'static str,
 }
 
-#[injectable_impl]
+#[injectable]
 impl CtorServiceWithPreDestruct {
-    #[constructor]
+    #[injectable_ctor]
     fn new() -> Self {
         Self { name: "test" }
     }
@@ -1910,9 +1927,9 @@ pub struct CtorServiceFullLifecycle {
     pub initialized: bool,
 }
 
-#[injectable_impl]
+#[injectable]
 impl CtorServiceFullLifecycle {
-    #[constructor]
+    #[injectable_ctor]
     fn new() -> Self {
         Self { initialized: false }
     }
@@ -1975,9 +1992,9 @@ async fn test_injectable_impl_full_lifecycle() {
 #[derive(Debug, Clone)]
 pub struct ServiceWithSucceedingPostConstruct;
 
-#[injectable_impl]
+#[injectable]
 impl ServiceWithSucceedingPostConstruct {
-    #[constructor]
+    #[injectable_ctor]
     fn new() -> Self {
         Self
     }
@@ -1992,9 +2009,9 @@ impl ServiceWithSucceedingPostConstruct {
 #[derive(Debug, Clone)]
 pub struct ServiceWithFailingPostConstruct;
 
-#[injectable_impl]
+#[injectable]
 impl ServiceWithFailingPostConstruct {
-    #[constructor]
+    #[injectable_ctor]
     fn new() -> Self {
         Self
     }
@@ -2056,9 +2073,9 @@ async fn test_post_construct_result_err_propagates() {
 #[derive(Debug, Clone)]
 pub struct ServiceWithFalliblePreDestruct;
 
-#[injectable_impl]
+#[injectable]
 impl ServiceWithFalliblePreDestruct {
-    #[constructor]
+    #[injectable_ctor]
     fn new() -> Self {
         Self
     }
@@ -2108,9 +2125,9 @@ async fn test_pre_destruct_err_accumulated_on_shutdown() {
 /// The macro should handle both `-> ()` and `-> Result<...>` hooks.
 pub struct ServiceWithInfallibleHook;
 
-#[injectable_impl]
+#[injectable]
 impl ServiceWithInfallibleHook {
-    #[constructor]
+    #[injectable_ctor]
     fn new() -> Self {
         Self
     }
@@ -2136,16 +2153,16 @@ async fn test_infallible_post_construct_works() {
     );
 }
 
-// ─── #[injectable_impl] with Scope Attribute ──────────────────────────
+// ─── #[injectable] with Scope Attribute ──────────────────────────
 
-/// A service with transient scope via #[injectable_impl(scope = "transient")].
+/// A service with transient scope via #[injectable(scope = Transient)].
 pub struct TransientCtorService {
     pub id: u32,
 }
 
-#[injectable_impl(scope = "transient")]
+#[injectable(scope = Transient)]
 impl TransientCtorService {
-    #[constructor]
+    #[injectable_ctor]
     fn new() -> Self {
         Self { id: 42 }
     }
@@ -2177,7 +2194,7 @@ fn test_constructor_callable_outside_di() {
     let service = CtorServiceWithArc::new(db);
     let _db_ref = &*service.db; // Just verify we can access the Arc
 
-    let config = CloneableConfig { value: 99 };
+    let config = Arc::new(CloneableConfig { value: 99 });
     let db = Arc::new(Database);
     let service = CtorServiceWithOwned::new(config, db);
     assert_eq!(service.config.value, 99);
@@ -2185,14 +2202,20 @@ fn test_constructor_callable_outside_di() {
 
 // ─── #[inject] Attribute Tests ────────────────────────────────────────
 
-/// A struct using #[injectable(default)] with one #[inject] field.
-#[derive(Injectable)]
-#[injectable(default)]
+/// A struct with a mix of injected and defaulted fields.
+/// Uses explicit constructor (replaces old #[injectable(default)] pattern).
 pub struct MixedDefaultAndInject {
-    #[inject]
-    pub db: Inject<Database>, // Injected (overrides default behavior)
-    pub port: u16,    // Defaulted via Default::default()
-    pub host: String, // Defaulted via Default::default()
+    pub db: Inject<Database>,
+    pub port: u16,
+    pub host: String,
+}
+
+#[injectable]
+impl MixedDefaultAndInject {
+    #[injectable_ctor]
+    fn new(db: Inject<Database>) -> Self {
+        Self { db, port: 0, host: String::new() }
+    }
 }
 
 #[tokio::test]
@@ -2211,17 +2234,23 @@ async fn test_inject_attribute_in_default_struct() {
     let _db: &Database = &service.db;
 }
 
-/// A struct using #[inject(skip)] in a normal (non-default) struct.
-#[derive(Injectable)]
+/// A struct with a non-injectable field — uses a constructor to set it.
 pub struct PartialInjectService {
-    db: Inject<Database>, // Injected (default for non-default struct)
-    #[inject(skip)]
-    name: String, // NOT injected — uses Default::default()
-    cache: Inject<Cache>, // Injected (default for non-default struct)
+    db: Inject<Database>,
+    name: String,
+    cache: Inject<Cache>,
+}
+
+#[injectable]
+impl PartialInjectService {
+    #[injectable_ctor]
+    fn new(db: Inject<Database>, cache: Inject<Cache>) -> Self {
+        Self { db, name: String::new(), cache }
+    }
 }
 
 #[tokio::test]
-async fn test_inject_skip_attribute_in_normal_struct() {
+async fn test_non_injectable_field_via_constructor() {
     let container = Container::builder()
         .build()
         .await
@@ -2230,11 +2259,383 @@ async fn test_inject_skip_attribute_in_normal_struct() {
     let service = container.resolve::<PartialInjectService>().await;
     assert!(service.is_ok(), "should resolve PartialInjectService");
     let service = service.unwrap();
-    assert_eq!(
-        service.name, "",
-        "name should be defaulted via #[inject(skip)]"
-    );
-    // db and cache were injected normally
+    assert_eq!(service.name, "", "name is set by constructor");
     let _db: &Database = &service.db;
     let _cache: &Cache = &service.cache;
+}
+
+// ─── Arc<T> vs owned T field — scope semantics ────────────────────────────
+//
+// All injectables are singleton-scoped by default (IS_SINGLETON = true).
+//
+// Arc<Svc> field:
+//   • Routes through `impl<T: Injectable> Extract for Arc<T>` in injectable_runtime
+//   • That impl calls `resolve_singleton_arc::<T>()` — the singleton cache
+//   • Every consumer with `svc: Arc<SharedSvc2>` shares the SAME heap allocation
+//   • Arc::ptr_eq holds between any two resolutions
+//
+// Owned `Svc` field:
+//   • Routes through the per-type generated `impl Extract for SharedSvc2`
+//   • That impl calls `ctx.resolve::<SharedSvc2>()` → Provider::provide directly
+//   • This BYPASSES the singleton cache — each provider call creates a fresh instance
+//   • Semantics: "I want my own private copy, embedded in this struct"
+//   • The owned field does NOT participate in the global singleton cache
+//   • Consequence: if WeatherService is singleton and UserService has
+//     `svc: WeatherService`, UserService gets its own private WeatherService
+//     that is distinct from the cached `Arc<WeatherService>` or `Inject<WeatherService>`
+//
+// Rule of thumb:
+//   Use Arc<T>   when T is (or should be) a shared singleton resource.
+//   Use owned T  when you want an independent instance embedded in the consumer
+//                (T should logically be transient, or you intentionally want a copy).
+
+static SHARED_SVC2_CTOR: AtomicUsize = AtomicUsize::new(0);
+
+/// Clone is required for singleton types used as owned fields.
+/// Non-Clone singletons can still be used as Arc<T>/Inject<T> without issue.
+#[derive(Clone)]
+pub struct SharedSvc2;
+
+#[injectable]
+impl SharedSvc2 {
+    #[injectable_ctor]
+    fn new() -> Self {
+        SHARED_SVC2_CTOR.fetch_add(1, Ordering::SeqCst);
+        Self
+    }
+}
+
+/// Consumer via shared reference — scope is respected.
+#[injectable]
+pub struct ConsumerArc {
+    #[inject]
+    svc: Arc<SharedSvc2>,
+}
+
+/// Factory: get owned SharedSvc2 by cloning from the pre-extracted Arc.
+/// use_factory_async keeps ctx for this pattern, since it needs to resolve.
+async fn make_owned_svc2_from_ctx(ctx: &ResolveContext) -> Result<SharedSvc2, InjectableError> {
+    let arc = ctx.resolve_singleton_arc::<SharedSvc2>().await?;
+    Ok((*arc).clone())
+}
+
+/// Consumer with owned field via explicit factory (the user's approach).
+#[injectable]
+#[derive(Clone)]
+pub struct ConsumerOwned {
+    #[inject(use_factory_async=self::make_owned_svc2_from_ctx)]
+    svc: SharedSvc2,
+}
+
+/// Arc<T> field: singleton cache is respected.
+/// Both Inject<ConsumerArc> resolutions share the same ConsumerArc AND the
+/// same Arc<SharedSvc2> — ptr_eq proves both are cached.
+#[tokio::test]
+async fn test_arc_field_shares_singleton() {
+    let before = SHARED_SVC2_CTOR.load(Ordering::SeqCst);
+    let ctx = Container::builder().build().await.unwrap();
+    let ctx = ctx.context();
+
+    // Resolve via Inject<T> so the singleton cache is used.
+    let a = Inject::<ConsumerArc>::extract(ctx).await.unwrap();
+    let b = Inject::<ConsumerArc>::extract(ctx).await.unwrap();
+
+    // Same ConsumerArc singleton → same Arc<SharedSvc2>.
+    assert!(Arc::ptr_eq(&a.svc, &b.svc),
+        "Arc<T> field must point to the same singleton allocation across resolutions");
+
+    // SharedSvc2 was constructed exactly once despite two resolutions.
+    let delta = SHARED_SVC2_CTOR.load(Ordering::SeqCst) - before;
+    assert_eq!(delta, 1,
+        "singleton SharedSvc2 must be constructed once, not once per consumer");
+}
+
+/// Owned T field (singleton + Clone): scope IS respected.
+///
+/// For singletons, `impl Extract for T where T: Clone` clones from the
+/// singleton cache (`resolve_singleton_arc` + `unwrap_or_clone`).
+/// SharedSvc2 is therefore constructed exactly once regardless of how many
+/// consumers hold it as Arc<T>, Inject<T>, or owned T.
+///
+/// If SharedSvc2 did NOT implement Clone, `impl Extract for SharedSvc2`
+/// would not exist and using it as an owned field would be a compile error
+/// — the user would have to add Clone or switch to Arc<T>/Inject<T>.
+#[tokio::test]
+async fn test_owned_singleton_field_respects_scope_via_clone() {
+    let before = SHARED_SVC2_CTOR.load(Ordering::SeqCst);
+    let container = Container::builder().build().await.unwrap();
+    let ctx = container.context();
+
+    // Resolve ConsumerOwned (singleton) whose field `svc: SharedSvc2` is
+    // extracted via the Clone path (resolve_singleton_arc + unwrap_or_clone).
+    let _consumer = Inject::<ConsumerOwned>::extract(ctx).await.unwrap();
+
+    // Resolve SharedSvc2 via the Arc path — same singleton entry in the cache.
+    let _cached = Arc::<SharedSvc2>::extract(ctx).await.unwrap();
+
+    // Only ONE SharedSvc2 was ever constructed — both consumers get their
+    // value from the same singleton cache entry.
+    let delta = SHARED_SVC2_CTOR.load(Ordering::SeqCst) - before;
+    assert_eq!(delta, 1,
+        "singleton SharedSvc2 must be constructed once, even when held as \
+         an owned Clone field (delta={delta})");
+}
+
+// ─── Clone::clone as factory ────────────────────────────────────────────────
+//
+// `use_factory_sync=Clone::clone` (or the fully-qualified form) works for any
+// field whose inner type is Injectable:
+//   • Arc<T> field  → Arc::clone (refcount increment, singleton shared)
+//   • T (owned) field → Clone::clone on the deref of Arc (requires T: Clone)
+
+// Separate counters per test to avoid concurrent interference.
+static ARC_CLONE_SVC_CTOR: AtomicUsize = AtomicUsize::new(0);
+static OWNED_CLONE_SVC_CTOR: AtomicUsize = AtomicUsize::new(0);
+
+#[derive(Clone)]
+pub struct ArcCloneSvc;
+
+#[injectable]
+impl ArcCloneSvc {
+    #[injectable_ctor]
+    fn new() -> Self {
+        ARC_CLONE_SVC_CTOR.fetch_add(1, Ordering::SeqCst);
+        Self
+    }
+}
+
+#[derive(Clone)]
+pub struct OwnedCloneSvc;
+
+#[injectable]
+impl OwnedCloneSvc {
+    #[injectable_ctor]
+    fn new() -> Self {
+        OWNED_CLONE_SVC_CTOR.fetch_add(1, Ordering::SeqCst);
+        Self
+    }
+}
+
+/// Arc<T> field — shares the singleton Arc via the normal #[inject] path.
+#[injectable]
+pub struct ArcCloneConsumer {
+    #[inject]
+    svc: Arc<ArcCloneSvc>,
+}
+
+/// Owned T field via explicit factory — clones from singleton (requires T: Clone).
+async fn clone_owned_clone_svc(
+    ctx: &ResolveContext,
+) -> Result<OwnedCloneSvc, InjectableError> {
+    let arc = ctx.resolve_singleton_arc::<OwnedCloneSvc>().await?;
+    Ok((*arc).clone())
+}
+
+#[injectable]
+#[derive(Clone)]
+pub struct OwnedCloneConsumer {
+    #[inject(use_factory_async = self::clone_owned_clone_svc)]
+    svc: OwnedCloneSvc,
+}
+
+/// Arc<T> field: singleton cache is respected — ptr_eq proves both resolutions
+/// return the same heap allocation.
+#[tokio::test]
+async fn test_arc_inject_field_shares_singleton() {
+    let before = ARC_CLONE_SVC_CTOR.load(Ordering::SeqCst);
+    let ctx = Container::builder().build().await.unwrap();
+    let ctx = ctx.context();
+
+    let a = Inject::<ArcCloneConsumer>::extract(ctx).await.unwrap();
+    let b = Inject::<ArcCloneConsumer>::extract(ctx).await.unwrap();
+
+    assert!(Arc::ptr_eq(&a.svc, &b.svc),
+        "Arc<T> field must share the same singleton Arc");
+    assert_eq!(ARC_CLONE_SVC_CTOR.load(Ordering::SeqCst) - before, 1,
+        "singleton must be constructed once");
+}
+
+/// Owned T field via async factory: factory clones from the singleton Arc.
+/// The singleton is constructed once; each consumer gets an independent copy.
+#[tokio::test]
+async fn test_owned_field_via_factory_clones_singleton() {
+    let before = OWNED_CLONE_SVC_CTOR.load(Ordering::SeqCst);
+    let ctx = Container::builder().build().await.unwrap();
+    let ctx = ctx.context();
+
+    let _c = Inject::<OwnedCloneConsumer>::extract(ctx).await.unwrap();
+
+    assert_eq!(OWNED_CLONE_SVC_CTOR.load(Ordering::SeqCst) - before, 1,
+        "singleton constructed once even when field is owned");
+}
+
+// ─── Extract for tuples ─────────────────────────────────────────────────────
+//
+// Extract is now implemented for tuples up to 16 elements.
+// Each element is extracted independently from the same context.
+
+#[tokio::test]
+async fn test_extract_unit_tuple() {
+    let ctx = Container::builder().build().await.unwrap();
+    let (): () = <() as injectable::Extract>::extract(ctx.context()).await.unwrap();
+}
+
+#[tokio::test]
+async fn test_extract_1_tuple() {
+    let ctx = Container::builder().build().await.unwrap();
+    let (arc,): (Arc<Database>,) =
+        <(Arc<Database>,) as injectable::Extract>::extract(ctx.context()).await.unwrap();
+    let _: &Database = &*arc;
+}
+
+#[tokio::test]
+async fn test_extract_2_tuple() {
+    let ctx = Container::builder().build().await.unwrap();
+    let (db, cfg): (Arc<Database>, Arc<Config>) =
+        <(Arc<Database>, Arc<Config>) as injectable::Extract>::extract(ctx.context()).await.unwrap();
+    let _ = (db, cfg);
+}
+
+// ─── #[injectable] unified attribute macro ─────────────────────────────────
+//
+// #[injectable] on a struct = field injection (replaces #[injectable])
+// #[injectable] on an impl block = constructor injection (replaces #[injectable])
+// Both accept type-safe scope idents: Singleton, Transient, RequestScoped.
+
+/// Struct with #[injectable] (no derive needed).
+#[injectable]
+pub struct InjectableAttrService {
+    db: Inject<Database>,
+    #[inject]
+    config: Arc<Config>,
+}
+
+/// Struct with type-safe scope ident.
+#[injectable(scope = Transient)]
+pub struct TransientAttrService {
+    db: Inject<Database>,
+}
+
+/// Impl block with #[injectable] instead of #[injectable].
+pub struct ImplAttrService {
+    name: &'static str,
+}
+
+#[injectable]
+impl ImplAttrService {
+    #[injectable_ctor]
+    fn new() -> Self {
+        Self { name: "impl-attr" }
+    }
+}
+
+#[tokio::test]
+async fn test_injectable_attr_on_struct() {
+    let ctx = Container::builder().build().await.unwrap();
+    let svc = Inject::<InjectableAttrService>::extract(ctx.context()).await.unwrap();
+    let _: &Database = &*svc.db;
+}
+
+#[tokio::test]
+async fn test_injectable_attr_on_impl() {
+    let container = Container::builder().build().await.unwrap();
+    let svc = container.resolve::<ImplAttrService>().await;
+    let _ = svc;
+}
+
+// ─── #[inject_fn] ───────────────────────────────────────────────────
+//
+// Verifies that #[inject_fn] transforms a function with #[inject]
+// parameters into an async factory compatible with use_factory_async.
+
+/// A factory that receives an injectable type and produces a value.
+#[inject_fn]
+fn make_label(_config: Inject<Config>) -> String {
+    "label-from-config".to_string()
+}
+
+/// A factory that receives an Arc<T> parameter.
+#[inject_fn]
+fn make_arc_label(#[inject] _db: Arc<Database>) -> String {
+    "db-label-from-arc".to_string()
+}
+
+/// A factory returning Result<T, E>.
+#[inject_fn]
+fn make_checked_label(_config: Inject<Config>) -> Result<String, std::convert::Infallible> {
+    Ok("checked-label".to_string())
+}
+
+/// An async factory.
+#[inject_fn]
+async fn make_async_label(_config: Inject<Config>) -> String {
+    "async-label-value".to_string()
+}
+
+#[injectable]
+pub struct FactoryConsumer {
+    #[inject(use_factory_async = self::make_label)]
+    label: String,
+}
+
+#[injectable]
+pub struct ArcFactoryConsumer {
+    #[inject(use_factory_async = self::make_arc_label)]
+    label: String,
+}
+
+#[injectable]
+pub struct ResultFactoryConsumer {
+    #[inject(use_factory_async = self::make_checked_label)]
+    label: String,
+}
+
+#[injectable]
+pub struct AsyncFactoryConsumer {
+    #[inject(use_factory_async = self::make_async_label)]
+    label: String,
+}
+
+#[tokio::test]
+async fn test_inject_fn_inject_t_param() {
+    let ctx = Container::builder().build().await.unwrap();
+    let svc = ctx.resolve::<FactoryConsumer>().await.unwrap();
+    assert!(svc.label.starts_with("label-from-"));
+}
+
+#[tokio::test]
+async fn test_inject_fn_arc_param() {
+    let ctx = Container::builder().build().await.unwrap();
+    let svc = ctx.resolve::<ArcFactoryConsumer>().await.unwrap();
+    assert!(svc.label.starts_with("db-label-"));
+}
+
+#[tokio::test]
+async fn test_inject_fn_result_return() {
+    let ctx = Container::builder().build().await.unwrap();
+    let svc = ctx.resolve::<ResultFactoryConsumer>().await.unwrap();
+    assert!(svc.label.starts_with("checked-"));
+}
+
+#[tokio::test]
+async fn test_inject_fn_async_body() {
+    let ctx = Container::builder().build().await.unwrap();
+    let svc = ctx.resolve::<AsyncFactoryConsumer>().await.unwrap();
+    assert!(svc.label.starts_with("async-label-"));
+}
+
+// ─── prelude ─────────────────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn test_prelude_items_accessible() {
+    // Verify the prelude re-exports compile (use items from injectable::prelude::*)
+    use injectable::prelude::*;
+
+    #[injectable]
+    pub struct PreludeService {
+        db: Inject<Database>,
+    }
+
+    let container = Container::builder().build().await.unwrap();
+    let _svc = container.resolve::<PreludeService>().await.unwrap();
 }

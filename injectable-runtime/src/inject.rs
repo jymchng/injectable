@@ -54,6 +54,14 @@ impl<T> Inject<T> {
     pub fn arc(&self) -> Arc<T> {
         Arc::clone(&self.0)
     }
+
+    /// Returns `true` if both `Inject<T>` values point to the same heap allocation.
+    ///
+    /// Useful for asserting singleton semantics in tests without going through
+    /// `Arc::ptr_eq(a.inner(), b.inner())`.
+    pub fn ptr_eq(&self, other: &Inject<T>) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+    }
 }
 
 impl<T> std::ops::Deref for Inject<T> {
@@ -73,6 +81,32 @@ impl<T> From<Arc<T>> for Inject<T> {
 impl<T> From<Inject<T>> for Arc<T> {
     fn from(inject: Inject<T>) -> Self {
         inject.into_inner()
+    }
+}
+
+impl<T: PartialEq> PartialEq for Inject<T> {
+    fn eq(&self, other: &Self) -> bool {
+        **self == **other
+    }
+}
+
+impl<T: Eq> Eq for Inject<T> {}
+
+impl<T: std::hash::Hash> std::hash::Hash for Inject<T> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        (**self).hash(state);
+    }
+}
+
+impl<T> AsRef<T> for Inject<T> {
+    fn as_ref(&self) -> &T {
+        self
+    }
+}
+
+impl<T> std::borrow::Borrow<T> for Inject<T> {
+    fn borrow(&self) -> &T {
+        self
     }
 }
 

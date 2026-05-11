@@ -1,7 +1,7 @@
 #![allow(warnings)]
 //! Constructor Injection Example
 //!
-//! This example demonstrates `#[injectable_impl]` for constructor-based
+//! This example demonstrates `#[injectable]` for constructor-based
 //! injection. Unlike field injection, constructor injection gives you
 //! full control over how your type is constructed, while still allowing
 //! the framework to resolve dependencies automatically.
@@ -21,13 +21,16 @@ use std::sync::Arc;
 
 // ─── Dependency Types ───────────────────────────────────────────────
 
-#[derive(Injectable, Default, Clone, Debug)]
+#[injectable]
+#[derive(Default, Clone, Debug)]
 pub struct Config;
 
-#[derive(Injectable, Default, Debug)]
+#[injectable]
+#[derive(Default, Debug)]
 pub struct Database;
 
-#[derive(Injectable, Default, Debug)]
+#[injectable]
+#[derive(Default, Debug)]
 pub struct Cache;
 
 // ─── Constructor Injection Examples ─────────────────────────────────
@@ -41,9 +44,9 @@ pub struct InjectParamService {
     cache: Inject<Cache>,
 }
 
-#[injectable_impl]
+#[injectable]
 impl InjectParamService {
-    #[constructor]
+    #[injectable_ctor]
     fn new(db: Inject<Database>, cache: Inject<Cache>) -> Self {
         println!("  Constructing InjectParamService");
         Self { db, cache }
@@ -64,10 +67,10 @@ pub struct ArcParamService {
     cache: Arc<Cache>,
 }
 
-#[injectable_impl]
+#[injectable]
 impl ArcParamService {
-    #[constructor]
-    fn new(db: Arc<Database>, cache: Arc<Cache>) -> Self {
+    #[injectable_ctor]
+    fn new(#[inject] db: Arc<Database>, #[inject] cache: Arc<Cache>) -> Self {
         println!("  Constructing ArcParamService");
         Self { db, cache }
     }
@@ -77,53 +80,46 @@ impl ArcParamService {
     }
 }
 
-/// Example 3: Constructor with owned `T` parameters (requires T: Clone).
+/// Example 3: Constructor with `Arc<T>` parameters.
 ///
-/// The macro resolves `Inject<T>`, then calls `Arc::unwrap_or_clone()`
-/// to give you an owned value. This lets you call the constructor
-/// outside of DI with plain values:
-///
-/// ```rust,ignore
-/// let config = Config;
-/// let service = OwnedParamService::new(config);
-/// ```
-pub struct OwnedParamService {
-    config: Config,
+/// Use `Arc<Config>` when you need a shared config without the `Inject<T>`
+/// wrapper. The DI system resolves it from the singleton cache.
+pub struct ArcConfigService {
+    config: Arc<Config>,
 }
 
-#[injectable_impl]
-impl OwnedParamService {
-    #[constructor]
-    fn new(config: Config) -> Self {
-        println!("  Constructing OwnedParamService");
+#[injectable]
+impl ArcConfigService {
+    #[injectable_ctor]
+    fn new(#[inject] config: Arc<Config>) -> Self {
+        println!("  Constructing ArcConfigService");
         Self { config }
     }
 
     fn describe(&self) -> String {
-        "OwnedParamService: config via owned T".to_string()
+        "ArcConfigService: config via Arc<T>".to_string()
     }
 }
 
 /// Example 4: Constructor with mixed parameter types.
 ///
-/// Combine `Inject<T>`, `Arc<T>`, and `T` in a single constructor
-/// for maximum flexibility.
+/// Combine `Inject<T>` and `Arc<T>` in a single constructor.
 pub struct MixedParamService {
     db: Inject<Database>,
-    config: Config,
+    config: Arc<Config>,
     cache: Arc<Cache>,
 }
 
-#[injectable_impl]
+#[injectable]
 impl MixedParamService {
-    #[constructor]
-    fn new(db: Inject<Database>, config: Config, cache: Arc<Cache>) -> Self {
+    #[injectable_ctor]
+    fn new(db: Inject<Database>, #[inject] config: Arc<Config>, #[inject] cache: Arc<Cache>) -> Self {
         println!("  Constructing MixedParamService");
         Self { db, config, cache }
     }
 
     fn describe(&self) -> String {
-        "MixedParamService: Inject<T> + owned T + Arc<T>".to_string()
+        "MixedParamService: Inject<T> + Arc<T> + Arc<T>".to_string()
     }
 }
 
@@ -135,9 +131,9 @@ pub struct NoDepService {
     started_at: String,
 }
 
-#[injectable_impl]
+#[injectable]
 impl NoDepService {
-    #[constructor]
+    #[injectable_ctor]
     fn new() -> Self {
         println!("  Constructing NoDepService");
         Self {
@@ -158,9 +154,9 @@ pub struct AsyncCtorService {
     db: Inject<Database>,
 }
 
-#[injectable_impl]
+#[injectable]
 impl AsyncCtorService {
-    #[constructor]
+    #[injectable_ctor]
     async fn new(db: Inject<Database>) -> Self {
         println!("  Constructing AsyncCtorService (async)");
         // Simulate async initialization (e.g., connection warmup)
@@ -193,8 +189,8 @@ async fn main() {
     let svc = container.resolve::<ArcParamService>().await.unwrap();
     println!("   {}\n", svc.describe());
 
-    println!("3. Owned T parameters:");
-    let svc = container.resolve::<OwnedParamService>().await.unwrap();
+    println!("3. Arc<T> config parameter:");
+    let svc = container.resolve::<ArcConfigService>().await.unwrap();
     println!("   {}\n", svc.describe());
 
     println!("4. Mixed parameter types:");

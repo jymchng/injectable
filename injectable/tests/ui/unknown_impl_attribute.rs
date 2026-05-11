@@ -1,16 +1,16 @@
-//! Compile-fail test: unknown attribute in #[injectable_impl(...)].
+//! Compile-fail test: unknown attribute in #[injectable(...)].
 //!
-//! Only `scope` is a valid attribute for #[injectable_impl].
+//! Only `scope` is a valid attribute for #[injectable] on an impl block.
 
-use injectable::{injectable_impl, constructor};
+use injectable::injectable_ctor;
 
 pub struct MyService {
     name: String,
 }
 
-#[injectable_impl(bad = "value")]
+#[injectable(bad = "value")]
 impl MyService {
-    #[constructor]
+    #[injectable_ctor]
     pub fn new() -> Self {
         Self { name: "default".to_string() }
     }

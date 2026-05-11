@@ -1,13 +1,7 @@
-error: unknown injectable_impl attribute: `bad`
+error: cannot find attribute `injectable` in this scope
  --> tests/ui/unknown_impl_attribute.rs
   |
-  | #[injectable_impl(bad = "value")]
-  |                   ^^^
-
-warning: unused import: `constructor`
- --> tests/ui/unknown_impl_attribute.rs
+  | #[injectable(bad = "value")]
+  |   ^^^^^^^^^^
   |
-  | use injectable::{injectable_impl, constructor};
-  |                                   ^^^^^^^^^^^
-  |
-  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+  = note: `injectable` is in scope, but it is a crate, not an attribute

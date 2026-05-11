@@ -3,7 +3,7 @@
 //!
 //! This example demonstrates how to inject types you DON'T own —
 //! types from third-party crates like `reqwest::Client`, `sqlx::SqlitePool`,
-//! or any other type where you can't add `#[derive(Injectable)]`.
+//! or any other type where you can't add `#[injectable]`.
 //!
 //! The solution is `DynProvider` — a closure-based provider that you
 //! register with the `ContainerBuilder`. It comes in three flavors:
@@ -19,7 +19,8 @@ use injectable::*;
 // ─── Owned Injectable Types ─────────────────────────────────────────
 // External types can depend on Injectable types through the context.
 
-#[derive(Injectable, Default, Debug)]
+#[injectable]
+#[derive(Default, Debug)]
 pub struct AppConfig;
 
 // ─── Main ───────────────────────────────────────────────────────────

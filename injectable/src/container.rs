@@ -30,7 +30,8 @@ use injectable_runtime::{
 ///
 /// ```rust,ignore
 /// // Types you own: derive Injectable
-/// #[derive(Injectable, Default)]
+/// #[injectable]
+/// #[derive(Default)]
 /// pub struct UserService { ... }
 ///
 /// // Types you don't own: register a provider
@@ -61,7 +62,7 @@ impl Container {
     /// Resolve a type that implements `Injectable`.
     ///
     /// This is the primary resolution method for types you own that
-    /// use `#[derive(Injectable)]`.
+    /// use `#[injectable]`.
     ///
     /// # Example
     ///
@@ -91,6 +92,46 @@ impl Container {
     /// Useful for manual extraction in advanced scenarios.
     pub fn context(&self) -> &ResolveContext {
         &self.ctx
+    }
+
+    /// Returns the names of all `#[injectable]` types registered in the container.
+    ///
+    /// This includes every type that was annotated with `#[injectable]` and
+    /// linked into the binary — useful for debugging `MissingDependency` errors
+    /// and asserting DI registration in tests.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// let container = Container::builder().build().await?;
+    /// assert!(container.registered_types().contains(&"Database"));
+    /// ```
+    pub fn registered_types(&self) -> Vec<&'static str> {
+        injectable_runtime::inventory::iter::<injectable_runtime::InjectableArcFactory>()
+            .map(|f| f.type_name)
+            .collect()
+    }
+
+    /// Resolve a type, returning `None` instead of an error if it is not registered.
+    ///
+    /// Maps `MissingDependency → Ok(None)` and propagates all other errors.
+    pub async fn try_resolve<T: Injectable>(&self) -> InjectableResult<Option<T>> {
+        match self.resolve::<T>().await {
+            Ok(v) => Ok(Some(v)),
+            Err(InjectableError::MissingDependency { .. }) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Resolve an external type, returning `None` instead of an error if not registered.
+    pub async fn try_resolve_external<T: Send + Sync + 'static>(
+        &self,
+    ) -> InjectableResult<Option<T>> {
+        match self.resolve_external::<T>().await {
+            Ok(v) => Ok(Some(v)),
+            Err(InjectableError::MissingDependency { .. }) => Ok(None),
+            Err(e) => Err(e),
+        }
     }
 
     /// Shut down the container, running all `#[pre_destruct]` hooks.
@@ -245,7 +286,7 @@ impl ContainerBuilder {
     /// Build the container.
     ///
     /// This performs startup validation of the dependency graph (collected
-    /// automatically from all `#[derive(Injectable)]` and `#[injectable_impl]`
+    /// automatically from all `#[injectable]` and `#[injectable]`
     /// types via the `inventory` crate) and the singleton store, then
     /// returns a ready-to-use container.
     ///
@@ -271,7 +312,7 @@ impl ContainerBuilder {
         }
 
         // Validate the dependency graph collected from inventory.
-        // Every #[derive(Injectable)] and #[injectable_impl] submits a
+        // Every #[injectable] and #[injectable] submits a
         // GraphNode via inventory::submit!, which is automatically
         // gathered here at build time.
         let nodes: Vec<injectable_graph::GraphNode> =
@@ -283,13 +324,8 @@ impl ContainerBuilder {
         if !nodes.is_empty() {
             let graph = injectable_graph::DependencyGraph::new(nodes);
             if let Err(errors) = graph.validate() {
-                let error_messages: Vec<String> = errors.iter().map(|e| e.to_string()).collect();
-                return Err(InjectableError::ConstructionFailed {
-                    type_name: "Container",
-                    reason: format!(
-                        "dependency graph validation failed:\n  - {}",
-                        error_messages.join("\n  - ")
-                    ),
+                return Err(InjectableError::GraphValidationFailed {
+                    errors: errors.iter().map(|e| e.to_string()).collect(),
                 });
             }
         }

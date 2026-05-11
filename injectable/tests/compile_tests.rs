@@ -10,8 +10,8 @@
 //!   - Duplicate type registrations
 //!
 //! - **Proc-macro structural errors**:
-//!   - Missing `#[constructor]` in `#[injectable_impl]`
-//!   - Multiple `#[constructor]` methods
+//!   - Missing `#[injectable_ctor]` in `#[injectable]`
+//!   - Multiple `#[injectable_ctor]` methods
 //!   - Unknown `#[injectable(...)]` attributes
 //!   - Unknown `#[injectable_impl(...)]` attributes
 //!
@@ -49,6 +49,29 @@ fn compile_pass_valid_graph() {
     let ui_dir = manifest_dir().join("tests/ui");
 
     t.pass(ui_dir.join("valid_graph.rs"));
+}
+
+/// Verify both field-ownership patterns compile and are correctly typed.
+///
+/// `Arc<T>` field    — shared reference, scope always respected, no Clone needed.
+/// `T` (owned) field — clone of singleton (requires T: Clone), or fresh transient.
+#[test]
+fn compile_pass_field_ownership_patterns() {
+    let t = trybuild::TestCases::new();
+    let ui_dir = manifest_dir().join("tests/ui");
+
+    t.pass(ui_dir.join("field_arc_shared.rs")); // Arc<T> — shared, no Clone
+    t.pass(ui_dir.join("field_owned.rs"));      // T (owned, Clone) — scope respected
+}
+
+/// Owned field of a singleton that does NOT implement Clone must be rejected.
+/// The user must either add Clone or switch to Arc<T>/Inject<T>.
+#[test]
+fn compile_fail_owned_non_clone_singleton() {
+    let t = trybuild::TestCases::new();
+    let ui_dir = manifest_dir().join("tests/ui");
+
+    t.compile_fail(ui_dir.join("field_owned_non_clone_singleton.rs"));
 }
 
 fn manifest_dir() -> PathBuf {

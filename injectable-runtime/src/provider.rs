@@ -187,6 +187,38 @@ impl<T: Send + Sync + 'static> DynProvider<T> {
         }
     }
 
+    /// Register a pre-built value. On each resolution the value is cloned.
+    ///
+    /// Useful in tests to inject a pre-configured mock without writing a closure:
+    /// ```rust,ignore
+    /// container.register(DynProvider::from_value(MockDb::default()));
+    /// ```
+    pub fn from_value(value: T) -> Self
+    where
+        T: Clone,
+    {
+        Self::from_arc(Arc::new(value))
+    }
+
+    /// Register a pre-built `Arc<T>`. On each resolution the inner value is cloned.
+    ///
+    /// Use this when you already hold an `Arc<T>` and want to avoid double-wrapping:
+    /// ```rust,ignore
+    /// let shared = Arc::new(MockDb::default());
+    /// container.register(DynProvider::from_arc(Arc::clone(&shared)));
+    /// ```
+    pub fn from_arc(arc: Arc<T>) -> Self
+    where
+        T: Clone,
+    {
+        Self {
+            f: Box::new(move |_ctx| {
+                let val = (*arc).clone();
+                Box::pin(std::future::ready(Ok(val)))
+            }),
+        }
+    }
+
     /// Invoke the dynamic provider to construct a value.
     pub(crate) async fn provide(&self, ctx: Arc<ResolveContext>) -> InjectableResult<T> {
         (self.f)(ctx).await

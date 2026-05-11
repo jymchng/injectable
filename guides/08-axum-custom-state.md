@@ -44,7 +44,8 @@ use axum::{Json, Router, extract::State, routing::get};
 use injectable::*;
 use serde::Serialize;
 
-#[derive(Injectable, Default)] pub struct GreetingService;
+#[injectable
+#[derive(, Default)] pub struct GreetingService;
 impl GreetingService {
     pub fn greet(&self, name: &str) -> String { format!("Hello, {name}!") }
 }
@@ -162,7 +163,8 @@ impl InjectableState for AppState {
 use axum::{extract::State, Json};
 use serde::Serialize;
 
-#[derive(Injectable, Default)] pub struct ApiHandler;
+#[injectable
+#[derive(, Default)] pub struct ApiHandler;
 impl ApiHandler {
     pub fn handle(&self) -> &str { "v2 response" }
 }

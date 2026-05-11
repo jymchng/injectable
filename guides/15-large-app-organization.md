@@ -17,8 +17,8 @@ src/
 │   ├── users/
 │   │   ├── mod.rs
 │   │   ├── model.rs     ← UserRow, CreateUser, etc.
-│   │   ├── repository.rs← UserRepository (#[injectable_impl])
-│   │   ├── service.rs   ← UserService (#[injectable_impl])
+│   │   ├── repository.rs← UserRepository (#[injectable])
+│   │   ├── service.rs   ← UserService (#[injectable])
 │   │   └── handlers.rs  ← get_user, create_user (async fn)
 │   └── orders/
 │       ├── mod.rs
@@ -106,9 +106,9 @@ pub struct UserService {
     repo: Arc<UserRepository>,
 }
 
-#[injectable_impl]
+#[injectable]
 impl UserService {
-    #[constructor]
+    #[injectable_ctor]
     pub fn new(repo: Arc<UserRepository>) -> Self { Self { repo } }
 
     pub async fn get(&self, id: i64) -> Option<UserRow> {
@@ -196,16 +196,16 @@ Services are pure business logic. They never import `axum` or know about HTTP. H
 
 ```rust
 // Good: shared AppConfig is Injectable
-#[injectable_impl]
+#[injectable]
 impl AppConfig { /* reads env */ }
 
 pub struct Mailer { config: Arc<AppConfig>, smtp: Arc<SmtpClient> }
 
 // Also good: service-specific settings inline
 pub struct RateLimiter { max_rps: u32 }
-#[injectable_impl]
+#[injectable]
 impl RateLimiter {
-    #[constructor]
+    #[injectable_ctor]
     pub fn new(config: Arc<AppConfig>) -> Self {
         Self { max_rps: config.rate_limit_rps }
     }

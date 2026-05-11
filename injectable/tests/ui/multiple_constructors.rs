@@ -1,22 +1,22 @@
-//! Compile-fail test: multiple #[constructor] methods.
+//! Compile-fail test: multiple #[injectable_ctor] methods.
 //!
-//! The #[injectable_impl] attribute requires exactly one method
-//! annotated with #[constructor]. Having multiple is a compile error.
+//! The #[injectable] attribute requires exactly one method
+//! annotated with #[injectable_ctor]. Having multiple is a compile error.
 
-use injectable::{injectable_impl, constructor};
+use injectable::injectable_ctor;
 
 pub struct MyService {
     name: String,
 }
 
-#[injectable_impl]
+#[injectable]
 impl MyService {
-    #[constructor]
+    #[injectable_ctor]
     pub fn new() -> Self {
         Self { name: "default".to_string() }
     }
 
-    #[constructor]
+    #[injectable_ctor]
     pub fn from_name(name: String) -> Self {
         Self { name }
     }

@@ -8,7 +8,7 @@
 
 use syn::visit::Visit;
 
-/// Metadata extracted from a type annotated with `#[derive(Injectable)]`.
+/// Metadata extracted from a type annotated with `#[injectable]`.
 #[derive(Debug, Default)]
 pub struct InjectableMetadata {
     /// The name of the injectable type.
@@ -232,8 +232,8 @@ impl<'a> Visit<'a> for InjectableVisitor<'a> {
         let method_name = node.sig.ident.to_string();
         let is_async = node.sig.asyncness.is_some();
 
-        // Check for #[constructor]
-        let has_constructor = node.attrs.iter().any(|a| a.path().is_ident("constructor"));
+        // Check for #[injectable_ctor]
+        let has_constructor = node.attrs.iter().any(|a| a.path().is_ident("injectable_ctor"));
         let has_post_construct = node
             .attrs
             .iter()

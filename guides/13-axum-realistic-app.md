@@ -33,9 +33,9 @@ pub struct AppConfig {
     pub port: u16,
 }
 
-#[injectable_impl]
+#[injectable]
 impl AppConfig {
-    #[constructor]
+    #[injectable_ctor]
     pub fn new() -> Self {
         Self {
             database_url: std::env::var("DATABASE_URL")
@@ -52,9 +52,9 @@ pub struct Database {
     pool: Arc<sqlx::SqlitePool>,
 }
 
-#[injectable_impl]
+#[injectable]
 impl Database {
-    #[constructor]
+    #[injectable_ctor]
     pub fn new(pool: Arc<sqlx::SqlitePool>) -> Self {
         Self { pool }
     }
@@ -91,9 +91,9 @@ impl Clone for Database {
 
 pub struct UserRepository { db: Arc<Database> }
 
-#[injectable_impl]
+#[injectable]
 impl UserRepository {
-    #[constructor]
+    #[injectable_ctor]
     pub fn new(db: Arc<Database>) -> Self { Self { db } }
 
     pub async fn find(&self, id: i64) -> Option<UserRow> {
@@ -122,9 +122,9 @@ pub struct UserRow { pub id: i64, pub name: String, pub email: String }
 
 pub struct UserService { repo: Arc<UserRepository> }
 
-#[injectable_impl]
+#[injectable]
 impl UserService {
-    #[constructor]
+    #[injectable_ctor]
     pub fn new(repo: Arc<UserRepository>) -> Self { Self { repo } }
 
     pub async fn get(&self, id: i64) -> Option<UserRow> {
@@ -250,9 +250,9 @@ POST /users        → 201 {"id":2}
 
 | Pattern | How |
 |---|---|
-| Config from env | `#[injectable_impl]` zero-arg constructor |
+| Config from env | `#[injectable]` zero-arg constructor |
 | External pool | `DynProvider::new` registered at build time |
-| DB wrapper with lifecycle | `#[injectable_impl]` with `#[post_construct]` / `#[pre_destruct]` |
+| DB wrapper with lifecycle | `#[injectable]` with `#[post_construct]` / `#[pre_destruct]` |
 | Thin repository layer | `Arc<Database>` constructor param |
 | Service layer | `Arc<UserRepository>` constructor param |
 | Handler injection | `Inject<UserService>` in Axum handler parameters |

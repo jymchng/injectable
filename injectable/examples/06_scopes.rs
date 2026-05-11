@@ -23,27 +23,35 @@ use std::sync::atomic::{AtomicU32, Ordering};
 // ─── Singleton Scope (default) ──────────────────────────────────────
 // By default, all Injectable types are singleton scope.
 
-#[derive(Injectable, Default, Debug)]
+#[injectable]
+#[derive(Default, Debug)]
 pub struct AppConfig;
 
-#[derive(Injectable, Default, Debug)]
+#[injectable]
+#[derive(Default, Debug)]
 pub struct Database;
 
 // ─── Transient Scope ────────────────────────────────────────────────
 // Transient scope means a new instance is created each time the type
 // is resolved. Use #[injectable(scope = "transient")] to declare it.
-// Note: all fields must be Injectable — use #[injectable_impl] for
+// Note: all fields must be Injectable — use #[injectable] for
 // structs with non-Injectable fields like u32.
 
-/// A transient handler. Since u32 is not Injectable, we use
-/// #[injectable(default)] to construct via Default.
-#[derive(Injectable, Default, Debug)]
-#[injectable(scope = "transient", default)]
+/// A transient handler. Uses #[injectable] with explicit constructor.
+#[derive(Default, Debug)]
 pub struct RequestHandler {
     pub id: u32,
 }
 
-// ─── Transient scope via #[injectable_impl] ─────────────────────────
+#[injectable(scope = Transient)]
+impl RequestHandler {
+    #[injectable_ctor]
+    fn new() -> Self {
+        Self::default()
+    }
+}
+
+// ─── Transient scope via #[injectable] ─────────────────────────
 // This is the most flexible approach — the constructor can set
 // non-Injectable fields directly.
 
@@ -52,9 +60,9 @@ pub struct TransientProcessor {
     pub id: u32,
 }
 
-#[injectable_impl(scope = "transient")]
+#[injectable(scope = Transient)]
 impl TransientProcessor {
-    #[constructor]
+    #[injectable_ctor]
     fn new() -> Self {
         static COUNTER: AtomicU32 = AtomicU32::new(0);
         let id = COUNTER.fetch_add(1, Ordering::SeqCst);

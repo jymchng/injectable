@@ -5,13 +5,16 @@
 
 use injectable::container;
 
-#[derive(injectable::Injectable, Default)]
+#[injectable]
+#[derive(Default)]
 pub struct A;
 
-#[derive(injectable::Injectable, Default)]
+#[injectable]
+#[derive(Default)]
 pub struct B;
 
-#[derive(injectable::Injectable, Default)]
+#[injectable]
+#[derive(Default)]
 pub struct C;
 
 container! {

@@ -29,20 +29,23 @@ use injectable::axum::{AxumState, InjectableState};
 use injectable::*;
 
 // ─── Injectable Types ───────────────────────────────────────────────
-// All fields in #[derive(Injectable)] must implement Injectable.
+// All fields in #[injectable] must implement Injectable.
 // Primitive types like String and usize are NOT Injectable.
 // Use unit structs or #[injectable(default)] for those cases.
 
 /// Application configuration.
-#[derive(Injectable, Default, Clone, Debug)]
+#[injectable]
+#[derive(Default, Clone, Debug)]
 pub struct AppConfig;
 
 /// Database connection.
-#[derive(Injectable, Default, Debug)]
+#[injectable]
+#[derive(Default, Debug)]
 pub struct Database;
 
 /// A service with Injectable dependencies.
-#[derive(Injectable, Debug)]
+#[injectable]
+#[derive(Debug)]
 pub struct UserService {
     db: Inject<Database>,
     config: Inject<AppConfig>,

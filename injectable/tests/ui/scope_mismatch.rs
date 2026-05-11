@@ -6,10 +6,12 @@
 
 use injectable::container;
 
-#[derive(injectable::Injectable, Default)]
+#[injectable]
+#[derive(Default)]
 pub struct SingletonService;
 
-#[derive(injectable::Injectable, Default)]
+#[injectable]
+#[derive(Default)]
 pub struct TransientService;
 
 container! {

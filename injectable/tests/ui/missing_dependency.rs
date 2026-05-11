@@ -5,7 +5,8 @@
 
 use injectable::container;
 
-#[derive(injectable::Injectable, Default)]
+#[injectable]
+#[derive(Default)]
 pub struct UserService;
 
 // Database is NOT registered in the container

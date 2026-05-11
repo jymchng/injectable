@@ -1,50 +1,51 @@
 # Guide 05 — Lifecycle Hooks
 
-Injectable provides two lifecycle hooks that run at predictable points in a type's lifetime. Use them for resource initialization after construction (`post_construct`) and clean teardown before destruction (`pre_destruct`).
+Injectable provides two lifecycle hooks that run at predictable points:
+`#[post_construct]` runs after construction and `#[pre_destruct]` runs during
+`container.shutdown()` in reverse construction order.
 
 ## The Two Hooks
 
 | Hook | Runs | Common uses |
 |---|---|---|
-| `#[post_construct]` | After construction, before first use | Connection warm-up, cache loading, health checks, background task spawn |
-| `#[pre_destruct]` | During `container.shutdown()`, reverse order | Flush buffers, drain queues, close connections, stop background tasks |
+| `#[post_construct]` | After construction, before first use | Schema migration, connection warm-up, cache loading |
+| `#[pre_destruct]` | During `container.shutdown()`, reverse order | Flush buffers, drain queues, close connections |
 
-## Approach A — `#[injectable_impl]` Auto-Detection (Recommended)
+## Approach A — Constructor injection (recommended)
 
-The macro detects `#[post_construct]` and `#[pre_destruct]` methods and generates the trait impls for you:
+Put `#[post_construct]` and `#[pre_destruct]` in the same `#[injectable]` impl
+block as your `#[injectable_ctor]`. The macro generates the trait impls automatically.
 
 ```rust
 use injectable::*;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 pub struct WorkQueue {
-    running: AtomicBool,
+    running:   AtomicBool,
     processed: AtomicUsize,
 }
 
-#[injectable_impl]
+#[injectable]
 impl WorkQueue {
-    #[constructor]
+    #[injectable_ctor]
     pub fn new() -> Self {
         Self {
-            running: AtomicBool::new(false),
+            running:   AtomicBool::new(false),
             processed: AtomicUsize::new(0),
         }
     }
 
-    /// Runs immediately after construction — start background processing.
     #[post_construct]
     pub async fn start(&self) {
         self.running.store(true, Ordering::SeqCst);
-        println!("[WorkQueue] started, accepting jobs");
+        println!("[WorkQueue] started");
     }
 
-    /// Runs during container.shutdown() — drain in-flight jobs.
     #[pre_destruct]
     pub async fn drain(&self) {
         self.running.store(false, Ordering::SeqCst);
         let n = self.processed.load(Ordering::SeqCst);
-        println!("[WorkQueue] drained {n} processed jobs, shutting down");
+        println!("[WorkQueue] drained {n} jobs, shutting down");
     }
 
     pub fn enqueue(&self, job: &str) {
@@ -54,179 +55,110 @@ impl WorkQueue {
         }
     }
 }
-
-// pre_destruct wraps the instance in Arc internally, so Clone is required
-impl Clone for WorkQueue {
-    fn clone(&self) -> Self {
-        Self {
-            running: AtomicBool::new(self.running.load(Ordering::SeqCst)),
-            processed: AtomicUsize::new(self.processed.load(Ordering::SeqCst)),
-        }
-    }
-}
 ```
 
-## Approach B — Manual Trait Impl (with `#[derive(Injectable)]`)
+## Approach B — Field injection with lifecycle hooks
 
-Use this when your struct has non-Injectable fields and you want the full `#[derive(Injectable)]` + `#[injectable(default)]` combo:
+Put lifecycle hooks in a **separate** `#[injectable]` impl block when the struct
+uses field injection (no `#[injectable_ctor]`):
 
 ```rust
 use injectable::*;
-use std::sync::atomic::{AtomicUsize, Ordering};
 
-#[derive(Injectable, Default, Debug)]
-#[injectable(has_post_construct, has_pre_destruct, default)]
+#[injectable]
 pub struct ConnectionPool {
-    pub active: AtomicUsize,
+    db: Inject<Database>,
 }
 
-#[async_trait::async_trait]
-impl PostConstruct for ConnectionPool {
-    async fn post_construct(&self) -> HookResult {
-        // Simulate opening 10 connections
-        self.active.store(10, Ordering::SeqCst);
-        println!("[Pool] opened 10 connections");
+#[injectable]          // no #[injectable_ctor] — lifecycle hooks only
+impl ConnectionPool {
+    #[post_construct]
+    pub async fn warm_up(&self) -> HookResult {
+        println!("[Pool] warming up…");
         Ok(())
     }
-}
 
-#[async_trait::async_trait]
-impl PreDestruct for ConnectionPool {
-    async fn pre_destruct(&self) -> HookResult {
-        let n = self.active.swap(0, Ordering::SeqCst);
-        println!("[Pool] closed {n} connections");
+    #[pre_destruct]
+    pub async fn drain(&self) -> HookResult {
+        println!("[Pool] draining…");
         Ok(())
     }
 }
 ```
 
-The flags in `#[injectable(has_post_construct, has_pre_destruct)]` tell the code generator to call the traits. Without them, hooks are silently skipped.
+## Hook Return Types
 
-## Triggering Shutdown
-
-`pre_destruct` hooks only run when you explicitly call `container.shutdown()`. Call it at the end of your application, before dropping the container:
+Both hooks accept `()` or `Result<(), E>`. The macro adapts accordingly:
 
 ```rust
-#[tokio::main]
-async fn main() {
-    let container = Container::builder().build().await.unwrap();
-
-    // ... run your application ...
-
-    // Trigger pre_destruct on all registered instances in reverse order
-    container.shutdown().await.expect("clean shutdown");
+// Unit return — always succeeds
+#[post_construct]
+fn init(&self) {
+    println!("initialized");
 }
-```
 
-With Axum, call `container.shutdown()` in the shutdown signal handler:
-
-```rust
-let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
-
-// Serve in one task
-tokio::spawn(async move {
-    axum::serve(listener, app)
-        .with_graceful_shutdown(async { shutdown_rx.await.ok(); })
-        .await
-        .unwrap();
-});
-
-// Await OS signal
-tokio::signal::ctrl_c().await.unwrap();
-shutdown_tx.send(()).ok();
-container.shutdown().await.unwrap();
+// Result return — error is wrapped as InjectableError::LifecycleHookFailed
+#[post_construct]
+async fn connect(&self) -> Result<(), std::io::Error> {
+    // ...
+    Ok(())
+}
 ```
 
 ## Shutdown Order
 
-Instances are destroyed in **reverse construction order** — last constructed, first destroyed. If `UserService` was constructed after `Database`, shutdown calls `UserService::pre_destruct` then `Database::pre_destruct`.
-
-## Returning Errors from Hooks
-
-Hooks can fail. Return `Err(...)` from a `HookResult` to signal a problem. Shutdown collects all errors and continues shutting down the remaining instances before returning them:
+`container.shutdown()` calls `pre_destruct` on every registered instance in
+**reverse construction order** — the most recently constructed type is destroyed
+first, ensuring dependents are torn down before their dependencies.
 
 ```rust
-#[async_trait::async_trait]
-impl PreDestruct for FileWriter {
-    async fn pre_destruct(&self) -> HookResult {
-        self.flush().await
-            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
-    }
-}
+container.shutdown().await.expect("clean shutdown");
 ```
 
-```rust
-// Shutdown returns all errors
-if let Err(errs) = container.shutdown().await {
-    for e in errs {
-        eprintln!("Shutdown error: {e}");
-    }
-}
-```
+If any `pre_destruct` hook returns `Err`, the error is collected and returned as
+`ShutdownFailed` after all remaining hooks have run (no hook is skipped).
 
-## Async vs Sync Hooks
-
-Both `post_construct` and `pre_destruct` are always async. For synchronous teardown, just don't `.await` anything inside:
-
-```rust
-#[post_construct]
-pub async fn init(&self) {
-    // sync work is fine in an async fn
-    println!("initialized");
-}
-```
-
-## Real-World Example — Database with Health Check
+## Practical Example — Database with Migration
 
 ```rust
 use injectable::*;
-use std::sync::Arc;
 
 pub struct Database {
-    pool: Arc<sqlx::SqlitePool>,
-    healthy: std::sync::atomic::AtomicBool,
+    pool: sqlx::SqlitePool,
 }
 
-#[injectable_impl]
+async fn make_pool(_ctx: &ResolveContext) -> Result<sqlx::SqlitePool, sqlx::Error> {
+    sqlx::SqlitePool::connect("sqlite:./app.db").await
+}
+
+#[injectable]
 impl Database {
-    #[constructor]
-    pub fn new(pool: Arc<sqlx::SqlitePool>) -> Self {
-        Self {
-            pool,
-            healthy: std::sync::atomic::AtomicBool::new(false),
-        }
+    #[injectable_ctor]
+    pub async fn new(
+        #[inject(use_factory_async = self::make_pool)] pool: sqlx::SqlitePool,
+    ) -> Self {
+        Self { pool }
     }
 
     #[post_construct]
-    pub async fn verify(&self) {
-        match sqlx::query("SELECT 1").execute(&*self.pool).await {
-            Ok(_) => {
-                self.healthy.store(true, std::sync::atomic::Ordering::SeqCst);
-                println!("[Database] health check passed");
-            }
-            Err(e) => eprintln!("[Database] health check failed: {e}"),
-        }
+    pub async fn migrate(&self) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "CREATE TABLE IF NOT EXISTS users (
+                id   INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT    NOT NULL
+            )",
+        )
+        .execute(&self.pool)
+        .await?;
+        println!("[DB] Schema ready");
+        Ok(())
     }
 
     #[pre_destruct]
-    pub async fn close(&self) {
+    pub async fn close(&self) -> HookResult {
         self.pool.close().await;
-        println!("[Database] pool closed gracefully");
-    }
-
-    pub fn is_healthy(&self) -> bool {
-        self.healthy.load(std::sync::atomic::Ordering::SeqCst)
-    }
-}
-
-impl Clone for Database {
-    fn clone(&self) -> Self {
-        Self {
-            pool: Arc::clone(&self.pool),
-            healthy: std::sync::atomic::AtomicBool::new(
-                self.healthy.load(std::sync::atomic::Ordering::SeqCst),
-            ),
-        }
+        println!("[DB] Connection pool closed");
+        Ok(())
     }
 }
 ```

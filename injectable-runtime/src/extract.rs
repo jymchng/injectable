@@ -31,6 +31,58 @@ pub trait Extract: Sized {
     async fn extract(ctx: &ResolveContext) -> InjectableResult<Self>;
 }
 
+/// `Extract` for the unit type — always succeeds with `()`.
+///
+/// Useful as a factory input when no context value is needed.
+#[async_trait::async_trait]
+impl Extract for () {
+    async fn extract(_ctx: &ResolveContext) -> InjectableResult<Self> {
+        Ok(())
+    }
+}
+
+/// `Extract` for tuples up to 16 elements, each implementing `Extract`.
+///
+/// Extracting a tuple extracts every element independently from the same
+/// context.  Combined with `Arc<T>: Into<Inject<T>>` this lets factories
+/// receive pre-extracted values — for example:
+///
+/// ```rust,ignore
+/// // field svc: Arc<WeatherService>
+/// #[inject(use_factory_sync = Clone::clone)]
+/// svc: Arc<WeatherService>,
+/// ```
+///
+/// The macro extracts `Arc<WeatherService>` from the context and passes it
+/// directly to `Clone::clone`, which returns another `Arc<WeatherService>`.
+macro_rules! impl_extract_tuple {
+    ($($T:ident),+) => {
+        #[async_trait::async_trait]
+        impl<$($T: Extract + Send + Sync + 'static),+> Extract for ($($T,)+) {
+            async fn extract(ctx: &ResolveContext) -> InjectableResult<Self> {
+                Ok(($($T::extract(ctx).await?,)+))
+            }
+        }
+    };
+}
+
+impl_extract_tuple!(T1);
+impl_extract_tuple!(T1, T2);
+impl_extract_tuple!(T1, T2, T3);
+impl_extract_tuple!(T1, T2, T3, T4);
+impl_extract_tuple!(T1, T2, T3, T4, T5);
+impl_extract_tuple!(T1, T2, T3, T4, T5, T6);
+impl_extract_tuple!(T1, T2, T3, T4, T5, T6, T7);
+impl_extract_tuple!(T1, T2, T3, T4, T5, T6, T7, T8);
+impl_extract_tuple!(T1, T2, T3, T4, T5, T6, T7, T8, T9);
+impl_extract_tuple!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10);
+impl_extract_tuple!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11);
+impl_extract_tuple!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12);
+impl_extract_tuple!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13);
+impl_extract_tuple!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14);
+impl_extract_tuple!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15);
+impl_extract_tuple!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16);
+
 /// Blanket `Extract` implementation for `Option<T>` where `T: Extract`.
 ///
 /// If the inner extraction fails with `MissingDependency`, this returns

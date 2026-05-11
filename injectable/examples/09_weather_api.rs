@@ -48,9 +48,9 @@ pub struct AppConfig {
     pub port: u16,
 }
 
-#[injectable_impl]
+#[injectable]
 impl AppConfig {
-    #[constructor]
+    #[injectable_ctor]
     fn new() -> Self {
         Self {
             database_url: std::env::var("DATABASE_URL").unwrap_or_else(|_| ":memory:".into()),
@@ -78,7 +78,7 @@ async fn get_sqlite_pool(ctx: &ResolveContext) -> Result<sqlx::SqlitePool, Injec
 
 // ─── reqwest::Client provider ───────────────────────────────────────────────
 
-fn reqwest_client_provider(_ctx: &ResolveContext) -> Result<reqwest::Client, InjectableError> {
+async fn reqwest_client_provider(_ctx: &ResolveContext) -> Result<reqwest::Client, InjectableError> {
     println!("  [HTTP] Building reqwest::Client");
     reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(10))
@@ -92,18 +92,19 @@ fn reqwest_client_provider(_ctx: &ResolveContext) -> Result<reqwest::Client, Inj
 
 // ─── WeatherService ──────────────────────────────────────────────────────────
 
-#[derive(Debug, Injectable)]
+#[derive(Debug)]
+#[injectable]
 pub struct WeatherService {
     #[inject(use_factory_async=self::get_sqlite_pool)]
     pool: sqlx::SqlitePool,
-    #[inject(use_factory_sync=self::reqwest_client_provider)]
+    #[inject(use_factory_async=self::reqwest_client_provider)]
     client: reqwest::Client,
 }
 
-#[injectable_impl]
+#[injectable]
 impl WeatherService {
     /// Possible constructor
-    // #[constructor] //--- IGNORE ---
+    // #[injectable_ctor] //--- IGNORE ---
     // async fn new(
     //     #[inject(use_factory_async=self::get_sqlite_pool)] pool: sqlx::SqlitePool,
     //     #[inject(use_factory_sync=self::reqwest_client_provider)] client: reqwest::Client,

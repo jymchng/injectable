@@ -5,13 +5,16 @@
 
 use injectable::container;
 
-#[derive(injectable::Injectable, Default)]
+#[injectable]
+#[derive(Default)]
 pub struct ServiceA;
 
-#[derive(injectable::Injectable, Default)]
+#[injectable]
+#[derive(Default)]
 pub struct ServiceB;
 
-#[derive(injectable::Injectable, Default)]
+#[injectable]
+#[derive(Default)]
 pub struct TransientCache;
 
 container! {

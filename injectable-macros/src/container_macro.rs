@@ -7,7 +7,7 @@
 //! When called without arguments, the macro simply generates
 //! `Container::builder().build()`. Graph validation happens automatically
 //! in `ContainerBuilder::build()` via the `inventory` crate — each
-//! `#[derive(Injectable)]` and `#[injectable_impl]` submits a `GraphNode`
+//! `#[injectable]` and `#[injectable]` submits a `GraphNode`
 //! via `inventory::submit!`, and `build()` collects and validates them.
 //!
 //! ```rust,ignore

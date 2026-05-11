@@ -1,11 +1,8 @@
 //! Compile-fail test: unknown attribute in #[injectable(...)].
 //!
-//! Only `scope`, `default`, `has_post_construct`, and
-//! `has_pre_destruct` are valid attributes.
+//! Only `scope`, `has_post_construct`, and `has_pre_destruct` are
+//! valid attributes for #[injectable] on a struct.
 
-use injectable::Injectable;
-
-#[derive(Injectable)]
 #[injectable(bad_attribute)]
 pub struct MyService;
 

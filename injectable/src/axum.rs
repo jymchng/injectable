@@ -11,7 +11,8 @@
 //! use injectable::axum::AxumState;
 //! use axum::{Router, routing::get};
 //!
-//! #[derive(Injectable, Default)]
+//! #[injectable]
+//! #[derive(Default)]
 //! pub struct Database;
 //!
 //! async fn handler(db: Inject<Database>) -> &'static str {
@@ -92,7 +93,8 @@ pub use injectable_runtime::{InjectableRejection, InjectableState};
 /// use injectable::{Container, Injectable, Inject};
 /// use axum::{Router, routing::get};
 ///
-/// #[derive(Injectable, Default)]
+/// #[injectable]
+/// #[derive(Default)]
 /// pub struct Database;
 ///
 /// async fn handler(db: Inject<Database>) -> &'static str {

@@ -4,7 +4,7 @@
 //! This is the "one example to rule them all" — a dead-simple, realistic web app
 //! that shows the entire workflow in one file:
 //!
-//! 1. **Config from environment** → `#[injectable_impl]` constructor reads env vars
+//! 1. **Config from environment** → `#[injectable]` constructor reads env vars
 //! 2. **Real sqlx::SqlitePool** → registered via DynProvider with real async connect
 //! 3. **Injectable services** → plain struct fields, no `Inject<T>` wrapper needed
 //! 4. **Axum handlers** → use `Inject<T>` to get dependencies
@@ -15,7 +15,7 @@
 //! ```text
 //! Services:  struct UserService { repo: Arc<UserRepository>, email: Arc<EmailService> }
 //! Handlers:  async fn handler(Inject(svc): Inject<UserService>) { ... }
-//! Config:    #[injectable_impl] fn new() -> reads env vars
+//! Config:    #[injectable] fn new() -> reads env vars
 //! External:  DynProvider::new(|| sqlx::SqlitePool::connect(...).await)  // REAL SqlitePool!
 //! ```
 //!
@@ -38,7 +38,7 @@ use injectable::*;
 
 // ─── 1. Configuration (from environment variables) ─────────────────────
 //
-// AppConfig uses #[injectable_impl] with a zero-arg constructor that reads
+// AppConfig uses #[injectable] with a zero-arg constructor that reads
 // env vars. This makes it Injectable, so other services can depend on it
 // using bare `config: AppConfig` or `config: Arc<AppConfig>` params.
 //
@@ -53,9 +53,9 @@ pub struct AppConfig {
     pub max_connections: u32,
 }
 
-#[injectable_impl]
+#[injectable]
 impl AppConfig {
-    #[constructor]
+    #[injectable_ctor]
     fn new() -> Self {
         Self {
             database_url: std::env::var("DATABASE_URL")
@@ -130,7 +130,7 @@ async fn get_sqllite_pool(
 
 /// Database service wrapping a real `sqlx::SqlitePool`.
 ///
-/// Uses `#[injectable_impl]` with a `#[constructor]` that has
+/// Uses `#[injectable]` with a `#[injectable_ctor]` that has
 /// `#[inject(use_factory=...)]` on the `pool` parameter.
 /// The factory function provides the real sqlx::SqlitePool.
 #[derive(Debug, Clone)]
@@ -139,9 +139,9 @@ pub struct Database {
     active_connections: Arc<AtomicUsize>,
 }
 
-#[injectable_impl]
+#[injectable]
 impl Database {
-    #[constructor]
+    #[injectable_ctor]
     async fn new(#[inject(use_factory=self::get_sqllite_pool)] pool: sqlx::SqlitePool) -> Self {
         Self {
             pool,
@@ -199,7 +199,7 @@ impl Database {
 // ─── 3. UserRepository (bare Arc<T> param, no Inject<T>) ───────────────
 //
 // The constructor takes `db: Arc<Database>` — NOT `Inject<Database>`.
-// The #[injectable_impl] macro rewrites `Arc<T>` params to extract
+// The #[injectable] macro rewrites `Arc<T>` params to extract
 // via Inject<T> internally, then passes the Arc directly.
 // Your code never touches Inject<T> in service definitions.
 
@@ -208,10 +208,10 @@ pub struct UserRepository {
     db: Arc<Database>,
 }
 
-#[injectable_impl]
+#[injectable]
 impl UserRepository {
-    #[constructor]
-    fn new(db: Arc<Database>) -> Self {
+    #[injectable_ctor]
+    fn new(#[inject] db: Arc<Database>) -> Self {
         println!("  [UserRepository] Created with Database connection");
         Self { db }
     }
@@ -250,10 +250,10 @@ pub struct EmailService {
     smtp_host: String,
 }
 
-#[injectable_impl]
+#[injectable]
 impl EmailService {
-    #[constructor]
-    fn new(config: AppConfig) -> Self {
+    #[injectable_ctor]
+    fn new(#[inject] config: Arc<AppConfig>) -> Self {
         println!(
             "  [EmailService] Created with config from {}",
             config.server_host
@@ -279,10 +279,10 @@ pub struct UserService {
     email: Arc<EmailService>,
 }
 
-#[injectable_impl]
+#[injectable]
 impl UserService {
-    #[constructor]
-    fn new(repo: Arc<UserRepository>, email: Arc<EmailService>) -> Self {
+    #[injectable_ctor]
+    fn new(#[inject] repo: Arc<UserRepository>, #[inject] email: Arc<EmailService>) -> Self {
         println!("  [UserService] Created with UserRepository + EmailService");
         Self { repo, email }
     }
@@ -545,7 +545,7 @@ async fn main() {
     println!("=== Summary ===");
     println!();
     println!("What you just saw:");
-    println!("  - AppConfig: reads env vars in its #[injectable_impl] constructor");
+    println!("  - AppConfig: reads env vars in its #[injectable] constructor");
     println!("  - SqlitePool: REAL sqlx::SqlitePool registered via DynProvider::with_ctx");
     println!("  - Database: wraps SqlitePool, lifecycle hooks run automatically");
     println!("  - Services: use bare Arc<T> and T params, NOT Inject<T>");

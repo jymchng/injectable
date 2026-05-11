@@ -20,24 +20,27 @@ use injectable::*;
 // ─── Injectable Types ──────────────────────────────────────────────
 
 /// A leaf injectable with no dependencies (unit struct).
-#[derive(Injectable, Default, Clone, Debug)]
+#[injectable]
+#[derive(Default, Clone, Debug)]
 pub struct Config;
 
 /// Another leaf injectable.
-#[derive(Injectable, Default)]
+#[injectable]
+#[derive(Default, Clone)]
 pub struct Database;
 
 /// A service with field injection (Inject<T> fields).
-#[derive(Injectable)]
+#[injectable]
 pub struct UserService {
     db: Inject<Database>,
     config: Inject<Config>,
 }
 
 /// A service with bare Injectable fields (owned values).
-#[derive(Injectable)]
+#[injectable]
 pub struct Repository {
-    db: Database,
+    #[inject]
+    db: Arc<Database>,
 }
 
 // ─── External Types (simulating third-party) ───────────────────────
@@ -368,9 +371,9 @@ static CTOR_COUNT_A: AtomicUsize = AtomicUsize::new(0);
 #[derive(Clone)]
 pub struct SingletonA;
 
-#[injectable_impl]
+#[injectable]
 impl SingletonA {
-    #[constructor]
+    #[injectable_ctor]
     fn new() -> Self {
         CTOR_COUNT_A.fetch_add(1, Ordering::SeqCst);
         Self
@@ -386,9 +389,9 @@ static CTOR_COUNT_B: AtomicUsize = AtomicUsize::new(0);
 #[derive(Clone)]
 pub struct SingletonB;
 
-#[injectable_impl]
+#[injectable]
 impl SingletonB {
-    #[constructor]
+    #[injectable_ctor]
     fn new() -> Self {
         CTOR_COUNT_B.fetch_add(1, Ordering::SeqCst);
         Self
