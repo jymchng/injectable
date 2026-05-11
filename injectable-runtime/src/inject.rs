@@ -6,7 +6,7 @@
 
 use std::sync::Arc;
 
-use crate::{Extract, InjectableResult, ResolveContext};
+use crate::{Extract, Injectable, InjectableResult, Provider, ResolveContext};
 
 /// A wrapper around `Arc<T>` that can be extracted from a [`ResolveContext`].
 ///
@@ -99,5 +99,26 @@ impl<T: Send + Sync + 'static> Extract for Inject<T> {
         ctx.resolve_external::<T>()
             .await
             .map(|t| Inject(Arc::new(t)))
+    }
+}
+
+/// `Extract` for `Arc<T>` where `T: Injectable`.
+///
+/// Defined inside `injectable_runtime` (where `Extract` is local) so the orphan
+/// rule is satisfied. This replaces the previous special-case codegen for
+/// `Arc<T>` fields — the `Extract` impl lives in one place and any
+/// `Arc<WeatherService>` field just works without annotation.
+///
+/// Singletons: returns the cached `Arc` (same pointer every call).
+/// Transients: wraps a fresh instance in `Arc::new`.
+#[async_trait::async_trait]
+impl<T: Injectable> Extract for Arc<T> {
+    async fn extract(ctx: &ResolveContext) -> InjectableResult<Self> {
+        if T::IS_SINGLETON {
+            ctx.resolve_singleton_arc::<T>().await
+        } else {
+            let v = T::Provider::provide(ctx).await?;
+            Ok(Arc::new(v))
+        }
     }
 }

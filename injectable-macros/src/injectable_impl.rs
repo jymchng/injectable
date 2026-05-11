@@ -551,6 +551,7 @@ fn generate_provider(
     let graph_metadata = generate_graph_metadata(type_name, &dep_strings, scope_str);
     let is_singleton: bool = attrs.scope != crate::attrs::Scope::Transient;
     let arc_factory_submit = crate::provider_gen::generate_arc_factory_submit(type_name);
+    let owned_extract_impl = crate::provider_gen::generate_owned_extract_impl(type_name);
 
     // Generate PostConstruct impl if there are hooks
     let post_construct_impl = generate_post_construct_impl(type_name, post_construct_hooks);
@@ -581,6 +582,7 @@ fn generate_provider(
         #pre_destruct_impl
         #graph_metadata
         #arc_factory_submit
+        #owned_extract_impl
     })
 }
 

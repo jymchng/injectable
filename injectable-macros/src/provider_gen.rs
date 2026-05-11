@@ -87,79 +87,83 @@ pub fn generate_field_injection_provider(
     let provider_name = provider_ident(type_name);
 
     // Generate extraction/default statements for each field
-    let field_statements: Vec<TokenStream> = fields.iter().enumerate().map(|(i, field)| {
-        let field_ty = &field.ty;
-        match &field.inject_kind {
-            FieldInjectKind::Inject => {
-                // If the field type is Arc<T>, extract via Inject<T> (uses singleton
-                // cache) and take .0 to get the Arc directly. Otherwise use the
-                // normal Extract::extract path.
-                let var_expr = if let Some(inner_ty) = extract_arc_inner(field_ty) {
-                    quote! {
-                        <injectable_runtime::Inject<#inner_ty> as injectable_runtime::Extract>::extract(ctx).await?.0
-                    }
-                } else {
-                    quote! {
+    let field_statements: Vec<TokenStream> = fields
+        .iter()
+        .enumerate()
+        .map(|(i, field)| {
+            let field_ty = &field.ty;
+            match &field.inject_kind {
+                FieldInjectKind::Inject => {
+                    // All Injectable types — including Arc<T> — now implement Extract
+                    // through either the per-type generated impl (for owned T) or the
+                    // blanket `impl<T: Injectable> Extract for Arc<T>` in injectable_runtime.
+                    // No special-casing needed here.
+                    let var_expr = quote! {
                         <#field_ty as injectable_runtime::Extract>::extract(ctx).await?
-                    }
-                };
-                if let Some(name) = &field.name {
-                    quote! { let #name = #var_expr; }
-                } else {
-                    let temp_name = syn::Ident::new(
-                        &format!("__field_{}", i),
-                        proc_macro2::Span::call_site(),
-                    );
-                    quote! { let #temp_name = #var_expr; }
-                }
-            }
-            FieldInjectKind::Skip => {
-                // Use Default::default() for this field
-                if let Some(name) = &field.name {
-                    quote! {
-                        let #name = <#field_ty as std::default::Default>::default();
-                    }
-                } else {
-                    let temp_name = syn::Ident::new(
-                        &format!("__field_{}", i),
-                        proc_macro2::Span::call_site(),
-                    );
-                    quote! {
-                        let #temp_name = <#field_ty as std::default::Default>::default();
+                    };
+                    if let Some(name) = &field.name {
+                        quote! { let #name = #var_expr; }
+                    } else {
+                        let temp_name = syn::Ident::new(
+                            &format!("__field_{}", i),
+                            proc_macro2::Span::call_site(),
+                        );
+                        quote! { let #temp_name = #var_expr; }
                     }
                 }
-            }
-            FieldInjectKind::Factory(factory_path) | FieldInjectKind::Provider(factory_path) => {
-                let ty_str = &field.ty_string;
-                let is_async = matches!(&field.inject_kind, FieldInjectKind::Factory(_));
-                let await_tok = if is_async { quote! { .await } } else { quote! {} };
-                // Wrap the factory result to match the declared field type:
-                //   Inject<T>   → Inject::new(Arc::new(__v))
-                //   Arc<T>      → Arc::new(__v)
-                //   T (plain)   → __v  (no wrapping)
-                let wrap = factory_wrap_for_field_type(&field.ty);
-                let var_expr = quote! {
-                    {
-                        let __v = #factory_path(ctx)#await_tok.map_err(|e|
-                            injectable_runtime::InjectableError::ConstructionFailed {
-                                type_name: #ty_str,
-                                reason: e.to_string(),
-                            })?;
-                        #wrap
+                FieldInjectKind::Skip => {
+                    // Use Default::default() for this field
+                    if let Some(name) = &field.name {
+                        quote! {
+                            let #name = <#field_ty as std::default::Default>::default();
+                        }
+                    } else {
+                        let temp_name = syn::Ident::new(
+                            &format!("__field_{}", i),
+                            proc_macro2::Span::call_site(),
+                        );
+                        quote! {
+                            let #temp_name = <#field_ty as std::default::Default>::default();
+                        }
                     }
-                };
-                if let Some(name) = &field.name {
-                    quote! { let #name = #var_expr; }
-                } else {
-                    let temp_name = syn::Ident::new(
-                        &format!("__field_{}", i),
-                        proc_macro2::Span::call_site(),
-                    );
-                    quote! { let #temp_name = #var_expr; }
+                }
+                FieldInjectKind::Factory(factory_path)
+                | FieldInjectKind::Provider(factory_path) => {
+                    let ty_str = &field.ty_string;
+                    let is_async = matches!(&field.inject_kind, FieldInjectKind::Factory(_));
+                    let await_tok = if is_async {
+                        quote! { .await }
+                    } else {
+                        quote! {}
+                    };
+                    // Wrap the factory result to match the declared field type:
+                    //   Inject<T>   → Inject::new(Arc::new(__v))
+                    //   Arc<T>      → Arc::new(__v)
+                    //   T (plain)   → __v  (no wrapping)
+                    let wrap = factory_wrap_for_field_type(&field.ty);
+                    let var_expr = quote! {
+                        {
+                            let __v = #factory_path(ctx)#await_tok.map_err(|e|
+                                injectable_runtime::InjectableError::ConstructionFailed {
+                                    type_name: #ty_str,
+                                    reason: e.to_string(),
+                                })?;
+                            #wrap
+                        }
+                    };
+                    if let Some(name) = &field.name {
+                        quote! { let #name = #var_expr; }
+                    } else {
+                        let temp_name = syn::Ident::new(
+                            &format!("__field_{}", i),
+                            proc_macro2::Span::call_site(),
+                        );
+                        quote! { let #temp_name = #var_expr; }
+                    }
                 }
             }
-        }
-    }).collect();
+        })
+        .collect();
 
     // Generate the struct construction
     let construction = if fields.is_empty() {
@@ -207,6 +211,7 @@ pub fn generate_field_injection_provider(
     let graph_metadata = generate_graph_metadata_from_strings(type_name, &dep_strings, scope);
     let is_singleton: bool = scope != "transient";
     let arc_factory_submit = generate_arc_factory_submit(type_name);
+    let owned_extract_impl = generate_owned_extract_impl(type_name);
     let hooks_dispatch = generate_inventory_hooks_dispatch(type_name);
     // Backward compat: has_post_construct submits a legacy hooks entry via inventory.
     let legacy_hooks_submit = generate_legacy_hooks_submit(type_name, has_post_construct, false);
@@ -236,7 +241,32 @@ pub fn generate_field_injection_provider(
 
         #graph_metadata
         #arc_factory_submit
+        #owned_extract_impl
         #legacy_hooks_submit
+    }
+}
+
+/// Generate `impl Extract for TypeName` for an Injectable type.
+///
+/// This replaces the old blanket `impl<T: Injectable> Extract for T` which had
+/// to be removed to make room for `impl<T: Injectable> Extract for Arc<T>` in
+/// `injectable_runtime` (the two blankets overlapped under coherence).
+///
+/// A per-type concrete impl `impl Extract for ConcreteStruct` never conflicts
+/// with any blanket because `ConcreteStruct ≠ Arc<U>` for any U (a user-defined
+/// struct and `Arc<_>` are definitively distinct types).
+pub(crate) fn generate_owned_extract_impl(type_name: &syn::Ident) -> TokenStream {
+    quote! {
+        #[async_trait::async_trait]
+        impl injectable_runtime::Extract for #type_name {
+            async fn extract(
+                ctx: &injectable_runtime::ResolveContext,
+            ) -> injectable_runtime::InjectableResult<Self> {
+                // Use ctx.resolve() which dispatches through the Provider trait
+                // internally — avoids needing Provider in scope in user crates.
+                ctx.resolve::<#type_name>().await
+            }
+        }
     }
 }
 
@@ -318,6 +348,7 @@ pub fn generate_default_provider(
     let graph_metadata = generate_graph_metadata_from_strings(type_name, &[], scope);
     let arc_factory_submit = generate_arc_factory_submit(type_name);
     let is_singleton: bool = scope != "transient";
+    let owned_extract_impl = generate_owned_extract_impl(type_name);
     let hooks_dispatch = generate_inventory_hooks_dispatch(type_name);
     let legacy_hooks_submit = generate_legacy_hooks_submit(type_name, has_post_construct, false);
 
@@ -342,6 +373,7 @@ pub fn generate_default_provider(
 
         #graph_metadata
         #arc_factory_submit
+        #owned_extract_impl
         #legacy_hooks_submit
     }
 }
@@ -468,6 +500,7 @@ fn generate_mixed_provider(
     let graph_metadata = generate_graph_metadata_from_strings(type_name, &dep_strings, scope);
     let arc_factory_submit = generate_arc_factory_submit(type_name);
     let is_singleton: bool = scope != "transient";
+    let owned_extract_impl = generate_owned_extract_impl(type_name);
     let hooks_dispatch = generate_inventory_hooks_dispatch(type_name);
     let legacy_hooks_submit = generate_legacy_hooks_submit(type_name, has_post_construct, false);
 
@@ -495,6 +528,7 @@ fn generate_mixed_provider(
 
         #graph_metadata
         #arc_factory_submit
+        #owned_extract_impl
         #legacy_hooks_submit
     }
 }

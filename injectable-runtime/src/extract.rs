@@ -4,7 +4,7 @@
 //! `T::extract(ctx).await?`, which is fully typed and has no runtime type
 //! lookup.
 
-use crate::{Injectable, InjectableError, InjectableResult, Provider, ResolveContext};
+use crate::{InjectableError, InjectableResult, ResolveContext};
 
 /// Axum-inspired extractor trait for dependency resolution.
 ///
@@ -29,32 +29,6 @@ pub trait Extract: Sized {
     /// code for each constructor parameter or struct field marked with an
     /// extractor type.
     async fn extract(ctx: &ResolveContext) -> InjectableResult<Self>;
-}
-
-/// Blanket `Extract` implementation for any type that implements `Injectable`.
-///
-/// When a struct has `#[derive(Injectable)]` but no `#[constructor]`, each
-/// field type must implement `Extract`. This blanket impl ensures that any
-/// `Injectable` type can be used as a field type directly, resolving via
-/// `T::Provider::provide(ctx)`.
-///
-/// For shared access, use `Inject<T>` as the field type instead, which
-/// wraps the resolved value in `Arc<T>`.
-///
-/// # Example
-///
-/// ```rust,ignore
-/// #[derive(Injectable)]
-/// pub struct UserService {
-///     db: Database,           // owned value via blanket Extract
-///     cache: Inject<Cache>,   // Arc<Cache> via Inject<T> Extract
-/// }
-/// ```
-#[async_trait::async_trait]
-impl<T: Injectable> Extract for T {
-    async fn extract(ctx: &ResolveContext) -> InjectableResult<Self> {
-        T::Provider::provide(ctx).await
-    }
 }
 
 /// Blanket `Extract` implementation for `Option<T>` where `T: Extract`.
