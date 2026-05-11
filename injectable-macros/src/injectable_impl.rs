@@ -36,7 +36,7 @@ use syn::spanned::Spanned;
 use syn::visit_mut::VisitMut;
 
 use crate::attrs::Scope;
-use crate::metadata::{extract_inject_inner, type_to_string};
+use crate::metadata::{extract_arc_inner_str, extract_inject_inner, type_to_string};
 
 // ─── Public Entry Point ──────────────────────────────────────────────
 
@@ -418,29 +418,15 @@ fn classify_param(ty: &syn::Type, _ty_string: &str) -> (ParamKind, Option<String
         return (ParamKind::Inject, Some(inner));
     }
 
-    // Check if it's Arc<T>
-    if let Some(inner) = extract_arc_inner(ty) {
+    // Check if it's Arc<T> — uses metadata::extract_arc_inner_str which
+    // checks segments.last().ident and handles all path prefix forms.
+    if let Some(inner) = extract_arc_inner_str(ty) {
         return (ParamKind::Arc, Some(inner));
     }
 
     // Otherwise, it's a plain T — will be extracted via Inject<T>
     // and converted using Arc::unwrap_or_clone (requires T: Clone)
     (ParamKind::Owned, None)
-}
-
-/// Check if a type path represents `Arc<T>` and extract T.
-fn extract_arc_inner(ty: &syn::Type) -> Option<String> {
-    if let syn::Type::Path(type_path) = ty {
-        let segment = type_path.path.segments.last()?;
-        if segment.ident == "Arc" {
-            if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
-                if let Some(syn::GenericArgument::Type(inner_ty)) = args.args.first() {
-                    return Some(type_to_string(inner_ty));
-                }
-            }
-        }
-    }
-    None
 }
 
 // ─── Type Name Extraction ────────────────────────────────────────────

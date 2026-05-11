@@ -11,7 +11,9 @@
 use proc_macro2::TokenStream;
 use quote::quote;
 
-use crate::metadata::{extract_arc_inner, extract_inject_inner, type_to_string};
+use crate::metadata::{
+    extract_arc_inner, extract_arc_inner_str, extract_inject_inner, type_to_string,
+};
 
 /// How a field should be handled during injection.
 #[derive(Debug, Clone)]
@@ -190,10 +192,12 @@ pub fn generate_field_injection_provider(
         .filter(|f| f.inject_kind.is_injected())
         .filter_map(|f| {
             let ty_str = &f.ty_string;
-            if ty_str.starts_with("Inject<") && ty_str.ends_with('>') {
-                Some(ty_str[7..ty_str.len() - 1].to_string())
-            } else if ty_str.starts_with("Arc<") && ty_str.ends_with('>') {
-                Some(ty_str[4..ty_str.len() - 1].to_string())
+            // Use AST-based detection so all path forms are handled:
+            // Inject<T>, injectable::Inject<T>, Arc<T>, std::sync::Arc<T>, etc.
+            if let Some(inner) = extract_inject_inner(&f.ty) {
+                Some(inner)
+            } else if let Some(inner) = extract_arc_inner_str(&f.ty) {
+                Some(inner)
             } else {
                 Some(ty_str.clone())
             }
@@ -449,10 +453,12 @@ fn generate_mixed_provider(
         .filter(|f| f.inject_kind.is_injected())
         .filter_map(|f| {
             let ty_str = &f.ty_string;
-            if ty_str.starts_with("Inject<") && ty_str.ends_with('>') {
-                Some(ty_str[7..ty_str.len() - 1].to_string())
-            } else if ty_str.starts_with("Arc<") && ty_str.ends_with('>') {
-                Some(ty_str[4..ty_str.len() - 1].to_string())
+            // Use AST-based detection so all path forms are handled:
+            // Inject<T>, injectable::Inject<T>, Arc<T>, std::sync::Arc<T>, etc.
+            if let Some(inner) = extract_inject_inner(&f.ty) {
+                Some(inner)
+            } else if let Some(inner) = extract_arc_inner_str(&f.ty) {
+                Some(inner)
             } else {
                 Some(ty_str.clone())
             }
@@ -555,23 +561,21 @@ fn generate_graph_metadata_from_strings(
 /// - `Inject<T>` field  → `Inject::new(Arc::new(__v))`
 /// - `Arc<T>` field     → `Arc::new(__v)`
 /// - plain `T` field    → `__v` (no wrapping)
+/// Determine how to wrap the raw factory result `__v: T` to match the field type.
+///
+/// Detection uses the AST-based `extract_inject_inner` / `extract_arc_inner`
+/// functions, which check only the final path segment by identifier. This means
+/// all path forms — `Arc<T>`, `std::sync::Arc<T>`, `::std::sync::Arc<T>` —
+/// are handled correctly.
 fn factory_wrap_for_field_type(field_ty: &syn::Type) -> TokenStream {
-    let ty_str = type_to_string(field_ty);
-    if extract_inject_inner(field_ty).is_some() || ty_str.starts_with("Inject<") {
+    if extract_inject_inner(field_ty).is_some() {
+        // Inject<T> field → wrap in Inject::new(Arc::new(__v))
         quote! { injectable_runtime::Inject::new(::std::sync::Arc::new(__v)) }
-    } else if ty_str.starts_with("Arc<") || {
-        if let syn::Type::Path(p) = field_ty {
-            p.path
-                .segments
-                .last()
-                .map(|s| s.ident == "Arc")
-                .unwrap_or(false)
-        } else {
-            false
-        }
-    } {
+    } else if extract_arc_inner(field_ty).is_some() {
+        // Arc<T> field → wrap in Arc::new(__v)
         quote! { ::std::sync::Arc::new(__v) }
     } else {
+        // Plain T field → use __v directly
         quote! { __v }
     }
 }

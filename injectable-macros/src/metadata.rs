@@ -82,7 +82,11 @@ pub fn type_to_string(ty: &syn::Type) -> String {
     quote::quote!(#ty).to_string().replace(' ', "")
 }
 
-/// Check if a type path represents `Arc<T>` and return the inner type.
+/// Check if a type path represents `Arc<T>` and return the inner type as `syn::Type`.
+///
+/// Robust to all path prefix forms: `Arc<T>`, `std::sync::Arc<T>`,
+/// `::std::sync::Arc<T>`, `sync::Arc<T>`, etc. — checks only the final
+/// path segment by identifier.
 pub fn extract_arc_inner(ty: &syn::Type) -> Option<syn::Type> {
     if let syn::Type::Path(type_path) = ty {
         let segment = type_path.path.segments.last()?;
@@ -95,6 +99,11 @@ pub fn extract_arc_inner(ty: &syn::Type) -> Option<syn::Type> {
         }
     }
     None
+}
+
+/// Convenience wrapper: `extract_arc_inner` that returns the inner type as a `String`.
+pub fn extract_arc_inner_str(ty: &syn::Type) -> Option<String> {
+    extract_arc_inner(ty).map(|inner| type_to_string(&inner))
 }
 
 /// Check if a type path represents `Inject<T>` and extract T.
