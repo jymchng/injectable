@@ -1,0 +1,20 @@
+//! Compile-fail test: Arc<T> field without #[inject] annotation.
+//!
+//! Only `Inject<T>` fields are auto-injected.  Any other type — including
+//! `Arc<T>` — requires an explicit `#[inject]` annotation.  Omitting it
+//! is a compile error.
+
+use injectable::*;
+use std::sync::Arc;
+
+#[injectable]
+#[derive(Default, Clone)]
+pub struct Database;
+
+/// ERROR: `Arc<Database>` without `#[inject]` — must annotate explicitly.
+#[injectable]
+pub struct Repository {
+    db: Arc<Database>,
+}
+
+fn main() {}

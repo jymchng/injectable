@@ -1,0 +1,13 @@
+error: non-`Inject<T>` fields require an explicit `#[inject]` annotation; if this field has no DI dependency, use a `#[injectable_ctor]` constructor instead
+ --> tests/ui/field_arc_no_inject.rs
+  |
+  |     db: Arc<Database>,
+  |         ^^^
+
+warning: unused import: `std::sync::Arc`
+ --> tests/ui/field_arc_no_inject.rs
+  |
+  | use std::sync::Arc;
+  |     ^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
