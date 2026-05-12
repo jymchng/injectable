@@ -25,7 +25,6 @@ mod singleton_gen;
 use proc_macro::TokenStream;
 use syn::parse_macro_input;
 
-
 /// Attribute macro to mark a constructor for injection.
 ///
 /// This attribute marks the method that the framework should call
@@ -220,7 +219,6 @@ pub fn bind(input: TokenStream) -> TokenStream {
 pub fn container(input: TokenStream) -> TokenStream {
     container_macro::expand_container(input.into()).into()
 }
-
 
 /// Unified DI attribute macro — replaces both `#[injectable]` and
 /// `#[injectable]` with a single, consistent annotation.

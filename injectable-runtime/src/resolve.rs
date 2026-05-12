@@ -135,7 +135,9 @@ impl ResolveContext {
     /// types — this avoids the `#[async_trait]` macro which has trouble with
     /// concrete-type `where T: Clone` bounds on impl blocks.
     pub async fn clone_from_singleton<T: Injectable + Clone>(&self) -> InjectableResult<T> {
-        Ok(Arc::unwrap_or_clone(self.resolve_singleton_arc::<T>().await?))
+        Ok(Arc::unwrap_or_clone(
+            self.resolve_singleton_arc::<T>().await?,
+        ))
     }
 
     /// Resolve and cache a singleton, returning a shared `Arc<T>`.

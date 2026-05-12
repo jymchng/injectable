@@ -35,7 +35,7 @@ use crate::provider_gen::{self, FieldInfo, FieldInjectKind};
 /// - `#[inject(skip)]` on a field → use `Default::default()` (in a non-default struct)
 pub fn expand_derive_injectable(input: syn::DeriveInput) -> syn::Result<TokenStream> {
     let type_name = &input.ident;
-    let generics  = &input.generics;
+    let generics = &input.generics;
     let injectable_attrs = attrs::parse_attrs(&input.attrs)?;
 
     let fields = parse_struct_fields(&input.data)?;
@@ -69,7 +69,12 @@ fn parse_struct_fields(data: &syn::Data) -> syn::Result<Vec<FieldInfo>> {
                     let ty = field.ty.clone();
                     let ty_string = type_to_string(&ty);
                     let inject_kind = parse_field_inject_kind(&field.attrs, &ty)?;
-                    Ok(FieldInfo { name, ty, ty_string, inject_kind })
+                    Ok(FieldInfo {
+                        name,
+                        ty,
+                        ty_string,
+                        inject_kind,
+                    })
                 })
                 .collect(),
             syn::Fields::Unnamed(unnamed_fields) => unnamed_fields
@@ -79,7 +84,12 @@ fn parse_struct_fields(data: &syn::Data) -> syn::Result<Vec<FieldInfo>> {
                     let ty = field.ty.clone();
                     let ty_string = type_to_string(&ty);
                     let inject_kind = parse_field_inject_kind(&field.attrs, &ty)?;
-                    Ok(FieldInfo { name: None, ty, ty_string, inject_kind })
+                    Ok(FieldInfo {
+                        name: None,
+                        ty,
+                        ty_string,
+                        inject_kind,
+                    })
                 })
                 .collect(),
             syn::Fields::Unit => Ok(Vec::new()),

@@ -113,7 +113,11 @@ pub struct MixedParamService {
 #[injectable]
 impl MixedParamService {
     #[injectable_ctor]
-    fn new(db: Inject<Database>, #[inject] config: Arc<Config>, #[inject] cache: Arc<Cache>) -> Self {
+    fn new(
+        db: Inject<Database>,
+        #[inject] config: Arc<Config>,
+        #[inject] cache: Arc<Cache>,
+    ) -> Self {
         println!("  Constructing MixedParamService");
         Self { db, config, cache }
     }

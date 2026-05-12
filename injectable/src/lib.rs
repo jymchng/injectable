@@ -72,9 +72,9 @@ pub use injectable_graph::{DependencyGraph, GraphError, GraphNode, ValidationErr
 // Re-export proc macros
 pub use injectable_macros::bind;
 pub use injectable_macros::container;
-pub use injectable_macros::injectable;          // unified #[injectable] — on structs AND impl blocks
-pub use injectable_macros::injectable_ctor;     // marks the injection constructor method
-pub use injectable_macros::inject_fn;  // transforms a fn with #[inject] params into a DI factory
+pub use injectable_macros::inject_fn; // transforms a fn with #[inject] params into a DI factory
+pub use injectable_macros::injectable; // unified #[injectable] — on structs AND impl blocks
+pub use injectable_macros::injectable_ctor; // marks the injection constructor method
 pub use injectable_macros::injectable_trait;
 pub use injectable_macros::post_construct;
 pub use injectable_macros::pre_destruct;
@@ -92,29 +92,29 @@ pub mod axum;
 /// Commonly used items — `use injectable::prelude::*` covers the full public API.
 pub mod prelude {
     pub use crate::{
+        bind,
+        container,
+        inject_fn,
         // Macros
         injectable,
         injectable_ctor,
-        inject_fn,
         post_construct,
         pre_destruct,
-        bind,
-        container,
-        // Runtime types
-        Injectable,
-        Inject,
-        Extract,
         Container,
         DynProvider,
+        Extract,
         FactoryCtx,
+        HookResult,
+        Inject,
+        // Runtime types
+        Injectable,
         InjectableError,
         InjectableResult,
-        HookResult,
+        RequestScoped,
         ResolveContext,
         // Scope markers
         Singleton,
         Transient,
-        RequestScoped,
     };
     // Arc is used in almost every injectable definition.
     pub use std::sync::Arc;

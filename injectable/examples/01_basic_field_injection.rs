@@ -20,8 +20,8 @@
 //!
 //! Run with: cargo run --example 01_basic_field_injection
 
-use std::sync::Arc;
 use injectable::*;
+use std::sync::Arc;
 
 // ─── Leaf Types ─────────────────────────────────────────────────────
 // Leaf types have no dependencies and serve as the foundation
@@ -108,7 +108,11 @@ pub struct ConfigWithPort {
 impl ConfigWithPort {
     #[injectable_ctor]
     fn new(db: Inject<Database>) -> Self {
-        Self { db, port: 0, host: String::new() }
+        Self {
+            db,
+            port: 0,
+            host: String::new(),
+        }
     }
 }
 
@@ -125,7 +129,11 @@ pub struct PartialInjectService {
 impl PartialInjectService {
     #[injectable_ctor]
     fn new(db: Inject<Database>, cache: Inject<Cache>) -> Self {
-        Self { db, name: String::new(), cache }
+        Self {
+            db,
+            name: String::new(),
+            cache,
+        }
     }
 }
 

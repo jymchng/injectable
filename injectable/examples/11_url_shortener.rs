@@ -127,8 +127,7 @@ impl AppConfig {
         Self {
             database_url: std::env::var("DATABASE_URL")
                 .unwrap_or_else(|_| "sqlite::memory:".into()),
-            base_url: std::env::var("BASE_URL")
-                .unwrap_or_else(|_| "http://localhost:3000".into()),
+            base_url: std::env::var("BASE_URL").unwrap_or_else(|_| "http://localhost:3000".into()),
             host: std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".into()),
             port: std::env::var("PORT")
                 .ok()
@@ -387,14 +386,12 @@ impl AnalyticsService {
         if self.url_svc.get_link(code).await?.is_none() {
             return Err(AppError::NotFound);
         }
-        sqlx::query(
-            "INSERT INTO click_events (link_code, referer, user_agent) VALUES (?, ?, ?)",
-        )
-        .bind(code)
-        .bind(referer)
-        .bind(user_agent)
-        .execute(&self.pool)
-        .await?;
+        sqlx::query("INSERT INTO click_events (link_code, referer, user_agent) VALUES (?, ?, ?)")
+            .bind(code)
+            .bind(referer)
+            .bind(user_agent)
+            .execute(&self.pool)
+            .await?;
         Ok(())
     }
 
@@ -425,10 +422,7 @@ impl AnalyticsService {
     /// a per-link summary. Uses `UrlService`'s pool via the same SQLite file,
     /// but calls through to `UrlService` for the link list so the domain
     /// boundary stays clean.
-    pub async fn user_dashboard(
-        &self,
-        owner_email: &str,
-    ) -> Result<Vec<LinkSummary>, AppError> {
+    pub async fn user_dashboard(&self, owner_email: &str) -> Result<Vec<LinkSummary>, AppError> {
         // Fetch links via UrlService — respects UrlService's domain boundary.
         let links = self.url_svc.list_by_owner(owner_email).await?;
 
@@ -537,7 +531,11 @@ impl LinkPreviewService {
   </div>
 </body>
 </html>"#,
-            title = if link.title.is_empty() { code.to_string() } else { link.title.clone() },
+            title = if link.title.is_empty() {
+                code.to_string()
+            } else {
+                link.title.clone()
+            },
             original_url = link.original_url,
             short_url = short_url,
             redirect_url = redirect_url,
@@ -669,8 +667,9 @@ impl FromRequestParts<AppState> for AuthenticatedUser {
         parts: &mut Parts,
         state: &AppState,
     ) -> Result<Self, Self::Rejection> {
-        let api_key = extract_api_key(&parts.headers)
-            .ok_or(AppError::Unauthorized("missing x-api-key or Authorization: Bearer header"))?;
+        let api_key = extract_api_key(&parts.headers).ok_or(AppError::Unauthorized(
+            "missing x-api-key or Authorization: Bearer header",
+        ))?;
 
         let ctx = state.resolve_context();
         let auth = Inject::<AuthService>::extract(ctx)
@@ -707,7 +706,10 @@ async fn register(
 ) -> Result<Json<RegisterResponse>, AppError> {
     let api_key = auth.register(&body.email).await?;
     println!("  [register] {}", body.email);
-    Ok(Json(RegisterResponse { email: body.email, api_key }))
+    Ok(Json(RegisterResponse {
+        email: body.email,
+        api_key,
+    }))
 }
 
 /// `POST /api/shorten` — create a short URL (auth required).
@@ -854,7 +856,10 @@ impl InjectableState for AppState {
 // ─────────────────────────────────────────────────────────────────────────────
 
 fn generate_api_key(email: &str) -> String {
-    let ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos();
+    let ts = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
     let mut h1 = DefaultHasher::new();
     email.hash(&mut h1);
     ts.hash(&mut h1);
@@ -869,7 +874,11 @@ fn generate_short_code(url: &str) -> String {
     const ALPHA: &[u8] = b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     let mut h = DefaultHasher::new();
     url.hash(&mut h);
-    SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().subsec_nanos().hash(&mut h);
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .subsec_nanos()
+        .hash(&mut h);
     let mut n = h.finish();
     let mut code = String::with_capacity(6);
     for _ in 0..6 {
@@ -926,30 +935,41 @@ async fn main() {
     // instances that don't share state with handler-resolved singletons.
     println!("Warming up services (running DB migrations)…");
     let ctx = container.context();
-    Inject::<AuthService>::extract(ctx).await.expect("AuthService");
-    Inject::<AnalyticsService>::extract(ctx).await.expect("AnalyticsService");
+    Inject::<AuthService>::extract(ctx)
+        .await
+        .expect("AuthService");
+    Inject::<AnalyticsService>::extract(ctx)
+        .await
+        .expect("AnalyticsService");
     // RedirectService (level 3) and LinkPreviewService (level 2) pull in
     // UrlService + AnalyticsService transitively — the full graph is confirmed.
-    Inject::<RedirectService>::extract(ctx).await.expect("RedirectService");
-    Inject::<LinkPreviewService>::extract(ctx).await.expect("LinkPreviewService");
+    Inject::<RedirectService>::extract(ctx)
+        .await
+        .expect("RedirectService");
+    Inject::<LinkPreviewService>::extract(ctx)
+        .await
+        .expect("LinkPreviewService");
     println!("All services ready.\n");
 
     let config = container.resolve::<AppConfig>().await.unwrap();
-    let addr     = format!("{}:{}", config.host, config.port);
+    let addr = format!("{}:{}", config.host, config.port);
     let base_url = config.base_url.clone();
 
-    let state = AppState { container: Arc::new(container), version: "1.0" };
+    let state = AppState {
+        container: Arc::new(container),
+        version: "1.0",
+    };
 
     let app = Router::new()
-        .route("/health",               get(health))
-        .route("/api/register",         post(register))
-        .route("/api/shorten",          post(shorten))
-        .route("/api/links",            get(list_links))
+        .route("/health", get(health))
+        .route("/api/register", post(register))
+        .route("/api/shorten", post(shorten))
+        .route("/api/links", get(list_links))
         .route("/api/links/:code/stats", get(link_stats))
-        .route("/api/dashboard",        get(dashboard))
-        .route("/preview/:code",       get(preview))
+        .route("/api/dashboard", get(dashboard))
+        .route("/preview/:code", get(preview))
         // /{code} last — matches anything not caught above
-        .route("/:code",               get(redirect))
+        .route("/:code", get(redirect))
         .with_state(state);
 
     println!("Listening on http://{addr}");
@@ -961,15 +981,19 @@ async fn main() {
     println!("─── Step-by-step test guide ─────────────────────────────────────────");
     println!();
     println!("Step 1 — Register (note the api_key in the response):");
-    println!(r#"  curl -s -X POST http://{addr}/api/register \
+    println!(
+        r#"  curl -s -X POST http://{addr}/api/register \
     -H 'Content-Type: application/json' \
-    -d '{{"email":"alice@example.com"}}'"#);
+    -d '{{"email":"alice@example.com"}}'"#
+    );
     println!();
     println!("Step 2 — Shorten a URL (replace <KEY> with your api_key):");
-    println!(r#"  curl -s -X POST http://{addr}/api/shorten \
+    println!(
+        r#"  curl -s -X POST http://{addr}/api/shorten \
     -H 'x-api-key: <KEY>' \
     -H 'Content-Type: application/json' \
-    -d '{{"url":"https://www.rust-lang.org","title":"The Rust Language"}}'"#);
+    -d '{{"url":"https://www.rust-lang.org","title":"The Rust Language"}}'"#
+    );
     println!();
     println!("Step 3 — Follow the short link (replace <CODE> with the code field):");
     println!("  curl -v {base_url}/<CODE>          # see 307 + Location header");

@@ -65,7 +65,7 @@ fn compile_pass_field_ownership_patterns() {
     let ui_dir = manifest_dir().join("tests/ui");
 
     t.pass(ui_dir.join("field_arc_shared.rs")); // Arc<T> — shared, no Clone
-    t.pass(ui_dir.join("field_owned.rs"));      // T (owned, Clone) — scope respected
+    t.pass(ui_dir.join("field_owned.rs")); // T (owned, Clone) — scope respected
 }
 
 /// Owned field of a singleton that does NOT implement Clone must be rejected.

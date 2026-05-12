@@ -40,7 +40,9 @@ impl IntService {
     #[injectable_ctor]
     fn new(cfg: Inject<IntConfig>) -> Self {
         SERVICE_CTOR_COUNT.fetch_add(1, Ordering::SeqCst);
-        Self { config_value: cfg.value }
+        Self {
+            config_value: cfg.value,
+        }
     }
 }
 
@@ -126,8 +128,14 @@ async fn factory_ctx_transient_gets_fresh_instance() {
     let same: bool = container.resolve_external().await.unwrap();
     let constructions = TRANSIENT_CTOR.load(Ordering::SeqCst) - before;
 
-    assert!(!same, "transient type must NOT share the same Arc across extractions");
-    assert_eq!(constructions, 2, "transient should be constructed twice, got {constructions}");
+    assert!(
+        !same,
+        "transient type must NOT share the same Arc across extractions"
+    );
+    assert_eq!(
+        constructions, 2,
+        "transient should be constructed twice, got {constructions}"
+    );
 }
 
 // ─── ctx.extract is the ergonomic replacement for the old ctx.resolve ─────────
@@ -142,7 +150,10 @@ async fn resolve_context_extract_is_scope_safe() {
     let a: Inject<IntConfig> = ctx.extract().await.unwrap();
     let b: Inject<IntConfig> = ctx.extract().await.unwrap();
 
-    assert!(Arc::ptr_eq(&a.0, &b.0), "singleton must be cached across ctx.extract() calls");
+    assert!(
+        Arc::ptr_eq(&a.0, &b.0),
+        "singleton must be cached across ctx.extract() calls"
+    );
 }
 
 // ─── inject_fn factories are compatible with FactoryCtx usage ────────────────

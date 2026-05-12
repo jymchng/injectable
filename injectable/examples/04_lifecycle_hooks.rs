@@ -16,9 +16,9 @@
 //!
 //! Run with: cargo run --example 04_lifecycle_hooks
 
-use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use injectable::*;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 
 // ─── Shared counters for tracking hook calls ────────────────────────
 
@@ -46,7 +46,9 @@ pub struct Database {
 
 impl Default for Database {
     fn default() -> Self {
-        Self { connection_count: Arc::new(AtomicUsize::new(0)) }
+        Self {
+            connection_count: Arc::new(AtomicUsize::new(0)),
+        }
     }
 }
 
@@ -82,7 +84,9 @@ pub struct OrderService {
 
 impl Default for OrderService {
     fn default() -> Self {
-        Self { ready: Arc::new(AtomicUsize::new(0)) }
+        Self {
+            ready: Arc::new(AtomicUsize::new(0)),
+        }
     }
 }
 

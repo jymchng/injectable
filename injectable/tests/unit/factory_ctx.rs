@@ -22,10 +22,7 @@ struct Transient_;
 async fn factory_ctx_extract_inject_t_singleton() {
     let container = Container::builder().build().await.unwrap();
 
-    let a = container
-        .resolve_external::<String>()
-        .await
-        .ok(); // just ensure no panic on build
+    let a = container.resolve_external::<String>().await.ok(); // just ensure no panic on build
 
     // Register a provider that extracts Singleton via FactoryCtx
     let got_same_instance = Arc::new(tokio::sync::Mutex::new(false));
@@ -115,10 +112,8 @@ async fn factory_ctx_resolve_external_missing_is_error() {
             async move {
                 // u64 is not registered — should yield MissingDependency.
                 let result: InjectableResult<u64> = ctx.resolve_external().await;
-                *flag.lock().await = matches!(
-                    result,
-                    Err(InjectableError::MissingDependency { .. })
-                );
+                *flag.lock().await =
+                    matches!(result, Err(InjectableError::MissingDependency { .. }));
                 Ok(99u32)
             }
         }))

@@ -46,7 +46,10 @@ impl Provider<Repository<UserEntity>> for UserRepositoryProvider {
         ctx: &injectable_runtime::ResolveContext,
     ) -> injectable_runtime::InjectableResult<Repository<UserEntity>> {
         let db: Arc<Db> = ctx.extract().await?;
-        Ok(Repository { db, _phantom: PhantomData })
+        Ok(Repository {
+            db,
+            _phantom: PhantomData,
+        })
     }
 }
 
@@ -65,7 +68,10 @@ impl Provider<Repository<ProductEntity>> for ProductRepositoryProvider {
         ctx: &injectable_runtime::ResolveContext,
     ) -> injectable_runtime::InjectableResult<Repository<ProductEntity>> {
         let db: Arc<Db> = ctx.extract().await?;
-        Ok(Repository { db, _phantom: PhantomData })
+        Ok(Repository {
+            db,
+            _phantom: PhantomData,
+        })
     }
 }
 
@@ -90,7 +96,10 @@ async fn two_generic_specializations_coexist() {
     let container = Container::builder().build().await.unwrap();
 
     let user_repo = container.resolve::<Repository<UserEntity>>().await.unwrap();
-    let product_repo = container.resolve::<Repository<ProductEntity>>().await.unwrap();
+    let product_repo = container
+        .resolve::<Repository<ProductEntity>>()
+        .await
+        .unwrap();
 
     // Both are singletons — same Db arc underneath.
     assert!(
@@ -210,7 +219,10 @@ async fn service_depending_on_generic_repos() {
 #[tokio::test]
 async fn vec_field_via_dyn_provider() {
     let container = Container::builder()
-        .register(DynProvider::from_value(vec!["alpha".to_string(), "beta".to_string()]))
+        .register(DynProvider::from_value(vec![
+            "alpha".to_string(),
+            "beta".to_string(),
+        ]))
         .build()
         .await
         .unwrap();

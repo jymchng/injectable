@@ -76,7 +76,10 @@ async fn optional_inject_some_when_registered() {
 
     let maybe: Option<Inject<String>> = ctx.extract().await.unwrap();
 
-    assert!(maybe.is_some(), "Option<Inject<String>> must be Some when DynProvider is registered");
+    assert!(
+        maybe.is_some(),
+        "Option<Inject<String>> must be Some when DynProvider is registered"
+    );
     assert_eq!(maybe.unwrap().as_str(), "hello");
 }
 
@@ -147,7 +150,10 @@ async fn hashmap_field_type_via_factory() {
     let container = Container::builder().build().await.unwrap();
     let settings = container.resolve::<AppSettings>().await.unwrap();
 
-    assert_eq!(settings.config.get("host").map(String::as_str), Some("localhost"));
+    assert_eq!(
+        settings.config.get("host").map(String::as_str),
+        Some("localhost")
+    );
 }
 
 // ─── PhantomData<Tag>: 'static + Send + Sync ─────────────────────────────────
@@ -168,12 +174,18 @@ struct TypedCounter<Marker: 'static + Send + Sync> {
 // Separate inject_fn factories for each concrete specialization.
 #[inject_fn]
 fn make_user_counter(_db: Inject<Database>) -> TypedCounter<UserMarker> {
-    TypedCounter { count: 0, _marker: PhantomData }
+    TypedCounter {
+        count: 0,
+        _marker: PhantomData,
+    }
 }
 
 #[inject_fn]
 fn make_order_counter(_db: Inject<Database>) -> TypedCounter<OrderMarker> {
-    TypedCounter { count: 100, _marker: PhantomData }
+    TypedCounter {
+        count: 100,
+        _marker: PhantomData,
+    }
 }
 
 #[injectable]
@@ -246,7 +258,7 @@ async fn generic_struct_field_injection_cache() {
 async fn generic_struct_two_specializations_coexist() {
     // Both Wrapper<Database> and Wrapper<Cache> are resolvable independently.
     let container = Container::builder().build().await.unwrap();
-    let _w_db    = container.resolve::<Wrapper<Database>>().await.unwrap();
+    let _w_db = container.resolve::<Wrapper<Database>>().await.unwrap();
     let _w_cache = container.resolve::<Wrapper<Cache>>().await.unwrap();
 }
 
@@ -257,7 +269,10 @@ async fn generic_struct_singleton_respected() {
     let ctx = container.context();
     let a: Arc<Wrapper<Database>> = ctx.extract().await.unwrap();
     let b: Arc<Wrapper<Database>> = ctx.extract().await.unwrap();
-    assert!(Arc::ptr_eq(&a, &b), "Wrapper<Database> singleton must be cached");
+    assert!(
+        Arc::ptr_eq(&a, &b),
+        "Wrapper<Database> singleton must be cached"
+    );
 }
 
 // ─── Generic Arc<T> field in another injectable ───────────────────────────────
@@ -278,7 +293,7 @@ async fn arc_of_generic_injectable_as_field() {
     let container = Container::builder().build().await.unwrap();
     let app = container.resolve::<App>().await.unwrap();
     let _: &Database = &*app.wrapper_db.inner;
-    let _: &Cache    = &*app.wrapper_cache.inner;
+    let _: &Cache = &*app.wrapper_cache.inner;
 }
 
 // ─── Generic constructor injection ───────────────────────────────────────────
@@ -301,7 +316,10 @@ struct ProductEntity;
 impl<Entity: 'static + Send + Sync + Clone> Repo<Entity> {
     #[injectable_ctor]
     fn new(#[inject] db: Arc<Database>) -> Self {
-        Self { db, _phantom: PhantomData }
+        Self {
+            db,
+            _phantom: PhantomData,
+        }
     }
 }
 
@@ -322,7 +340,7 @@ async fn generic_ctor_injection_product_entity() {
 #[tokio::test]
 async fn generic_ctor_two_specializations_share_same_db_singleton() {
     let container = Container::builder().build().await.unwrap();
-    let user_repo    = container.resolve::<Repo<UserEntity>>().await.unwrap();
+    let user_repo = container.resolve::<Repo<UserEntity>>().await.unwrap();
     let product_repo = container.resolve::<Repo<ProductEntity>>().await.unwrap();
     // Both repos depend on the same Database singleton.
     assert!(

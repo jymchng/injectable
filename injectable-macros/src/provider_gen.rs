@@ -33,7 +33,7 @@ pub enum FieldInjectKind {
 
 impl FieldInjectKind {
     pub fn is_injected(&self) -> bool {
-        true  // all remaining variants represent some form of injection
+        true // all remaining variants represent some form of injection
     }
 }
 
@@ -268,11 +268,17 @@ pub fn generate_field_injection_provider(
 pub(crate) fn phantom_for_generics(generics: &syn::Generics) -> proc_macro2::TokenStream {
     let types: Vec<_> = generics
         .type_params()
-        .map(|tp| { let id = &tp.ident; quote! { #id } })
+        .map(|tp| {
+            let id = &tp.ident;
+            quote! { #id }
+        })
         .collect();
     let lifetimes: Vec<_> = generics
         .lifetimes()
-        .map(|lp| { let lt = &lp.lifetime; quote! { &#lt () } })
+        .map(|lp| {
+            let lt = &lp.lifetime;
+            quote! { &#lt () }
+        })
         .collect();
     quote! { ::std::marker::PhantomData<(#(#types,)* #(#lifetimes,)*)> }
 }
@@ -284,7 +290,10 @@ pub(crate) fn phantom_for_generics(generics: &syn::Generics) -> proc_macro2::Tok
 ///
 /// Uses named `fn` helpers (not closures) so the factory entry is
 /// `const`-constructible for `inventory::submit!` static initializers.
-pub(crate) fn generate_arc_factory_submit(type_name: &syn::Ident, is_singleton: bool) -> TokenStream {
+pub(crate) fn generate_arc_factory_submit(
+    type_name: &syn::Ident,
+    is_singleton: bool,
+) -> TokenStream {
     let type_id_fn_name = syn::Ident::new(
         &format!("__injectable_type_id_{}", type_name),
         proc_macro2::Span::call_site(),

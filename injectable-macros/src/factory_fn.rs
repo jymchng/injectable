@@ -49,7 +49,9 @@ pub(crate) fn expand_inject_fn(item: syn::ItemFn) -> syn::Result<TokenStream> {
     let mut extract_stmts: Vec<TokenStream> = Vec::new();
 
     for arg in &item.sig.inputs {
-        let syn::FnArg::Typed(pat_type) = arg else { continue };
+        let syn::FnArg::Typed(pat_type) = arg else {
+            continue;
+        };
 
         let name = match &*pat_type.pat {
             syn::Pat::Ident(i) => i.ident.clone(),
@@ -170,9 +172,7 @@ impl ParamFactory {
 /// Parse `#[inject]` / `#[inject(use_factory_async/sync = path)]` from attrs.
 ///
 /// Returns `(has_inject, Option<factory>)`.
-fn parse_inject_attr(
-    attrs: &[syn::Attribute],
-) -> syn::Result<(bool, Option<ParamFactory>)> {
+fn parse_inject_attr(attrs: &[syn::Attribute]) -> syn::Result<(bool, Option<ParamFactory>)> {
     for attr in attrs {
         if !attr.path().is_ident("inject") {
             continue;
@@ -240,7 +240,11 @@ fn extract_result_ok_ty(ty: &syn::Type) -> Option<syn::Type> {
     if seg.ident != "Result" {
         return None;
     }
-    let syn::PathArguments::AngleBracketed(args) = &seg.arguments else { return None };
-    let syn::GenericArgument::Type(inner) = args.args.first()? else { return None };
+    let syn::PathArguments::AngleBracketed(args) = &seg.arguments else {
+        return None;
+    };
+    let syn::GenericArgument::Type(inner) = args.args.first()? else {
+        return None;
+    };
     Some(inner.clone())
 }

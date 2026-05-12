@@ -233,7 +233,10 @@ impl<'a> Visit<'a> for InjectableVisitor<'a> {
         let is_async = node.sig.asyncness.is_some();
 
         // Check for #[injectable_ctor]
-        let has_constructor = node.attrs.iter().any(|a| a.path().is_ident("injectable_ctor"));
+        let has_constructor = node
+            .attrs
+            .iter()
+            .any(|a| a.path().is_ident("injectable_ctor"));
         let has_post_construct = node
             .attrs
             .iter()

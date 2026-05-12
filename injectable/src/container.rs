@@ -3,8 +3,8 @@
 use std::sync::Arc;
 
 use injectable_runtime::{
-    DynProvider, EmptySingletonStore, Injectable, InjectableError, InjectableResult,
-    Provider, ProviderRegistry, ResolveContext, SingletonStore,
+    DynProvider, EmptySingletonStore, Injectable, InjectableError, InjectableResult, Provider,
+    ProviderRegistry, ResolveContext, SingletonStore,
 };
 
 /// The dependency injection container.

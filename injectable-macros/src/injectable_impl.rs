@@ -628,8 +628,8 @@ fn generate_extraction_code(
     let mut dep_strings = Vec::new();
 
     for param in &constructor.params {
-        let name   = &param.name;
-        let ty     = &param.ty;
+        let name = &param.name;
+        let ty = &param.ty;
         let ty_str = &param.ty_string;
 
         // ── factory param ─────────────────────────────────────────────────

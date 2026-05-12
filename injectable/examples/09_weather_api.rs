@@ -78,7 +78,9 @@ async fn get_sqlite_pool(ctx: &ResolveContext) -> Result<sqlx::SqlitePool, Injec
 
 // ─── reqwest::Client provider ───────────────────────────────────────────────
 
-async fn reqwest_client_provider(_ctx: &ResolveContext) -> Result<reqwest::Client, InjectableError> {
+async fn reqwest_client_provider(
+    _ctx: &ResolveContext,
+) -> Result<reqwest::Client, InjectableError> {
     println!("  [HTTP] Building reqwest::Client");
     reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(10))
