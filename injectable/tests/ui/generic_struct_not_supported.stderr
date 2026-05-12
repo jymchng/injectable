@@ -1,0 +1,179 @@
+error[E0277]: `T` cannot be shared between threads safely
+  --> tests/ui/generic_struct_not_supported.rs
+   |
+   | #[injectable]
+   | ^^^^^^^^^^^^^ `T` cannot be shared between threads safely
+   |
+   = note: required because it appears within the type `(T,)`
+note: required because it appears within the type `PhantomData<(T,)>`
+  --> $RUST/core/src/marker.rs
+note: required because it appears within the type `WrapperProvider<T>`
+  --> tests/ui/generic_struct_not_supported.rs
+   |
+   | #[injectable]
+   | ^^^^^^^^^^^^^
+note: required by a bound in `Provider`
+  --> $WORKSPACE/injectable-runtime/src/provider.rs
+   |
+   | pub trait Provider<T>: Send + Sync + 'static {
+   |                               ^^^^ required by this bound in `Provider`
+   = note: this error originates in the attribute macro `injectable` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: consider restricting type parameter `T` with trait `Sync`
+   |
+16 | struct Wrapper<T: std::marker::Sync> {
+   |                 +++++++++++++++++++
+
+error[E0277]: `T` cannot be sent between threads safely
+  --> tests/ui/generic_struct_not_supported.rs
+   |
+   | #[injectable]
+   | ^^^^^^^^^^^^^ `T` cannot be sent between threads safely
+   |
+   = note: required because it appears within the type `(T,)`
+note: required because it appears within the type `PhantomData<(T,)>`
+  --> $RUST/core/src/marker.rs
+note: required because it appears within the type `WrapperProvider<T>`
+  --> tests/ui/generic_struct_not_supported.rs
+   |
+   | #[injectable]
+   | ^^^^^^^^^^^^^
+note: required by a bound in `Provider`
+  --> $WORKSPACE/injectable-runtime/src/provider.rs
+   |
+   | pub trait Provider<T>: Send + Sync + 'static {
+   |                        ^^^^ required by this bound in `Provider`
+   = note: this error originates in the attribute macro `injectable` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: consider restricting type parameter `T` with trait `Send`
+   |
+16 | struct Wrapper<T: std::marker::Send> {
+   |                 +++++++++++++++++++
+
+error[E0277]: `T` cannot be shared between threads safely
+  --> tests/ui/generic_struct_not_supported.rs
+   |
+   | #[injectable]
+   | ^^^^^^^^^^^^^ `T` cannot be shared between threads safely
+   |
+   = note: required because it appears within the type `(T,)`
+note: required because it appears within the type `PhantomData<(T,)>`
+  --> $RUST/core/src/marker.rs
+note: required because it appears within the type `WrapperProvider<T>`
+  --> tests/ui/generic_struct_not_supported.rs
+   |
+   | #[injectable]
+   | ^^^^^^^^^^^^^
+   = note: required for `<Wrapper<T> as Injectable>::Provider` to implement `Provider<Wrapper<T>>`
+note: required by a bound in `injectable::Injectable::Provider`
+  --> $WORKSPACE/injectable-runtime/src/injectable.rs
+   |
+   |     type Provider: Provider<Self>;
+   |                    ^^^^^^^^^^^^^^ required by this bound in `Injectable::Provider`
+   = note: this error originates in the attribute macro `injectable` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: consider restricting type parameter `T` with trait `Sync`
+   |
+16 | struct Wrapper<T: std::marker::Sync> {
+   |                 +++++++++++++++++++
+
+error[E0277]: `T` cannot be sent between threads safely
+  --> tests/ui/generic_struct_not_supported.rs
+   |
+   | #[injectable]
+   | ^^^^^^^^^^^^^ `T` cannot be sent between threads safely
+   |
+   = note: required because it appears within the type `(T,)`
+note: required because it appears within the type `PhantomData<(T,)>`
+  --> $RUST/core/src/marker.rs
+note: required because it appears within the type `WrapperProvider<T>`
+  --> tests/ui/generic_struct_not_supported.rs
+   |
+   | #[injectable]
+   | ^^^^^^^^^^^^^
+   = note: required for `<Wrapper<T> as Injectable>::Provider` to implement `Provider<Wrapper<T>>`
+note: required by a bound in `injectable::Injectable::Provider`
+  --> $WORKSPACE/injectable-runtime/src/injectable.rs
+   |
+   |     type Provider: Provider<Self>;
+   |                    ^^^^^^^^^^^^^^ required by this bound in `Injectable::Provider`
+   = note: this error originates in the attribute macro `injectable` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: consider restricting type parameter `T` with trait `Send`
+   |
+16 | struct Wrapper<T: std::marker::Send> {
+   |                 +++++++++++++++++++
+
+error[E0277]: `T` cannot be shared between threads safely
+  --> tests/ui/generic_struct_not_supported.rs
+   |
+   | struct Wrapper<T> {
+   |        ^^^^^^^^^^ `T` cannot be shared between threads safely
+   |
+   = note: required for `Arc<T>` to implement `Sync`
+note: required because it appears within the type `injectable::Inject<T>`
+  --> $WORKSPACE/injectable-runtime/src/inject.rs
+   |
+   | pub struct Inject<T>(pub Arc<T>);
+   |            ^^^^^^
+note: required because it appears within the type `Wrapper<T>`
+  --> tests/ui/generic_struct_not_supported.rs
+   |
+   | struct Wrapper<T> {
+   |        ^^^^^^^
+note: required by a bound in `Injectable`
+  --> $WORKSPACE/injectable-runtime/src/injectable.rs
+   |
+   | pub trait Injectable: Send + Sync + Sized + 'static {
+   |                              ^^^^ required by this bound in `Injectable`
+help: consider restricting type parameter `T` with trait `Sync`
+   |
+16 | struct Wrapper<T: std::marker::Sync> {
+   |                 +++++++++++++++++++
+
+error[E0277]: `T` cannot be sent between threads safely
+  --> tests/ui/generic_struct_not_supported.rs
+   |
+   | struct Wrapper<T> {
+   |        ^^^^^^^^^^ `T` cannot be sent between threads safely
+   |
+   = note: required for `Arc<T>` to implement `Sync`
+note: required because it appears within the type `injectable::Inject<T>`
+  --> $WORKSPACE/injectable-runtime/src/inject.rs
+   |
+   | pub struct Inject<T>(pub Arc<T>);
+   |            ^^^^^^
+note: required because it appears within the type `Wrapper<T>`
+  --> tests/ui/generic_struct_not_supported.rs
+   |
+   | struct Wrapper<T> {
+   |        ^^^^^^^
+note: required by a bound in `Injectable`
+  --> $WORKSPACE/injectable-runtime/src/injectable.rs
+   |
+   | pub trait Injectable: Send + Sync + Sized + 'static {
+   |                              ^^^^ required by this bound in `Injectable`
+help: consider restricting type parameter `T` with trait `Send`
+   |
+16 | struct Wrapper<T: std::marker::Send> {
+   |                 +++++++++++++++++++
+
+error[E0277]: `T` cannot be sent between threads safely
+  --> tests/ui/generic_struct_not_supported.rs
+   |
+   |     inner: Inject<T>,
+   |            ^^^^^^^^^ `T` cannot be sent between threads safely
+   |
+   = note: required for `injectable::Inject<T>` to implement `Extract`
+help: consider restricting type parameter `T` with trait `Send`
+   |
+16 | struct Wrapper<T: std::marker::Send> {
+   |                 +++++++++++++++++++
+
+error[E0277]: `T` cannot be shared between threads safely
+  --> tests/ui/generic_struct_not_supported.rs
+   |
+   |     inner: Inject<T>,
+   |            ^^^^^^^^^ `T` cannot be shared between threads safely
+   |
+   = note: required for `injectable::Inject<T>` to implement `Extract`
+help: consider restricting type parameter `T` with trait `Sync`
+   |
+16 | struct Wrapper<T: std::marker::Sync> {
+   |                 +++++++++++++++++++

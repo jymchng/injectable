@@ -35,11 +35,13 @@ use crate::provider_gen::{self, FieldInfo, FieldInjectKind};
 /// - `#[inject(skip)]` on a field → use `Default::default()` (in a non-default struct)
 pub fn expand_derive_injectable(input: syn::DeriveInput) -> syn::Result<TokenStream> {
     let type_name = &input.ident;
+    let generics  = &input.generics;
     let injectable_attrs = attrs::parse_attrs(&input.attrs)?;
 
     let fields = parse_struct_fields(&input.data)?;
     let provider_code = provider_gen::generate_field_injection_provider(
         type_name,
+        generics,
         &fields,
         injectable_attrs.scope.as_str(),
         injectable_attrs.has_post_construct,

@@ -4,3 +4,4 @@
 //! service graph (multiple services, dependencies between them).
 
 mod factory_ctx;
+mod generic_types;

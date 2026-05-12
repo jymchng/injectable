@@ -51,8 +51,8 @@ pub fn expand_injectable_impl(attrs: TokenStream, item: TokenStream) -> syn::Res
     // Parse the impl block
     let mut impl_block: syn::ItemImpl = syn::parse2(item)?;
 
-    // Extract the type name from the impl block
-    let type_name = extract_type_name(&impl_block)?;
+    // Extract the type name, full self-type, and generics from the impl block.
+    let (type_name, self_ty, impl_generics) = extract_type_name(&impl_block)?;
 
     // Scan methods for #[injectable_ctor], #[post_construct], #[pre_destruct]
     let scan_result = scan_impl_methods(&impl_block)?;
@@ -61,9 +61,11 @@ pub fn expand_injectable_impl(attrs: TokenStream, item: TokenStream) -> syn::Res
     AttrStripper.visit_item_impl_mut(&mut impl_block);
 
     if let Some(constructor) = scan_result.constructor {
-        // ── Constructor path (existing behavior) ────────────────────────────
+        // ── Constructor path ────────────────────────────────────────────────
         let provider_code = generate_provider(
             &type_name,
+            &self_ty,
+            &impl_generics,
             &constructor,
             &scan_result.post_construct_hooks,
             &scan_result.pre_destruct_hooks,
@@ -72,11 +74,6 @@ pub fn expand_injectable_impl(attrs: TokenStream, item: TokenStream) -> syn::Res
         Ok(quote! { #impl_block #provider_code })
     } else {
         // ── No-constructor path ─────────────────────────────────────────────
-        // Valid when at least one lifecycle hook (#[post_construct] or
-        // #[pre_destruct]) is present. The struct handles field injection via
-        // #[injectable]; this block only generates hook trait impls and
-        // an inventory entry so the field-injection provider calls the hooks
-        // automatically — no extra struct annotation required.
         if scan_result.post_construct_hooks.is_empty() && scan_result.pre_destruct_hooks.is_empty()
         {
             return Err(syn::Error::new(
@@ -420,9 +417,16 @@ fn parse_param_inject(attrs: &[syn::Attribute]) -> syn::Result<(bool, Option<Fac
 
 // ─── Type Name Extraction ────────────────────────────────────────────
 
-/// Extract the type name from an impl block's self type.
-fn extract_type_name(impl_block: &syn::ItemImpl) -> syn::Result<syn::Ident> {
-    match &*impl_block.self_ty {
+/// Extract the type name, full self-type, and generics from an impl block.
+///
+/// Returns `(ident, self_ty, impl_generics)` where:
+/// - `ident` is the bare type name (e.g. `Cache` from `impl<T> Cache<T>`)
+/// - `self_ty` is the full self type (e.g. `Cache<T>`) — used in generated impls
+/// - `impl_generics` is the impl block's generic parameter list
+fn extract_type_name(
+    impl_block: &syn::ItemImpl,
+) -> syn::Result<(syn::Ident, syn::Type, syn::Generics)> {
+    let ident = match &*impl_block.self_ty {
         syn::Type::Path(type_path) => type_path
             .path
             .segments
@@ -433,12 +437,19 @@ fn extract_type_name(impl_block: &syn::ItemImpl) -> syn::Result<syn::Ident> {
                     impl_block.self_ty.span(),
                     "cannot determine type name from impl block",
                 )
-            }),
-        _ => Err(syn::Error::new(
-            impl_block.self_ty.span(),
-            "#[injectable] can only be used on impl blocks for named types",
-        )),
-    }
+            })?,
+        _ => {
+            return Err(syn::Error::new(
+                impl_block.self_ty.span(),
+                "#[injectable] can only be used on impl blocks for named types",
+            ))
+        }
+    };
+    Ok((
+        ident,
+        (*impl_block.self_ty).clone(),
+        impl_block.generics.clone(),
+    ))
 }
 
 // ─── Attribute Stripping ─────────────────────────────────────────────
@@ -470,6 +481,8 @@ impl VisitMut for AttrStripper {
 /// Generate all the DI infrastructure code for the type.
 fn generate_provider(
     type_name: &syn::Ident,
+    self_ty: &syn::Type,
+    impl_generics: &syn::Generics,
     constructor: &ConstructorInfo,
     post_construct_hooks: &[HookInfo],
     pre_destruct_hooks: &[HookInfo],
@@ -479,6 +492,8 @@ fn generate_provider(
         &format!("{}Provider", type_name),
         proc_macro2::Span::call_site(),
     );
+    let (gen_impl, ty_generics, where_clause) = impl_generics.split_for_impl();
+    let is_generic = !impl_generics.params.is_empty();
 
     // Generate extraction statements and constructor call arguments
     let (extract_statements, call_args, dep_strings) = generate_extraction_code(constructor)?;
@@ -492,12 +507,20 @@ fn generate_provider(
     };
     let type_str = type_name.to_string();
 
+    // For generic types we call the constructor via the full self_ty path;
+    // for concrete types the bare ident is sufficient.
+    let ctor_path = if is_generic {
+        quote! { <#self_ty>::#method_name }
+    } else {
+        quote! { #type_name::#method_name }
+    };
+
     let construction = match constructor.return_kind {
         ConstructorReturn::SelfOwned => quote! {
-            #type_name::#method_name(#(#call_args),*) #await_token
+            #ctor_path(#(#call_args),*) #await_token
         },
         ConstructorReturn::ResultWrapped => quote! {
-            #type_name::#method_name(#(#call_args),*) #await_token
+            #ctor_path(#(#call_args),*) #await_token
                 .map_err(|e| injectable_runtime::InjectableError::ConstructionFailed {
                     type_name: #type_str,
                     reason: e.to_string(),
@@ -505,7 +528,7 @@ fn generate_provider(
         },
         // Result<Self, InjectableError> — error is already the right type, pass through.
         ConstructorReturn::ResultInjectableError => quote! {
-            #type_name::#method_name(#(#call_args),*) #await_token?
+            #ctor_path(#(#call_args),*) #await_token?
         },
     };
 
@@ -522,7 +545,7 @@ fn generate_provider(
         // This requires T: Clone (reasonable bound for types with pre_destruct).
         (
             quote! {
-                let __destructor_arc: std::sync::Arc<#type_name> = std::sync::Arc::new(instance);
+                let __destructor_arc: std::sync::Arc<#self_ty> = std::sync::Arc::new(instance);
                 ctx.register_destructor_with_name(
                     #type_str,
                     std::sync::Arc::clone(&__destructor_arc) as std::sync::Arc<dyn injectable_runtime::PreDestruct>,
@@ -539,20 +562,36 @@ fn generate_provider(
     let scope_str = attrs.scope.as_str();
     let graph_metadata = generate_graph_metadata(type_name, &dep_strings, scope_str);
     let is_singleton: bool = attrs.scope != crate::attrs::Scope::Transient;
-    let arc_factory_submit = crate::provider_gen::generate_arc_factory_submit(type_name, is_singleton);
+
+    // InjectableArcFactory only for concrete (non-generic) types — see provider_gen.rs.
+    let arc_factory_submit = if is_generic {
+        quote! {}
+    } else {
+        crate::provider_gen::generate_arc_factory_submit(type_name, is_singleton)
+    };
 
     // Generate PostConstruct impl if there are hooks
     let post_construct_impl = generate_post_construct_impl(type_name, post_construct_hooks);
 
+    // Provider struct: plain for concrete types, PhantomData-carrying for generic types.
+    let provider_struct = if is_generic {
+        let phantom = crate::provider_gen::phantom_for_generics(impl_generics);
+        quote! { pub struct #provider_name #ty_generics (#phantom); }
+    } else {
+        quote! { pub struct #provider_name; }
+    };
+
     Ok(quote! {
-        /// Auto-generated provider for the injectable type (constructor injection).
-        pub struct #provider_name;
+        #provider_struct
 
         #[async_trait::async_trait]
-        impl injectable_runtime::Provider<#type_name> for #provider_name {
+        impl #gen_impl injectable_runtime::Provider<#self_ty>
+            for #provider_name #ty_generics
+        #where_clause
+        {
             async fn provide(
                 ctx: &injectable_runtime::ResolveContext,
-            ) -> injectable_runtime::InjectableResult<#type_name> {
+            ) -> injectable_runtime::InjectableResult<#self_ty> {
                 #(#extract_statements)*
                 let instance = #construction;
                 #post_construct_calls
@@ -561,8 +600,10 @@ fn generate_provider(
             }
         }
 
-        impl injectable_runtime::Injectable for #type_name {
-            type Provider = #provider_name;
+        impl #gen_impl injectable_runtime::Injectable for #self_ty
+        #where_clause
+        {
+            type Provider = #provider_name #ty_generics;
             const IS_SINGLETON: bool = #is_singleton;
         }
 

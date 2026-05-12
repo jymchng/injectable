@@ -43,6 +43,8 @@ fn compile_fail_proc_macro_errors() {
     t.compile_fail(ui_dir.join("unknown_impl_attribute.rs"));
     t.compile_fail(ui_dir.join("field_arc_no_inject.rs"));
     t.compile_fail(ui_dir.join("resolve_ctx_direct_call.rs"));
+    t.compile_fail(ui_dir.join("generic_struct_not_supported.rs"));
+    t.compile_fail(ui_dir.join("lifetime_not_injectable.rs"));
 }
 
 #[test]

@@ -69,11 +69,14 @@ pub struct FieldInfo {
 /// - Unit structs (no fields) are constructed without extraction
 pub fn generate_field_injection_provider(
     type_name: &syn::Ident,
+    generics: &syn::Generics,
     fields: &[FieldInfo],
     scope: &str,
     has_post_construct: bool,
 ) -> TokenStream {
     let provider_name = provider_ident(type_name);
+    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+    let is_generic = !generics.params.is_empty();
 
     // Generate extraction/default statements for each field
     let field_statements: Vec<TokenStream> = fields
@@ -144,7 +147,10 @@ pub fn generate_field_injection_provider(
         })
         .collect();
 
-    // Generate the struct construction
+    // Generate the struct construction.
+    // Do NOT include `#ty_generics` in the struct literal — `Foo<T> { field }`
+    // is parsed as a chained comparison, not a struct expression. Rust infers
+    // the generic arguments from the function's return type annotation.
     let construction = if fields.is_empty() {
         // Unit struct
         quote! { #type_name }
@@ -189,28 +195,65 @@ pub fn generate_field_injection_provider(
         })
         .collect();
 
-    let graph_metadata = generate_graph_metadata_from_strings(type_name, &dep_strings, scope);
+    // Graph metadata contains concrete type names (e.g. "Database"). For generic
+    // types the dep_strings contain the type parameter name ("T"), which is not
+    // a registered type. Skip graph metadata for generic types entirely.
+    let graph_metadata = if is_generic {
+        quote! {}
+    } else {
+        generate_graph_metadata_from_strings(type_name, &dep_strings, scope)
+    };
     let is_singleton: bool = scope != "transient";
-    let arc_factory_submit = generate_arc_factory_submit(type_name, is_singleton);
-    let hooks_dispatch = generate_inventory_hooks_dispatch(type_name);
-    let legacy_hooks_submit = generate_legacy_hooks_submit(type_name, has_post_construct, false);
+    // InjectableArcFactory requires const function pointers and a single TypeId —
+    // this only works for concrete (non-generic) types. Generic types are resolved
+    // via the blanket `impl<T: Injectable> Extract for Arc<T>` instead.
+    let arc_factory_submit = if is_generic {
+        quote! {}
+    } else {
+        generate_arc_factory_submit(type_name, is_singleton)
+    };
+    // Hooks dispatch uses TypeId::of::<TypeName>() and Arc<TypeName>, which require
+    // a concrete type. Skip for generic types (hooks can be added via #[injectable] impl).
+    let hooks_dispatch = if is_generic {
+        quote! { Ok(instance) }
+    } else {
+        generate_inventory_hooks_dispatch(type_name)
+    };
+    let legacy_hooks_submit = if is_generic {
+        quote! {}
+    } else {
+        generate_legacy_hooks_submit(type_name, has_post_construct, false)
+    };
+
+    // Provider struct: plain for concrete types, PhantomData-carrying for generic types.
+    let provider_struct = if is_generic {
+        let phantom = phantom_for_generics(generics);
+        quote! { pub struct #provider_name #impl_generics (#phantom); }
+    } else {
+        quote! { pub struct #provider_name; }
+    };
 
     quote! {
-        pub struct #provider_name;
+        #provider_struct
 
         #[async_trait::async_trait]
-        impl injectable_runtime::Provider<#type_name> for #provider_name {
+        impl #impl_generics injectable_runtime::Provider<#type_name #ty_generics>
+            for #provider_name #ty_generics
+        #where_clause
+        {
             async fn provide(
                 ctx: &injectable_runtime::ResolveContext,
-            ) -> injectable_runtime::InjectableResult<#type_name> {
+            ) -> injectable_runtime::InjectableResult<#type_name #ty_generics> {
                 #(#field_statements)*
                 let instance = #construction;
                 #hooks_dispatch
             }
         }
 
-        impl injectable_runtime::Injectable for #type_name {
-            type Provider = #provider_name;
+        impl #impl_generics injectable_runtime::Injectable for #type_name #ty_generics
+        #where_clause
+        {
+            type Provider = #provider_name #ty_generics;
             const IS_SINGLETON: bool = #is_singleton;
         }
 
@@ -218,6 +261,20 @@ pub fn generate_field_injection_provider(
         #arc_factory_submit
         #legacy_hooks_submit
     }
+}
+
+/// Build a `PhantomData<(T1, T2, ..., &'a (), &'b (), ...)>` expression
+/// from a generic parameter list, so the provider struct is well-formed.
+pub(crate) fn phantom_for_generics(generics: &syn::Generics) -> proc_macro2::TokenStream {
+    let types: Vec<_> = generics
+        .type_params()
+        .map(|tp| { let id = &tp.ident; quote! { #id } })
+        .collect();
+    let lifetimes: Vec<_> = generics
+        .lifetimes()
+        .map(|lp| { let lt = &lp.lifetime; quote! { &#lt () } })
+        .collect();
+    quote! { ::std::marker::PhantomData<(#(#types,)* #(#lifetimes,)*)> }
 }
 
 /// Generate an `inventory::submit!` for `InjectableArcFactory` so this

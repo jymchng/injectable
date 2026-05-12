@@ -4,3 +4,4 @@
 //! dependencies (no network, no database, no Axum).
 
 mod factory_ctx;
+mod generic_types;
