@@ -1,0 +1,97 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"         # e.g. v0.3.1
+      - "v[0-9]+.[0-9]+.[0-9]+-*"        # e.g. v0.3.1-rc.1
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+jobs:
+  # ── Gate: full CI must pass before publishing ────────────────────────────
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo registry
+        uses: Swatinem/rust-cache@v2
+
+      - name: Format check
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --features injectable/axum -- -D warnings
+
+      - name: Tests
+        run: cargo test --workspace --features injectable/axum
+
+  # ── Publish to crates.io ──────────────────────────────────────────────────
+  publish:
+    name: Publish
+    runs-on: ubuntu-latest
+    needs: validate
+    environment: crates-io        # requires CARGO_REGISTRY_TOKEN secret
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: Swatinem/rust-cache@v2
+
+      # Publish in dependency order — each step waits for the previous.
+      - name: Publish injectable-graph
+        run: cargo publish -p injectable-graph --no-verify
+        continue-on-error: true   # skip if already published at this version
+
+      - name: Publish injectable-runtime
+        run: |
+          sleep 20                 # wait for crates.io index to update
+          cargo publish -p injectable-runtime --no-verify
+        continue-on-error: true
+
+      - name: Publish injectable-macros
+        run: |
+          sleep 20
+          cargo publish -p injectable-macros --no-verify
+        continue-on-error: true
+
+      - name: Publish injectable (facade)
+        run: |
+          sleep 20
+          cargo publish -p injectable --no-verify
+
+  # ── GitHub Release ────────────────────────────────────────────────────────
+  github-release:
+    name: GitHub Release
+    runs-on: ubuntu-latest
+    needs: publish
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # full history for changelog generation
+
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "injectable v${{ steps.version.outputs.version }}"
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}

@@ -1,0 +1,49 @@
+name: Nightly
+
+on:
+  schedule:
+    - cron: "0 4 * * *"          # daily at 04:00 UTC
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # ── Test on nightly (catch upcoming breakage early) ───────────────────────
+  test-nightly:
+    name: Test (nightly)
+    runs-on: ubuntu-latest
+    continue-on-error: true       # nightly failures are informational
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust nightly
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Cache cargo registry
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: nightly
+
+      - name: Build
+        run: cargo +nightly build --workspace --features injectable/axum
+
+      - name: Test
+        run: cargo +nightly test --workspace --features injectable/axum
+
+  # ── Unused dependency check ───────────────────────────────────────────────
+  udeps:
+    name: Unused dependencies
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust nightly
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Install cargo-udeps
+        run: cargo install cargo-udeps --locked
+
+      - name: Check for unused deps
+        run: cargo +nightly udeps --workspace --features injectable/axum

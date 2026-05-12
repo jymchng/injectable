@@ -1,0 +1,85 @@
+repos:
+  # ── Rust toolchain hooks ─────────────────────────────────────────────────
+  - repo: local
+    hooks:
+      - id: cargo-fmt
+        name: cargo fmt
+        description: Enforce Rust formatting
+        language: system
+        entry: cargo fmt --all --
+        pass_filenames: false
+        types: [rust]
+
+      - id: cargo-check
+        name: cargo check
+        description: Fast compilation check (no binaries)
+        language: system
+        entry: cargo check --workspace --features injectable/axum
+        pass_filenames: false
+        types: [rust]
+
+      - id: cargo-clippy
+        name: cargo clippy
+        description: Lint with Clippy (deny warnings)
+        language: system
+        entry: cargo clippy --workspace --features injectable/axum -- -D warnings
+        pass_filenames: false
+        types: [rust]
+
+      - id: cargo-test
+        name: cargo test
+        description: Run the full test suite
+        language: system
+        entry: cargo test --workspace --features injectable/axum
+        pass_filenames: false
+        types: [rust]
+        stages: [pre-push]   # only on push — too slow for every commit
+
+  # ── General file hygiene ─────────────────────────────────────────────────
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: "\\.(md|txt)$"   # allow trailing whitespace in prose
+
+      - id: end-of-file-fixer
+        exclude: "^target/"
+
+      - id: check-yaml
+        args: [--unsafe]           # allow merge keys (<<: *anchor)
+
+      - id: check-toml
+
+      - id: check-merge-conflict
+
+      - id: check-case-conflict
+
+      - id: mixed-line-ending
+        args: [--fix=lf]
+
+      - id: no-commit-to-branch
+        args: [--branch, main, --branch, master]
+
+  # ── Markdown ──────────────────────────────────────────────────────────────
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.41.0
+    hooks:
+      - id: markdownlint
+        args:
+          - --disable
+          - MD013   # line length — too strict for code blocks
+          - MD033   # inline HTML — used for <details> collapse
+          - MD041   # first line must be h1 — not always appropriate
+        files: "^(guides|skills)/.*\\.md$"
+
+  # ── YAML lint ─────────────────────────────────────────────────────────────
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.35.1
+    hooks:
+      - id: yamllint
+        args: [-c, .yamllint.yaml]
+        files: "\\.ya?ml$"
+        exclude: "^(\\.pre-commit-config\\.yaml|\\.github/)"
+
+# ── Default stages ────────────────────────────────────────────────────────
+default_stages: [pre-commit]

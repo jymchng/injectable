@@ -1,0 +1,8 @@
+# All files require review from a codeowner before merging to main.
+* @injectable-maintainers
+
+# Macro crate: changes to proc-macros need extra scrutiny
+/injectable-macros/ @injectable-maintainers
+
+# Runtime: changes to the core trait definitions need extra scrutiny
+/injectable-runtime/ @injectable-maintainers
