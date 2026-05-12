@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use injectable_runtime::{
     DynProvider, EmptySingletonStore, Injectable, InjectableError, InjectableResult,
-    ProviderRegistry, ResolveContext, SingletonStore,
+    Provider, ProviderRegistry, ResolveContext, SingletonStore,
 };
 
 /// The dependency injection container.
@@ -70,7 +70,7 @@ impl Container {
     /// let service = app.resolve::<UserService>().await?;
     /// ```
     pub async fn resolve<T: Injectable>(&self) -> InjectableResult<T> {
-        self.ctx.resolve::<T>().await
+        T::Provider::provide(&self.ctx).await
     }
 
     /// Resolve an external type from the provider registry.

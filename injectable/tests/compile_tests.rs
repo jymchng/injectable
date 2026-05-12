@@ -42,6 +42,7 @@ fn compile_fail_proc_macro_errors() {
     t.compile_fail(ui_dir.join("unknown_attribute.rs"));
     t.compile_fail(ui_dir.join("unknown_impl_attribute.rs"));
     t.compile_fail(ui_dir.join("field_arc_no_inject.rs"));
+    t.compile_fail(ui_dir.join("resolve_ctx_direct_call.rs"));
 }
 
 #[test]

@@ -84,6 +84,28 @@ impl ResolveContext {
         &self.registry
     }
 
+    /// Extract a value using the scope-safe [`Extract`] path.
+    ///
+    /// This is the recommended way to resolve a type inside a factory closure
+    /// or `DynProvider::with_ctx`. Unlike the old `ctx.resolve::<T>()`, this
+    /// respects singleton / transient scope and goes through the full singleton
+    /// cache machinery.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// DynProvider::with_ctx(|ctx| async move {
+    ///     let config: Inject<AppConfig> = ctx.extract().await?;
+    ///     Ok(Database::connect(&config.db_url).await?)
+    /// })
+    /// ```
+    pub async fn extract<T>(&self) -> crate::InjectableResult<T>
+    where
+        T: crate::Extract + Send + Sync + 'static,
+    {
+        T::extract(self).await
+    }
+
     /// Resolve a root dependency from the context.
     ///
     /// This is the primary entry point. For types implementing `Injectable`,
@@ -94,7 +116,16 @@ impl ResolveContext {
     /// ```rust,ignore
     /// let service = ctx.resolve::<UserService>().await?;
     /// ```
-    pub async fn resolve<T: Injectable>(&self) -> InjectableResult<T> {
+    /// Resolve a type by calling its provider directly.
+    ///
+    /// # Safety / scope
+    ///
+    /// This method bypasses the singleton cache entirely — every call creates
+    /// a fresh instance regardless of the type's declared scope.  It is
+    /// intentionally `pub(crate)` so only framework-generated provider code
+    /// may call it.  User code should use `Inject::<T>::extract(ctx)` or
+    /// `Arc::<T>::extract(ctx)` instead, both of which respect scope.
+    pub(crate) async fn resolve<T: Injectable>(&self) -> InjectableResult<T> {
         T::Provider::provide(self).await
     }
 
@@ -112,13 +143,14 @@ impl ResolveContext {
     /// On the first call for type `T` the provider runs; subsequent calls
     /// return a clone of the cached `Arc<T>` without re-running the provider.
     ///
-    /// The value is stored as `Arc<T>` erased behind `Arc<dyn Any + Send + Sync>`.
-    /// Downcasting back is safe because the `TypeId` key uniquely identifies `T`.
+    /// # Safety / scope
     ///
-    /// Used internally by `Inject<T>::extract` and by generated
-    /// `InjectableArcFactory` entries. Exposed as `pub` so that
-    /// macro-generated code in user crates can call it.
-    pub async fn resolve_singleton_arc<T: Injectable>(&self) -> InjectableResult<Arc<T>> {
+    /// `pub(crate)` — called only by `Extract for Arc<T>`, `Extract for Inject<T>`
+    /// (via `InjectableArcFactory`), and `FactoryCtx`.  Direct user access would
+    /// allow grabbing a singleton Arc for a transient type, breaking scope
+    /// semantics.  User code should use `Inject::<T>::extract(ctx)` or
+    /// `Arc::<T>::extract(ctx)` instead.
+    pub(crate) async fn resolve_singleton_arc<T: Injectable>(&self) -> InjectableResult<Arc<T>> {
         let type_id = TypeId::of::<T>();
 
         // Briefly lock to get-or-insert the per-type OnceCell, then release.

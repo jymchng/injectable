@@ -61,9 +61,9 @@
 
 // Re-export runtime types
 pub use injectable_runtime::{
-    DynProvider, EmptySingletonStore, Extract, HookResult, Inject, Injectable, InjectableError,
-    InjectableResult, PostConstruct, PreDestruct, Provider, ProviderRegistry, ResolveContext,
-    SingletonStore,
+    DynProvider, EmptySingletonStore, Extract, FactoryCtx, HookResult, Inject, Injectable,
+    InjectableError, InjectableResult, PostConstruct, PreDestruct, Provider, ProviderRegistry,
+    ResolveContext, SingletonStore,
 };
 
 // Re-export graph types
@@ -106,6 +106,7 @@ pub mod prelude {
         Extract,
         Container,
         DynProvider,
+        FactoryCtx,
         InjectableError,
         InjectableResult,
         HookResult,

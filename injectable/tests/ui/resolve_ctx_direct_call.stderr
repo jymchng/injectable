@@ -1,0 +1,10 @@
+error[E0624]: method `resolve` is private
+ --> tests/ui/resolve_ctx_direct_call.rs
+  |
+  |     let _db = ctx.resolve::<Database>().await?;
+  |                   ^^^^^^^ private method
+  |
+ ::: $WORKSPACE/injectable-runtime/src/resolve.rs
+  |
+  |     pub(crate) async fn resolve<T: Injectable>(&self) -> InjectableResult<T> {
+  |     ------------------------------------------------------------------------ private method defined here

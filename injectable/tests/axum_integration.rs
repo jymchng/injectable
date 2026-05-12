@@ -509,8 +509,8 @@ fn test_injectable_rejection_into_response() {
 async fn test_container_implements_injectable_state() {
     let container = Container::builder().build().await.unwrap();
     let ctx = InjectableState::resolve_context(&container);
-    // Verify we can resolve through the trait method
-    let _config = ctx.resolve::<Config>().await.unwrap();
+    // Verify we can extract through the trait method (scope-safe path)
+    let _config: Inject<Config> = ctx.extract().await.unwrap();
 }
 
 // ─── AxumState implements InjectableState ──────────────────────────
@@ -520,7 +520,7 @@ async fn test_axum_state_implements_injectable_state() {
     let container = Container::builder().build().await.unwrap();
     let state = AxumState::new(container);
     let ctx = InjectableState::resolve_context(&state);
-    let _config = ctx.resolve::<Config>().await.unwrap();
+    let _config: Inject<Config> = ctx.extract().await.unwrap();
 }
 
 // ─── Inject<T> Destructuring Pattern ───────────────────────────────

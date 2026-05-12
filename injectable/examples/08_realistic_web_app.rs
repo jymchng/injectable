@@ -104,7 +104,7 @@ async fn shutdown_signal() {
 async fn get_sqllite_pool(
     ctx: &ResolveContext,
 ) -> Result<sqlx::SqlitePool, injectable_runtime::InjectableError> {
-    let config = ctx.resolve::<AppConfig>().await?;
+    let config: Inject<AppConfig> = ctx.extract().await?;
     println!(
         "   [DynProvider] Connecting to SQLite at {}...",
         config.database_url

@@ -91,7 +91,7 @@ impl AppConfig {
 /// Both WeatherService and UserService share this factory — the framework
 /// calls it once per service type and caches the result as a singleton.
 async fn make_pool(ctx: &ResolveContext) -> Result<Pool<Sqlite>, InjectableError> {
-    let cfg = ctx.resolve::<AppConfig>().await?;
+    let cfg = ctx.extract::<Inject<AppConfig>>().await?;
     println!("  [DB] Connecting to {}", cfg.database_url);
     sqlx::SqlitePool::connect(&cfg.database_url)
         .await

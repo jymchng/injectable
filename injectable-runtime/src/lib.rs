@@ -15,6 +15,7 @@
 
 mod error;
 mod extract;
+mod factory_ctx;
 mod inject;
 mod injectable;
 mod lifecycle;
@@ -28,6 +29,7 @@ mod axum;
 
 pub use error::{InjectableError, InjectableResult};
 pub use extract::Extract;
+pub use factory_ctx::FactoryCtx;
 pub use inject::Inject;
 pub use injectable::Injectable;
 pub use lifecycle::{HookResult, PostConstruct, PreDestruct};

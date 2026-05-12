@@ -237,10 +237,13 @@ pub(crate) fn generate_arc_factory_submit(type_name: &syn::Ident, is_singleton: 
         proc_macro2::Span::call_site(),
     );
 
-    // Singleton: return the cached Arc. Transient: create a fresh Arc each time.
+    // Singleton: go through Extract for Arc<T> which calls resolve_singleton_arc internally.
+    // Transient: call the provider directly to get a fresh Arc each time.
+    // Using `Extract for Arc<T>` (a pub trait) avoids calling the pub(crate)
+    // resolve_singleton_arc method from generated code in user crates.
     let resolve_expr = if is_singleton {
         quote! {
-            ctx.resolve_singleton_arc::<#type_name>().await
+            <::std::sync::Arc<#type_name> as injectable_runtime::Extract>::extract(&ctx).await
         }
     } else {
         quote! {

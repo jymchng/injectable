@@ -94,7 +94,7 @@ async fn main() {
             let url = db_url2.clone();
             async move {
                 // Resolve an owned type from the DI context
-                let _config = ctx.resolve::<AppConfig>().await?;
+                let _config = ctx.extract::<Inject<AppConfig>>().await?;
                 println!("  Creating SqlitePool using AppConfig from context");
                 let pool = sqlx::SqlitePool::connect(&url).await.map_err(|e| {
                     injectable_runtime::InjectableError::ConstructionFailed {

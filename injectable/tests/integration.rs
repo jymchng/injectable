@@ -287,8 +287,8 @@ async fn test_register_external_with_ctx_dependencies() {
         .register(DynProvider::with_ctx(move |ctx| {
             let url = database_url.clone();
             async move {
-                // Resolve an owned type from the context
-                let _config = ctx.resolve::<Config>().await?;
+                // Resolve a singleton type via the scope-safe extract method.
+                let _config: Inject<Config> = ctx.extract().await?;
                 sqlx::SqlitePool::connect(&url).await.map_err(|e| {
                     InjectableError::ConstructionFailed {
                         type_name: "sqlx::SqlitePool",
@@ -2312,10 +2312,10 @@ pub struct ConsumerArc {
     svc: Arc<SharedSvc2>,
 }
 
-/// Factory: get owned SharedSvc2 by cloning from the pre-extracted Arc.
-/// use_factory_async keeps ctx for this pattern, since it needs to resolve.
+/// Factory: get owned SharedSvc2 by cloning from the singleton Arc.
+/// Uses Extract for Arc<T> which routes through the singleton cache.
 async fn make_owned_svc2_from_ctx(ctx: &ResolveContext) -> Result<SharedSvc2, InjectableError> {
-    let arc = ctx.resolve_singleton_arc::<SharedSvc2>().await?;
+    let arc: Arc<SharedSvc2> = ctx.extract().await?;
     Ok((*arc).clone())
 }
 
@@ -2424,10 +2424,11 @@ pub struct ArcCloneConsumer {
 }
 
 /// Owned T field via explicit factory — clones from singleton (requires T: Clone).
+/// Uses Extract for Arc<T> (scope-safe) instead of the private resolve_singleton_arc.
 async fn clone_owned_clone_svc(
     ctx: &ResolveContext,
 ) -> Result<OwnedCloneSvc, InjectableError> {
-    let arc = ctx.resolve_singleton_arc::<OwnedCloneSvc>().await?;
+    let arc: Arc<OwnedCloneSvc> = ctx.extract().await?;
     Ok((*arc).clone())
 }
 

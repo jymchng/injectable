@@ -66,7 +66,7 @@ impl AppConfig {
 // ─── SQLite pool factory ─────────────────────────────────────────────────────
 
 async fn get_sqlite_pool(ctx: &ResolveContext) -> Result<sqlx::SqlitePool, InjectableError> {
-    let cfg = ctx.resolve::<AppConfig>().await?;
+    let cfg = ctx.extract::<Inject<AppConfig>>().await?;
     println!("  [DB] Connecting to {}", cfg.database_url);
     sqlx::SqlitePool::connect(&cfg.database_url)
         .await

@@ -8,7 +8,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 
-use crate::{InjectableResult, ResolveContext};
+use crate::{FactoryCtx, InjectableResult, ResolveContext};
 
 /// A provider that can asynchronously construct a value of type `T`.
 ///
@@ -54,8 +54,9 @@ pub trait Provider<T>: Send + Sync + 'static {
 
 /// Type-erased async closure signature for dynamic providers.
 ///
-/// The closure receives an `Arc<ResolveContext>` (not `&ResolveContext`)
-/// so the returned future is `'static` and can outlive the call site.
+/// The closure receives an `Arc<ResolveContext>` internally (not `FactoryCtx`);
+/// `FactoryCtx` is created at the call site and wraps this `Arc` before
+/// handing it to the user-facing `with_ctx` closure.
 type DynProviderFn<T> = Box<
     dyn Fn(Arc<ResolveContext>) -> Pin<Box<dyn Future<Output = InjectableResult<T>> + Send>>
         + Send
@@ -159,29 +160,36 @@ impl<T: Send + Sync + 'static> DynProvider<T> {
         }
     }
 
-    /// Create a `DynProvider` from a closure that receives `Arc<ResolveContext>`.
+    /// Create a `DynProvider` from a closure that receives a [`FactoryCtx`].
     ///
-    /// Use this for types that need to resolve other dependencies
-    /// during construction. The closure returns a future that owns
-    /// the `Arc<ResolveContext>`, so it's `'static` and has no
-    /// lifetime issues.
+    /// Use this for types that need to resolve other dependencies during
+    /// construction.  `FactoryCtx` exposes only scope-safe operations
+    /// (`extract` and `resolve_external`) so the factory cannot bypass the
+    /// singleton cache or violate transient/singleton scope semantics.
     ///
-    /// # Example
+    /// # Migrating from `ctx.resolve::<T>()`
     ///
     /// ```rust,ignore
+    /// // Before (bypassed singleton cache):
     /// DynProvider::with_ctx(|ctx| async move {
-    ///     let config = ctx.resolve::<AppConfig>().await?;
+    ///     let config = ctx.resolve::<AppConfig>().await?;   // ← dangerous
+    ///     Ok(Database::connect(&config.db_url).await?)
+    /// })
+    ///
+    /// // After (scope-safe):
+    /// DynProvider::with_ctx(|ctx| async move {
+    ///     let config: Inject<AppConfig> = ctx.extract().await?;
     ///     Ok(Database::connect(&config.db_url).await?)
     /// })
     /// ```
     pub fn with_ctx<F, Fut>(f: F) -> Self
     where
-        F: Fn(Arc<ResolveContext>) -> Fut + Send + Sync + 'static,
+        F: Fn(FactoryCtx) -> Fut + Send + Sync + 'static,
         Fut: Future<Output = InjectableResult<T>> + Send + 'static,
     {
         Self {
-            f: Box::new(move |ctx| {
-                let fut = f(ctx);
+            f: Box::new(move |ctx_arc| {
+                let fut = f(FactoryCtx::new(ctx_arc));
                 Box::pin(fut)
             }),
         }
