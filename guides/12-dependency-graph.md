@@ -171,3 +171,12 @@ fn dependency_graph_is_valid() {
 - **Prefer `Inject<T>` fields over owned `T`** unless you need mutation isolation per consumer.
 - **Read validation errors top-to-bottom.** The container builder reports all errors at once, not just the first.
 - **Circular deps are always a design smell.** Introduce an intermediate abstraction or event channel to break the cycle.
+
+---
+
+## Related skills
+
+- `skills/dependency-graph/`
+- `skills/troubleshooting/`
+- `skills/multi-service-graph/`
+- `skills/container-inspection/`

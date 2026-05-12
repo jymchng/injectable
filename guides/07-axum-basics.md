@@ -222,3 +222,11 @@ async fn maybe_handler(
     }
 }
 ```
+
+---
+
+## Related skills
+
+- `skills/axum-integration/`
+- `skills/axum-middleware/`
+- `skills/resolve-context/`

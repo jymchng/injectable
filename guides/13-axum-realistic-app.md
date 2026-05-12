@@ -256,3 +256,12 @@ POST /users        → 201 {"id":2}
 | Thin repository layer | `Arc<Database>` constructor param |
 | Service layer | `Arc<UserRepository>` constructor param |
 | Handler injection | `Inject<UserService>` in Axum handler parameters |
+
+---
+
+## Related skills
+
+- `skills/axum-realistic-app/`
+- `skills/url-shortener-example/`
+- `skills/weather-api-example/`
+- `skills/multi-service-graph/`

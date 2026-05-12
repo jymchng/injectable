@@ -263,3 +263,11 @@ async fn test_create_user() {
     assert!(id > 0);
 }
 ```
+
+---
+
+## Related skills
+
+- `skills/large-app-organization/`
+- `skills/multi-service-graph/`
+- `skills/axum-realistic-app/`

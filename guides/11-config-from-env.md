@@ -247,3 +247,11 @@ async fn server_info(
 | Multiple services, different config | Split into focused config structs |
 | `.env` file | `dotenvy::dotenv()` before `Container::builder().build()` |
 | Secret rotation | Use `DynProvider` + Arc<RwLock<Config>> for runtime updates |
+
+---
+
+## Related skills
+
+- `skills/config-injection/`
+- `skills/constructor-injection/`
+- `skills/getting-started/`

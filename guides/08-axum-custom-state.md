@@ -217,3 +217,11 @@ async fn root(
 | Need shutdown channel | Custom `AppState` + `InjectableState` |
 | Multiple container scopes | Custom `AppState` with multiple containers |
 | Existing Axum app you're extending | Implement `InjectableState` on your existing state |
+
+---
+
+## Related skills
+
+- `skills/axum-integration/`
+- `skills/axum-middleware/`
+- `skills/axum-realistic-app/`

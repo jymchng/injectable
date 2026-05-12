@@ -228,3 +228,13 @@ fn my_factory(ctx: &ResolveContext) -> ExternalType {
 
 Both factory variants can call `ctx.resolve::<T>()` or `ctx.resolve_external::<T>()`
 to pull in other dependencies when building the external value.
+
+---
+
+## Related skills
+
+- `skills/external-types/`
+- `skills/dyn-provider/`
+- `skills/inject-fn-macro/`
+- `skills/factory-ctx/`
+- `skills/sqlx-sqlite/`

@@ -213,3 +213,11 @@ async fn guarded_handler(
     }
 }
 ```
+
+---
+
+## Related skills
+
+- `skills/optional-dependencies/`
+- `skills/container-inspection/`
+- `skills/testing-injectable/`

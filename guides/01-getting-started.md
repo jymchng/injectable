@@ -160,3 +160,15 @@ default; constructor injection gives you full control when you need it.
 - **Guide 04** — Injecting external types with `DynProvider`
 - **3-ways-to-inject-external-types** — All three ways to handle external types
 - **Guide 07** — Axum integration
+
+---
+
+## Related skills
+
+| Task | Skill |
+|---|---|
+| First injectable type | `skills/getting-started/` |
+| Field injection | `skills/field-injection/` |
+| Constructor injection | `skills/constructor-injection/` |
+| External types (DB pool, HTTP) | `skills/external-types/` |
+| Troubleshoot errors | `skills/troubleshooting/` |

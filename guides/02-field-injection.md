@@ -212,3 +212,11 @@ async fn main() {
 | Need async initialization | Constructor injection with `async fn` |
 | Need to inject external types (not in your crate) | Factory field annotation or `DynProvider` (Guide 04) |
 | Simple structs with only `Inject<T>` fields | Field injection — least boilerplate |
+
+---
+
+## Related skills
+
+- `skills/field-injection/`
+- `skills/inject-wrapper/`
+- `skills/arc-vs-inject/`

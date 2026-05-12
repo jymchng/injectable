@@ -226,3 +226,11 @@ impl<S: InjectableState + Send + Sync> FromRequestParts<S> for RequireAdmin {
     }
 }
 ```
+
+---
+
+## Related skills
+
+- `skills/axum-middleware/`
+- `skills/axum-integration/`
+- `skills/resolve-context/`

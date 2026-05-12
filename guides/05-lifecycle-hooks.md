@@ -162,3 +162,12 @@ impl Database {
     }
 }
 ```
+
+---
+
+## Related skills
+
+- `skills/lifecycle-hooks/`
+- `skills/post-construct-migrations/`
+- `skills/shutdown-cleanup/`
+- `skills/async-initialization/`

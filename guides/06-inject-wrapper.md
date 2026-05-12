@@ -128,3 +128,11 @@ use injectable::Extract;
 
 let inject = Inject::<UserRepository>::extract(container.context()).await?;
 ```
+
+---
+
+## Related skills
+
+- `skills/inject-wrapper/`
+- `skills/arc-vs-inject/`
+- `skills/scoping/`

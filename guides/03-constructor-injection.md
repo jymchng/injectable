@@ -268,3 +268,11 @@ See the 3-ways-to-inject-external-types guide for all options.
   generates the `Injectable` + `Provider` impls.
 - Struct fields should be **plain types**, not `Inject<T>`. The constructor
   receives `Inject<T>` params and can unwrap them before storage.
+
+---
+
+## Related skills
+
+- `skills/constructor-injection/`
+- `skills/async-initialization/`
+- `skills/config-injection/`

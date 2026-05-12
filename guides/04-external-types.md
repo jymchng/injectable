@@ -186,3 +186,14 @@ let db_url = std::env::var("DATABASE_URL")
 | Type needs env var or complex async setup | Mechanism 3 with `DynProvider::new` / `with_ctx` |
 | Type depends on another resolved type | `DynProvider::with_ctx` or factory with `ctx.resolve` |
 | Type is in your crate | `#[injectable]` — no DynProvider needed |
+
+---
+
+## Related skills
+
+- `skills/external-types/`
+- `skills/dyn-provider/`
+- `skills/factory-ctx/`
+- `skills/inject-fn-macro/`
+- `skills/sqlx-sqlite/`
+- `skills/reqwest-client/`

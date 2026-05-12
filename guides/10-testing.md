@@ -285,3 +285,11 @@ async fn test_with_helper() {
     assert_eq!(svc.fetch_data(), "{}");
 }
 ```
+
+---
+
+## Related skills
+
+- `skills/testing-injectable/`
+- `skills/container-inspection/`
+- `skills/optional-dependencies/`
