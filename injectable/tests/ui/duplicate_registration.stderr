@@ -8,11 +8,3 @@ error: duplicate type `Database` registered in the container
   | |_^
   |
   = note: this error originates in the macro `container` (in Nightly builds, run with -Z macro-backtrace for more info)
-
-error: cannot find attribute `injectable` in this scope
- --> tests/ui/duplicate_registration.rs
-  |
-  | #[injectable]
-  |   ^^^^^^^^^^
-  |
-  = note: `injectable` is in scope, but it is a crate, not an attribute

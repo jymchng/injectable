@@ -90,12 +90,11 @@ use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use ::axum::{
-    async_trait,
+    Router, async_trait,
     extract::{FromRequestParts, Path, State},
-    http::{request::Parts, HeaderMap, StatusCode},
+    http::{HeaderMap, StatusCode, request::Parts},
     response::{Html, IntoResponse, Json, Redirect, Response},
     routing::{get, post},
-    Router,
 };
 use serde::{Deserialize, Serialize};
 use sqlx::{Pool, Sqlite};

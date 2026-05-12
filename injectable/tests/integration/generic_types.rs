@@ -3,8 +3,8 @@
 //! Demonstrates the idiomatic approaches when users need injectable types
 //! that involve generics or type-tagged patterns.
 
-use injectable::prelude::*;
 use injectable::Provider;
+use injectable::prelude::*;
 use std::marker::PhantomData;
 use std::sync::atomic::{AtomicU32, Ordering};
 

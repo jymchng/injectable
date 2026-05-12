@@ -5,12 +5,12 @@
 
 use std::sync::Arc;
 
+use ::axum::Router;
 use ::axum::body::Body;
 use ::axum::extract::State;
 use ::axum::http::{Request, StatusCode};
 use ::axum::response::IntoResponse;
 use ::axum::routing::{get, post};
-use ::axum::Router;
 use http_body_util::BodyExt;
 use tower::ServiceExt;
 

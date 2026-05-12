@@ -43,11 +43,11 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use ::axum::{
+    Router,
     extract::{Path, Query},
     http::StatusCode,
     response::{IntoResponse, Json},
     routing::{get, post},
-    Router,
 };
 use serde::{Deserialize, Serialize};
 use sqlx::{Pool, Sqlite};

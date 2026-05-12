@@ -1,7 +1,5 @@
-error: cannot find attribute `injectable` in this scope
+error: #[injectable] without #[injectable_ctor] requires at least one #[post_construct] or #[pre_destruct] method. For field injection without lifecycle hooks, use #[injectable] alone.
  --> tests/ui/missing_constructor.rs
   |
-  | #[injectable]
-  |   ^^^^^^^^^^
-  |
-  = note: `injectable` is in scope, but it is a crate, not an attribute
+  | impl MyService {
+  |      ^^^^^^^^^

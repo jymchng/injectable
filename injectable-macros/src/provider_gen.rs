@@ -159,9 +159,7 @@ pub fn generate_field_injection_provider(
             .iter()
             .enumerate()
             .map(|(i, _)| {
-                let temp_name =
-                    syn::Ident::new(&format!("__field_{}", i), proc_macro2::Span::call_site());
-                temp_name
+                syn::Ident::new(&format!("__field_{}", i), proc_macro2::Span::call_site())
             })
             .collect();
         quote! { #type_name(#(#field_refs),*) }

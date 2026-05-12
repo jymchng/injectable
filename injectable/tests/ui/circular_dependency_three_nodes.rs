@@ -3,7 +3,7 @@
 //! A -> B -> C -> A forms a cycle. This should be detected at
 //! compile time with the full cycle path in the error message.
 
-use injectable::container;
+use injectable::{container, injectable};
 
 #[injectable]
 #[derive(Default)]

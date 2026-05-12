@@ -21,19 +21,19 @@
 //!
 //! Run with: cargo run --example 08_realistic_web_app --features axum
 
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use ::axum::{
+    Json, Router,
     extract::State,
     http::StatusCode,
     routing::{get, post},
-    Json, Router,
 };
 use serde::{Deserialize, Serialize};
 
-use injectable::axum::AxumState;
 use injectable::ResolveContext;
+use injectable::axum::AxumState;
 use injectable::*;
 
 // ─── 1. Configuration (from environment variables) ─────────────────────
@@ -76,7 +76,7 @@ impl AppConfig {
 async fn shutdown_signal() {
     #[cfg(unix)]
     {
-        use tokio::signal::unix::{signal, SignalKind};
+        use tokio::signal::unix::{SignalKind, signal};
 
         let mut sigterm =
             signal(SignalKind::terminate()).expect("failed to install SIGTERM handler");

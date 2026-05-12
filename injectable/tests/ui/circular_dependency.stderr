@@ -8,19 +8,3 @@ error: circular dependency detected: A -> B -> A
   | |_^
   |
   = note: this error originates in the macro `container` (in Nightly builds, run with -Z macro-backtrace for more info)
-
-error: cannot find attribute `injectable` in this scope
- --> tests/ui/circular_dependency.rs
-  |
-  | #[injectable]
-  |   ^^^^^^^^^^
-  |
-  = note: `injectable` is in scope, but it is a crate, not an attribute
-
-error: cannot find attribute `injectable` in this scope
- --> tests/ui/circular_dependency.rs
-  |
-  | #[injectable]
-  |   ^^^^^^^^^^
-  |
-  = note: `injectable` is in scope, but it is a crate, not an attribute

@@ -17,8 +17,8 @@
 //!
 //! The compile-fail tests in `tests/ui/` verify the unsupported cases.
 
-use injectable::prelude::*;
 use injectable::Provider;
+use injectable::prelude::*;
 use std::marker::PhantomData;
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────

@@ -84,7 +84,7 @@ let container = Container::builder()
 
     // Async, with access to other resolved types
     .register(DynProvider::with_ctx(|ctx| async move {
-        let config = ctx.resolve::<AppConfig>().await?;
+        let config: Inject<AppConfig> = ctx.extract().await?;
         let pool = sqlx::SqlitePool::connect(&config.db_url)
             .await
             .map_err(|e| InjectableError::ConstructionFailed {
@@ -100,7 +100,12 @@ let container = Container::builder()
 
 ### Consuming a `DynProvider`-registered type
 
+`#[inject] param: Arc<T>` requires `T: Injectable`. External types registered via
+`DynProvider` are **not** `Injectable`, so receiving them by `Arc<T>` does not work.
+Instead, receive the value directly and wrap it yourself, or use a factory function:
+
 ```rust
+// ── Option A: receive the value directly via Arc wrapping ─────────────────
 pub struct UserRepository {
     pool: Arc<sqlx::SqlitePool>,
 }
@@ -108,14 +113,29 @@ pub struct UserRepository {
 #[injectable]
 impl UserRepository {
     #[injectable_ctor]
-    pub fn new(#[inject] pool: Arc<sqlx::SqlitePool>) -> Self {
-        Self { pool }
+    pub fn new(#[inject(use_factory_async = self::make_pool)] pool: sqlx::SqlitePool) -> Self {
+        Self { pool: Arc::new(pool) }
     }
+}
+
+// ── Option B: wrap the external type in your own Injectable struct ─────────
+#[injectable]
+pub struct Database {
+    #[inject(use_factory_async = self::make_pool)]
+    pool: sqlx::SqlitePool,
+}
+
+pub struct UserRepository { db: Inject<Database> }  // auto-injected, singleton
+
+#[injectable]
+impl UserRepository {
+    #[injectable_ctor]
+    pub fn new(db: Inject<Database>) -> Self { Self { db } }
 }
 ```
 
-The framework resolves `Arc<sqlx::SqlitePool>` from the registry and passes it
-to the constructor. Multiple services share the same `Arc`.
+Option B is preferred when many services need the same pool — `Database` is a
+singleton so the `sqlx::SqlitePool` is constructed once and shared via `Inject<Database>`.
 
 ## Resolving External Types Directly
 
@@ -184,7 +204,7 @@ let db_url = std::env::var("DATABASE_URL")
 | Declarative struct, all fields expressible as factories | Mechanism 2 (field factory annotations) |
 | External type shared by many services | Mechanism 3 (DynProvider) |
 | Type needs env var or complex async setup | Mechanism 3 with `DynProvider::new` / `with_ctx` |
-| Type depends on another resolved type | `DynProvider::with_ctx` or factory with `ctx.resolve` |
+| Type depends on another resolved type | `DynProvider::with_ctx` — use `ctx.extract()` inside the closure |
 | Type is in your crate | `#[injectable]` — no DynProvider needed |
 
 ---

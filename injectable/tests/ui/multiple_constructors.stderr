@@ -1,7 +1,5 @@
-error: cannot find attribute `injectable` in this scope
+error: #[injectable] requires exactly one #[injectable_ctor] method, but found multiple
  --> tests/ui/multiple_constructors.rs
   |
-  | #[injectable]
-  |   ^^^^^^^^^^
-  |
-  = note: `injectable` is in scope, but it is a crate, not an attribute
+  |     pub fn from_name(name: String) -> Self {
+  |            ^^^^^^^^^

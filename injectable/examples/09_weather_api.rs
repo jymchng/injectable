@@ -27,11 +27,11 @@
 use futures_util::future::TryFutureExt;
 
 use ::axum::{
+    Router,
     extract::Query,
     http::StatusCode,
     response::{IntoResponse, Json},
     routing::get,
-    Router,
 };
 use serde::{Deserialize, Serialize};
 

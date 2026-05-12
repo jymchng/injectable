@@ -82,7 +82,9 @@ fn main() {
         Err(errors) => {
             for err in &errors {
                 if let ValidationError::MissingDependency { source, missing } = err {
-                    println!("   Missing dependency: '{source}' depends on '{missing}' which is not in the graph");
+                    println!(
+                        "   Missing dependency: '{source}' depends on '{missing}' which is not in the graph"
+                    );
                 }
             }
             println!();
@@ -151,7 +153,9 @@ fn main() {
                 } = err
                 {
                     println!("   singleton  -> transient: INVALID");
-                    println!("     '{source}' ({source_scope}) cannot depend on '{dependency}' ({dependency_scope})");
+                    println!(
+                        "     '{source}' ({source_scope}) cannot depend on '{dependency}' ({dependency_scope})"
+                    );
                     println!("     Reason: wider-scope type would capture narrower-scope instance");
                 }
             }

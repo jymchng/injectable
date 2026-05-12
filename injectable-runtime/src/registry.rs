@@ -37,7 +37,7 @@ trait ErasedProvider: Send + Sync + 'static {
     ///
     /// The caller is responsible for downcasting back to the concrete type.
     /// This is safe because the `TypeId` key guarantees type correspondence.
-    fn provide_as_any<'a>(&'a self, ctx: Arc<ResolveContext>) -> ErasedProviderPinnedFuture<'a>;
+    fn provide_as_any(&self, ctx: Arc<ResolveContext>) -> ErasedProviderPinnedFuture;
 }
 
 impl<T: Send + Sync + 'static> ErasedProvider for DynProvider<T> {

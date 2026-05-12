@@ -3,6 +3,7 @@
 //! Only `Inject<T>` fields are auto-injected.  Any other type — including
 //! `Arc<T>` — requires an explicit `#[inject]` annotation.  Omitting it
 //! is a compile error.
+#![allow(unused_imports)]
 
 use injectable::*;
 use std::sync::Arc;

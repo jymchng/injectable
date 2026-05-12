@@ -17,8 +17,8 @@
 //! Run with: cargo run --example 04_lifecycle_hooks
 
 use injectable::*;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 // ─── Shared counters for tracking hook calls ────────────────────────
 

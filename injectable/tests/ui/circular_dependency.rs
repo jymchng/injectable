@@ -3,7 +3,7 @@
 //! A depends on B, and B depends on A. This forms a cycle and
 //! should be detected at compile time.
 
-use injectable::container;
+use injectable::{container, injectable};
 
 #[injectable]
 #[derive(Default)]

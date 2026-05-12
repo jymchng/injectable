@@ -21,27 +21,3 @@ error: scope mismatch: `ServiceB` (singleton) depends on `TransientCache` (trans
   | |_^
   |
   = note: this error originates in the macro `container` (in Nightly builds, run with -Z macro-backtrace for more info)
-
-error: cannot find attribute `injectable` in this scope
- --> tests/ui/scope_mismatch_multiple.rs
-  |
-  | #[injectable]
-  |   ^^^^^^^^^^
-  |
-  = note: `injectable` is in scope, but it is a crate, not an attribute
-
-error: cannot find attribute `injectable` in this scope
- --> tests/ui/scope_mismatch_multiple.rs
-  |
-  | #[injectable]
-  |   ^^^^^^^^^^
-  |
-  = note: `injectable` is in scope, but it is a crate, not an attribute
-
-error: cannot find attribute `injectable` in this scope
- --> tests/ui/scope_mismatch_multiple.rs
-  |
-  | #[injectable]
-  |   ^^^^^^^^^^
-  |
-  = note: `injectable` is in scope, but it is a crate, not an attribute

@@ -3,7 +3,7 @@
 //! A type declares a dependency on another type that is not
 //! registered in the container. This should be caught at compile time.
 
-use injectable::container;
+use injectable::{container, injectable};
 
 #[injectable]
 #[derive(Default)]

@@ -7,8 +7,8 @@
 //!   user code (verified by compile-fail UI tests)
 //! - `ctx.extract::<T>()` is the ergonomic replacement for `ctx.resolve::<T>()`
 
-use injectable::prelude::*;
 use injectable::Provider;
+use injectable::prelude::*;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 // ─── Fixtures: a multi-service graph (using #[injectable] for auto-registration)

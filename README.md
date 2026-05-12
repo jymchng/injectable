@@ -3,13 +3,16 @@
 A compile-time dependency injection framework for Rust, inspired by Axum's typed extractor model.
 
 ```rust
-use injectable::*;
+use injectable::prelude::*;
 
-#[derive(Injectable, Default)]
+#[injectable]
+#[derive(Default)]
 struct Database;
 
-#[derive(Injectable)]
-struct UserService { db: Inject<Database> }
+#[injectable]
+struct UserService {
+    db: Inject<Database>,
+}
 
 impl UserService {
     fn get_user(&self, id: u32) -> String { format!("User #{id}") }
@@ -43,26 +46,35 @@ injectable = { version = "0.1", features = ["axum"] }
 tokio     = { version = "1", features = ["full"] }
 ```
 
+Import everything via the prelude:
+
+```rust
+use injectable::prelude::*;
+```
+
 ---
 
 ## Core Concepts
 
-### Types You Own — `#[derive(Injectable)]`
+### Types You Own — `#[injectable]` on struct
 
 ```rust
-use injectable::*;
+use injectable::prelude::*;
 
-#[derive(Injectable, Default)]
+#[injectable]
+#[derive(Default)]
 pub struct Cache;
 
-#[derive(Injectable, Default)]
+#[injectable]
+#[derive(Default)]
 pub struct Database;
 
-// Field injection: all Injectable fields are auto-wired
-#[derive(Injectable)]
+// Field injection: Inject<T> fields are auto-wired.
+// Arc<T> and plain T fields require an explicit #[inject].
+#[injectable]
 pub struct UserRepository {
-    db:    Inject<Database>,    // Arc<Database> — shared
-    cache: Inject<Cache>,       // Arc<Cache>    — shared
+    db:    Inject<Database>,    // auto-injected — no annotation needed
+    cache: Inject<Cache>,       // auto-injected
 }
 ```
 
@@ -80,9 +92,9 @@ let container = Container::builder()
         Ok(sqlx::SqlitePool::connect("sqlite:./app.db").await?)
     }))
 
-    // Context-aware — depends on other registered types
+    // Context-aware — depends on other injectable types
     .register(DynProvider::with_ctx(|ctx| async move {
-        let config = ctx.resolve::<AppConfig>().await?;
+        let config: Inject<AppConfig> = ctx.extract().await?;
         Ok(sqlx::SqlitePool::connect(&config.database_url).await?)
     }))
 
@@ -90,50 +102,77 @@ let container = Container::builder()
     .await?;
 ```
 
-### Constructor Injection — `#[injectable_impl]`
+Inside `DynProvider::with_ctx`, use `ctx.extract::<Inject<T>>()` (scope-safe) to resolve
+injectable types, and `ctx.resolve_external::<T>()` to resolve other `DynProvider`-registered types.
+
+### Constructor Injection — `#[injectable]` on impl block
 
 Full control over construction while keeping the public signature clean:
 
 ```rust
+use injectable::prelude::*;
+
+// AppConfig is your own type — Injectable, singleton by default.
+#[injectable]
+pub struct AppConfig { pub database_url: String }
+
+async fn make_pool(_ctx: &ResolveContext) -> Result<sqlx::SqlitePool, sqlx::Error> {
+    sqlx::SqlitePool::connect("sqlite:./app.db").await
+}
+
 pub struct EmailService {
-    pool:   Arc<sqlx::SqlitePool>,
+    pool:   sqlx::SqlitePool,
     config: Arc<AppConfig>,
     retry:  u32,
 }
 
-#[injectable_impl]
+#[injectable]
 impl EmailService {
-    #[constructor]
-    pub fn new(pool: Arc<sqlx::SqlitePool>, config: Arc<AppConfig>) -> Self {
-        Self { pool, config, retry: 3 }  // retry set manually
+    #[injectable_ctor]
+    pub async fn new(
+        #[inject(use_factory_async = self::make_pool)] pool: sqlx::SqlitePool,
+        #[inject] config: Arc<AppConfig>,   // Injectable type — receives singleton Arc
+    ) -> Self {
+        Self { pool, config, retry: 3 }     // retry set manually
     }
 }
 ```
 
+`#[inject] param: Arc<T>` requires `T: Injectable` — it uses the singleton cache and returns the
+same `Arc` on every resolution. External types (sqlx, reqwest, etc.) are not `Injectable`;
+use `#[inject(use_factory_async/sync = path)]` for those instead.
+
 Parameter rewriting rules:
 
-| Declared type | What you receive |
-|---|---|
-| `Inject<T>` | `Inject<T>` — `Arc<T>` wrapper |
-| `Arc<T>` | `Arc<T>` — inner Arc from `Inject<T>` |
-| `T` (Clone) | Owned `T` — unwrapped from `Arc<T>` |
+| Declared type | Annotation | What you receive |
+|---|---|---|
+| `Inject<T>` | none | `Inject<T>` — `Arc<T>` wrapper; `T` must be `Injectable` |
+| `Arc<T>` | `#[inject]` | Singleton `Arc<T>`; `T` must be `Injectable` |
+| `T` (Clone) | `#[inject]` | Owned clone of singleton `T`; `T` must be `Injectable` |
+| External type | `#[inject(use_factory_async/sync = path)]` | `T` from factory |
 
 ### Lifecycle Hooks
 
 ```rust
-#[injectable_impl]
+use injectable::prelude::*;
+
+pub struct ConnectionPool { /* ... */ }
+
+#[injectable]
 impl ConnectionPool {
-    #[constructor]
+    #[injectable_ctor]
     pub fn new() -> Self { /* ... */ }
 
     #[post_construct]       // runs after construction
-    pub async fn warm_up(&self) {
+    pub async fn warm_up(&self) -> HookResult {
         println!("opening connections");
+        Ok(())
     }
 
     #[pre_destruct]         // runs during container.shutdown()
-    pub async fn drain(&self) {
+    pub async fn drain(&self) -> HookResult {
         println!("closing connections");
+        Ok(())
     }
 }
 ```
@@ -176,7 +215,7 @@ let Inject(arc) = svc;      // arc: Arc<UserService>
 ### Optional Dependencies
 
 ```rust
-#[derive(Injectable)]
+#[injectable]
 pub struct Notifier {
     sms: Option<Inject<SmsClient>>,    // None if not registered
 }
@@ -225,21 +264,22 @@ dependency graph validation failed:
 
 | # | Guide |
 |---|---|
-| 01 | [Getting Started](docs/guides/01-getting-started.md) |
-| 02 | [Field Injection with `#[derive(Injectable)]`](docs/guides/02-field-injection.md) |
-| 03 | [Constructor Injection with `#[injectable_impl]`](docs/guides/03-constructor-injection.md) |
-| 04 | [External Types with `DynProvider`](docs/guides/04-external-types.md) |
-| 05 | [Lifecycle Hooks](docs/guides/05-lifecycle-hooks.md) |
-| 06 | [The `Inject<T>` Wrapper](docs/guides/06-inject-wrapper.md) |
-| 07 | [Axum Integration Basics](docs/guides/07-axum-basics.md) |
-| 08 | [Axum Custom State](docs/guides/08-axum-custom-state.md) |
-| 09 | [Axum Middleware and Auth Guards](docs/guides/09-axum-middleware.md) |
-| 10 | [Testing Injectable Services](docs/guides/10-testing.md) |
-| 11 | [Config from Environment Variables](docs/guides/11-config-from-env.md) |
-| 12 | [Dependency Graph Validation](docs/guides/12-dependency-graph.md) |
-| 13 | [Realistic Axum Web App](docs/guides/13-axum-realistic-app.md) |
-| 14 | [Optional Dependencies and Layered Registration](docs/guides/14-optional-deps.md) |
-| 15 | [Organizing a Large Application](docs/guides/15-large-app-organization.md) |
+| 01 | [Getting Started](guides/01-getting-started.md) |
+| 02 | [Field Injection with `#[injectable]`](guides/02-field-injection.md) |
+| 03 | [Constructor Injection with `#[injectable_ctor]`](guides/03-constructor-injection.md) |
+| 04 | [External Types with `DynProvider`](guides/04-external-types.md) |
+| 05 | [Lifecycle Hooks](guides/05-lifecycle-hooks.md) |
+| 06 | [The `Inject<T>` Wrapper](guides/06-inject-wrapper.md) |
+| 07 | [Axum Integration Basics](guides/07-axum-basics.md) |
+| 08 | [Axum Custom State](guides/08-axum-custom-state.md) |
+| 09 | [Axum Middleware and Auth Guards](guides/09-axum-middleware.md) |
+| 10 | [Testing Injectable Services](guides/10-testing.md) |
+| 11 | [Config from Environment Variables](guides/11-config-from-env.md) |
+| 12 | [Dependency Graph Validation](guides/12-dependency-graph.md) |
+| 13 | [Realistic Axum Web App](guides/13-axum-realistic-app.md) |
+| 14 | [Optional Dependencies and Layered Registration](guides/14-optional-deps.md) |
+| 15 | [Organizing a Large Application](guides/15-large-app-organization.md) |
+| — | [3 Ways to Inject External Types](guides/3-ways-to-inject-external-types.md) |
 
 ---
 
@@ -269,15 +309,15 @@ cargo run --example 07_axum_integration --features axum
 
 # Realistic web app: config + sqlx + services + axum
 cargo run --example 08_realistic_web_app --features axum
-```
 
-Or use the justfile:
+# Weather API with sqlx + reqwest + axum
+cargo run --example 09_weather_api --features axum
 
-```sh
-just run 01      # runs example 01
-just run axum    # runs example 07_axum_integration
-just test        # runs all tests
-just check       # cargo check + clippy
+# Multi-service weather + users app
+cargo run --example 10_weather_users_api --features axum
+
+# URL shortener with full CRUD
+cargo run --example 11_url_shortener --features axum
 ```
 
 ---

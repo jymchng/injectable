@@ -92,14 +92,6 @@ pub mod axum;
 /// Commonly used items — `use injectable::prelude::*` covers the full public API.
 pub mod prelude {
     pub use crate::{
-        bind,
-        container,
-        inject_fn,
-        // Macros
-        injectable,
-        injectable_ctor,
-        post_construct,
-        pre_destruct,
         Container,
         DynProvider,
         Extract,
@@ -115,6 +107,14 @@ pub mod prelude {
         // Scope markers
         Singleton,
         Transient,
+        bind,
+        container,
+        inject_fn,
+        // Macros
+        injectable,
+        injectable_ctor,
+        post_construct,
+        pre_destruct,
     };
     // Arc is used in almost every injectable definition.
     pub use std::sync::Arc;

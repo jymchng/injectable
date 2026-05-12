@@ -94,7 +94,7 @@ pub struct Database {
 ```
 
 The factory function receives `&ResolveContext` and may call
-`ctx.resolve::<T>()` or `ctx.resolve_external::<T>()` to pull in other
+`ctx.extract::<Inject<T>>()` or `ctx.resolve_external::<T>()` to pull in other
 dependencies.
 
 ## Structs with Non-Injectable Fields

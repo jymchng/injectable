@@ -442,7 +442,7 @@ fn extract_type_name(
             return Err(syn::Error::new(
                 impl_block.self_ty.span(),
                 "#[injectable] can only be used on impl blocks for named types",
-            ))
+            ));
         }
     };
     Ok((

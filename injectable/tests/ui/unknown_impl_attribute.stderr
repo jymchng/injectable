@@ -1,7 +1,5 @@
-error: cannot find attribute `injectable` in this scope
+error: unknown injectable_impl attribute: `bad`
  --> tests/ui/unknown_impl_attribute.rs
   |
   | #[injectable(bad = "value")]
-  |   ^^^^^^^^^^
-  |
-  = note: `injectable` is in scope, but it is a crate, not an attribute
+  |              ^^^

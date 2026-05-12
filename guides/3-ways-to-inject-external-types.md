@@ -121,85 +121,87 @@ impl WeatherService {
 
 ## Way 3 — `DynProvider` in the container builder
 
-Use this when the external type is shared by many services, or when you want the
-container to hand it out as `Arc<T>` to any constructor that asks for it.
+Use this when the external type is shared by many services. Since external types
+are not `Injectable`, the recommended pattern is to wrap the external type in your
+own `#[injectable]` struct — then share it via `Inject<YourStruct>`.
 
 ```rust
 use injectable::*;
 
-// Multiple services share the same pool — no factory annotation on the fields
-pub struct UserRepository {
-    pool: Arc<sqlx::SqlitePool>,
+// Wrap the external type in an Injectable struct — constructed once via DynProvider.
+#[injectable]
+pub struct Database {
+    #[inject(use_factory_async = self::make_pool)]
+    pub pool: sqlx::SqlitePool,
 }
+
+async fn make_pool(_ctx: &ResolveContext) -> Result<sqlx::SqlitePool, sqlx::Error> {
+    sqlx::SqlitePool::connect("sqlite:./app.db").await
+}
+
+// Multiple services share the same Database singleton via Inject<Database>.
+pub struct UserRepository { db: Inject<Database> }
 
 #[injectable]
 impl UserRepository {
     #[injectable_ctor]
-    fn new(#[inject] pool: Arc<sqlx::SqlitePool>) -> Self {
-        Self { pool }
-    }
+    fn new(db: Inject<Database>) -> Self { Self { db } }
 }
 
-pub struct ReportService {
-    pool: Arc<sqlx::SqlitePool>,   // same shared pool
-}
+pub struct ReportService { db: Inject<Database> }   // same shared singleton
 
 #[injectable]
 impl ReportService {
     #[injectable_ctor]
-    fn new(#[inject] pool: Arc<sqlx::SqlitePool>) -> Self {
-        Self { pool }
-    }
+    fn new(db: Inject<Database>) -> Self { Self { db } }
 }
 
-// ─── register once in the container ──────────────────────────────────────
+// ─── build the container ─────────────────────────────────────────────────
+// No .register() needed — Database is #[injectable] and its pool field
+// uses a factory annotation, so everything is resolved automatically.
 
 #[tokio::main]
 async fn main() {
-    let container = Container::builder()
-        // async factory, no deps
-        .register(DynProvider::new(|| async {
-            Ok(sqlx::SqlitePool::connect("sqlite:./app.db").await?)
-        }))
-        // sync factory, no deps
-        .register(DynProvider::sync(|| {
-            Ok(reqwest::Client::builder()
-                .timeout(std::time::Duration::from_secs(10))
-                .build()?)
-        }))
-        // async factory, reads another resolved type
-        .register(DynProvider::with_ctx(|ctx| async move {
-            let config = ctx.resolve::<AppConfig>().await?;
-            Ok(sqlx::SqlitePool::connect(&config.db_url).await?)
-        }))
-        .build()
-        .await
-        .unwrap();
+    let container = Container::builder().build().await.unwrap();
 
     let repo   = container.resolve::<UserRepository>().await.unwrap();
     let report = container.resolve::<ReportService>().await.unwrap();
-    // both share the same Arc<SqlitePool>
+    // both share the same Inject<Database> singleton
 }
 ```
 
+Note: if the factory function needs a resolved type (e.g., a config URL), use the
+`DynProvider::with_ctx` pattern in a separate `#[injectable]` impl block instead of
+a free factory function:
+
+```rust
+#[injectable]
+impl Database {
+    #[post_construct]  // or #[injectable_ctor] async fn new(...)
+    // ...
+}
+```
+
+or use `FactoryCtx` in a `DynProvider` if you prefer centralised registration.
+
 **When to choose this way:**
-- The external type is used by many services — register once, share widely.
-- You want a single shared instance (`Arc<SqlitePool>`) across the whole app.
-- Creation depends on other resolved types (`DynProvider::with_ctx`).
+- The external type is used by many services — wrap once, share widely.
+- You want a single shared instance (singleton `Database`) across the whole app.
+- Creation depends on other resolved types (pass them into the factory fn via `ctx`).
 - You want to swap implementations per environment (test vs. production).
 
 ---
 
 ## Comparison
 
-| | Way 1 — ctor factory | Way 2 — field factory | Way 3 — DynProvider |
+| | Way 1 — ctor factory | Way 2 — field factory | Way 3 — wrapper struct |
 |---|---|---|---|
-| Syntax | `#[inject(use_factory_*=path)]` on param | `#[inject(use_factory_*=path)]` on field | `.register(DynProvider::…)` |
-| Shared across services | No (each service builds its own) | No | Yes (`Arc<T>` shared) |
-| Lifecycle hooks | `#[post_construct]` in the same impl | Separate `#[injectable]` impl | Not directly |
-| Factory co-location | Yes — factory next to the service | Yes — factory next to the struct | No — registered at startup |
-| Needs container setup | No | No | Yes |
-| Struct field type | Plain `T` (no `Inject<T>`) | Plain `T` | `Arc<T>` |
+| Syntax | `#[inject(use_factory_*=path)]` on param | `#[inject(use_factory_*=path)]` on field | `#[injectable]` wrapper + `Inject<Wrapper>` |
+| Shared across services | No (each service builds its own) | No | Yes (singleton wrapper) |
+| Lifecycle hooks | `#[post_construct]` in the same impl | Separate `#[injectable]` impl | In the wrapper's `#[injectable]` impl |
+| Factory co-location | Yes — factory next to the service | Yes — factory next to the struct | Yes — inside the wrapper |
+| Needs container setup | No | No | No |
+| Consumer field type | Plain `T` | Plain `T` | `Inject<Wrapper>` |
 | Typical use | Single-service external dep | Declarative struct with external fields | DB pool / HTTP client shared by many |
 
 ---
@@ -211,7 +213,7 @@ async fn main() {
 ```rust
 // Receives the resolve context; must return Result<T, E>
 async fn my_factory(ctx: &ResolveContext) -> Result<ExternalType, SomeError> {
-    // may call ctx.resolve::<InjectableType>().await?
+    // may call ctx.extract::<Inject<InjectableType>>().await?
     // may call ctx.resolve_external::<OtherExternal>().await?
     Ok(ExternalType::new())
 }
@@ -226,7 +228,7 @@ fn my_factory(ctx: &ResolveContext) -> ExternalType {
 }
 ```
 
-Both factory variants can call `ctx.resolve::<T>()` or `ctx.resolve_external::<T>()`
+Async factories can call `ctx.extract::<Inject<T>>()` or `ctx.resolve_external::<T>()`
 to pull in other dependencies when building the external value.
 
 ---

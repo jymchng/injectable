@@ -3,7 +3,7 @@
 //! Two singletons both depend on a transient. Both should be
 //! reported as separate scope mismatch errors.
 
-use injectable::container;
+use injectable::{container, injectable};
 
 #[injectable]
 #[derive(Default)]

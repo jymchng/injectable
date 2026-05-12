@@ -32,8 +32,8 @@
 use proc_macro2::TokenStream;
 use quote::quote;
 use std::collections::HashSet;
-use syn::parse::{Parse, ParseStream};
 use syn::Token;
+use syn::parse::{Parse, ParseStream};
 
 // ─── Public Entry Point ──────────────────────────────────────────────
 
