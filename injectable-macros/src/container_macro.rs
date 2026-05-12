@@ -386,8 +386,5 @@ fn check_scope_mismatches(entries: &[TypeEntry], errors: &mut Vec<CompileValidat
 ///
 /// Singleton is the widest scope. Transient is the narrowest.
 fn is_wider_scope(source_scope: &str, dep_scope: &str) -> bool {
-    match (source_scope, dep_scope) {
-        ("singleton", "transient") => true,
-        _ => false,
-    }
+    matches!((source_scope, dep_scope), ("singleton", "transient"))
 }

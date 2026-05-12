@@ -13,14 +13,12 @@
 #![forbid(unsafe_code)]
 
 mod attrs;
-mod container_gen;
 mod container_macro;
 mod derive;
 mod factory_fn;
 mod injectable_impl;
 mod metadata;
 mod provider_gen;
-mod singleton_gen;
 
 use proc_macro::TokenStream;
 use syn::parse_macro_input;

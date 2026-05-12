@@ -13,6 +13,10 @@ use crate::{
     SingletonStore,
 };
 
+pub type SingletonCache = Arc<
+    tokio::sync::Mutex<HashMap<TypeId, Arc<tokio::sync::OnceCell<Arc<dyn Any + Send + Sync>>>>>,
+>;
+
 /// A type-erased destructor entry.
 ///
 /// Stores an `Arc<dyn PreDestruct>` and the type name for
@@ -48,9 +52,7 @@ pub struct ResolveContext {
     /// Runtime singleton cache: TypeId → OnceCell<Arc<dyn Any>>.
     /// The stored value is `Arc<T>` erased as `dyn Any`, so downcasting
     /// back to `Arc<T>` is safe via TypeId guarantees.
-    singleton_cache: Arc<
-        tokio::sync::Mutex<HashMap<TypeId, Arc<tokio::sync::OnceCell<Arc<dyn Any + Send + Sync>>>>>,
-    >,
+    singleton_cache: SingletonCache,
 }
 
 impl ResolveContext {
@@ -104,29 +106,6 @@ impl ResolveContext {
         T: crate::Extract + Send + Sync + 'static,
     {
         T::extract(self).await
-    }
-
-    /// Resolve a root dependency from the context.
-    ///
-    /// This is the primary entry point. For types implementing `Injectable`,
-    /// it calls `T::Provider::provide(self)` (fully static path).
-    ///
-    /// # Example
-    ///
-    /// ```rust,ignore
-    /// let service = ctx.resolve::<UserService>().await?;
-    /// ```
-    /// Resolve a type by calling its provider directly.
-    ///
-    /// # Safety / scope
-    ///
-    /// This method bypasses the singleton cache entirely — every call creates
-    /// a fresh instance regardless of the type's declared scope.  It is
-    /// intentionally `pub(crate)` so only framework-generated provider code
-    /// may call it.  User code should use `Inject::<T>::extract(ctx)` or
-    /// `Arc::<T>::extract(ctx)` instead, both of which respect scope.
-    pub(crate) async fn resolve<T: Injectable>(&self) -> InjectableResult<T> {
-        T::Provider::provide(self).await
     }
 
     /// Extract an owned singleton value by cloning from the singleton cache.

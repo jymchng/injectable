@@ -91,6 +91,8 @@ run ex:
       07|07_*|axum) cargo run -p injectable --example 07_axum_integration --features injectable/axum ;;
       08|08_*|app)  cargo run -p injectable --example 08_realistic_web_app --features injectable/axum ;;
       09|09_*|app)  cargo run -p injectable --example 09_weather_api --features injectable/axum ;;
+      10|10_*|app)  cargo run -p injectable --example 10_weather_users_api --features injectable/axum ;;
+      11|11_*|app)  cargo run -p injectable --example 11_url_shortener --features injectable/axum ;;
       *) echo "Unknown example '{{ ex }}'. Use 01–08, axum, or app." && exit 1 ;;
     esac
 
@@ -179,6 +181,13 @@ doctor:
     command -v sqlite3 >/dev/null && echo "  ✓ sqlite3" || echo "  ! sqlite3 not found (needed for example 08)"
     command -v just   >/dev/null && echo "  ✓ just   $(just  --version)" || echo "  ✗ just   (cargo install just)"
     echo "Done."
+
+
+prek:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    prek run --all-files
+
 
 # Install optional cargo tools used by this justfile
 install-tools:

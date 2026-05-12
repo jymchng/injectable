@@ -317,7 +317,6 @@ impl ContainerBuilder {
         // gathered here at build time.
         let nodes: Vec<injectable_graph::GraphNode> =
             inventory::iter::<injectable_graph::GraphNode>()
-                .into_iter()
                 .cloned()
                 .collect();
 

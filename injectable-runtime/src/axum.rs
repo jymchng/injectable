@@ -32,8 +32,6 @@
 //!     .with_state(state);
 //! ```
 
-use std::sync::Arc;
-
 use axum::extract::FromRequestParts;
 use axum::http::request::Parts;
 use axum::http::StatusCode;

@@ -171,7 +171,7 @@ async fn make_db_pool(cfg: Inject<AppConfig>) -> Result<Pool<Sqlite>, sqlx::Erro
 /// Dependency: `Pool<Sqlite>` via `make_db_pool`.
 #[injectable]
 pub struct AuthService {
-    #[inject(use_factory_async = self::make_db_pool)]
+    #[inject(use_factory_async = make_db_pool)]
     pool: Pool<Sqlite>,
 }
 

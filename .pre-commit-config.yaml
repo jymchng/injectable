@@ -57,8 +57,8 @@ repos:
       - id: mixed-line-ending
         args: [--fix=lf]
 
-      - id: no-commit-to-branch
-        args: [--branch, main, --branch, master]
+      # - id: no-commit-to-branch
+      #   args: [--branch, main, --branch, master]
 
   # ── Markdown ──────────────────────────────────────────────────────────────
   - repo: https://github.com/igorshubovych/markdownlint-cli

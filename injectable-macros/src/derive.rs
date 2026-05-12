@@ -116,7 +116,7 @@ fn parse_field_inject_kind(
                 attr.parse_args_with(syn::punctuated::Punctuated::parse_terminated);
 
             if let Ok(args) = parsed {
-                for arg in args {
+                if let Some(arg) = args.into_iter().next() {
                     match arg {
                         InjectArg::FactoryAsync(path) => return Ok(FieldInjectKind::Factory(path)),
                         InjectArg::FactorySync(path) => return Ok(FieldInjectKind::Provider(path)),

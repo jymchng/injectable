@@ -24,6 +24,10 @@ use std::sync::Arc;
 
 use crate::{DynProvider, InjectableError, InjectableResult, ResolveContext};
 
+pub type ErasedProviderPinnedFuture<'a> = std::pin::Pin<
+    Box<dyn std::future::Future<Output = InjectableResult<Box<dyn Any + Send>>> + Send + 'a>,
+>;
+
 /// A type-erased dynamic provider stored in the registry.
 ///
 /// This wraps a `DynProvider<T>` behind a common trait object so that
@@ -33,12 +37,7 @@ trait ErasedProvider: Send + Sync + 'static {
     ///
     /// The caller is responsible for downcasting back to the concrete type.
     /// This is safe because the `TypeId` key guarantees type correspondence.
-    fn provide_as_any<'a>(
-        &'a self,
-        ctx: Arc<ResolveContext>,
-    ) -> std::pin::Pin<
-        Box<dyn std::future::Future<Output = InjectableResult<Box<dyn Any + Send>>> + Send + 'a>,
-    >;
+    fn provide_as_any<'a>(&'a self, ctx: Arc<ResolveContext>) -> ErasedProviderPinnedFuture<'a>;
 }
 
 impl<T: Send + Sync + 'static> ErasedProvider for DynProvider<T> {
@@ -252,16 +251,7 @@ impl InjectableArcFactory {
     }
 
     /// Invoke the provider function and return a type-erased result.
-    pub fn provide(
-        &self,
-        ctx: std::sync::Arc<ResolveContext>,
-    ) -> std::pin::Pin<
-        Box<
-            dyn std::future::Future<Output = InjectableResult<Box<dyn std::any::Any + Send>>>
-                + Send
-                + 'static,
-        >,
-    > {
+    pub fn provide(&self, ctx: std::sync::Arc<ResolveContext>) -> ErasedProviderPinnedFuture<'_> {
         (self.provide_fn)(ctx)
     }
 }

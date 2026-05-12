@@ -1,10 +1,5 @@
-error[E0624]: method `resolve` is private
+error[E0599]: no method named `resolve` found for reference `&injectable::ResolveContext` in the current scope
  --> tests/ui/resolve_ctx_direct_call.rs
   |
   |     let _db = ctx.resolve::<Database>().await?;
-  |                   ^^^^^^^ private method
-  |
- ::: $WORKSPACE/injectable-runtime/src/resolve.rs
-  |
-  |     pub(crate) async fn resolve<T: Injectable>(&self) -> InjectableResult<T> {
-  |     ------------------------------------------------------------------------ private method defined here
+  |                   ^^^^^^^ method not found in `&injectable::ResolveContext`

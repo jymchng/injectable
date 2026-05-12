@@ -11,9 +11,7 @@
 use proc_macro2::TokenStream;
 use quote::quote;
 
-use crate::metadata::{
-    extract_arc_inner, extract_arc_inner_str, extract_inject_inner, type_to_string,
-};
+use crate::metadata::{extract_arc_inner, extract_arc_inner_str, extract_inject_inner};
 
 /// How a field should be handled during injection.
 ///
@@ -29,12 +27,6 @@ pub enum FieldInjectKind {
     Factory(syn::Path),
     /// Call the given **sync** factory `fn(ctx: &ResolveContext) -> FieldType` (no `.await`).
     Provider(syn::Path),
-}
-
-impl FieldInjectKind {
-    pub fn is_injected(&self) -> bool {
-        true // all remaining variants represent some form of injection
-    }
 }
 
 /// Information about a struct field for field injection.
@@ -178,6 +170,7 @@ pub fn generate_field_injection_provider(
     // Generate dependency names for graph metadata.
     // Factory fields (use_factory_async/sync) are NOT DI dependencies — the factory
     // creates the value itself. Only Inject and plain-#[inject] fields contribute.
+    #[allow(clippy::unnecessary_filter_map)]
     let dep_strings: Vec<String> = fields
         .iter()
         .filter(|f| matches!(f.inject_kind, FieldInjectKind::Inject))
@@ -412,7 +405,7 @@ fn generate_graph_metadata_from_strings(
 /// - `Inject<T>` field  → `Inject::new(Arc::new(__v))`
 /// - `Arc<T>` field     → `Arc::new(__v)`
 /// - plain `T` field    → `__v` (no wrapping)
-
+///
 /// Determine how to wrap the raw factory result `__v: T` to match the field type.
 ///
 /// Detection uses the AST-based `extract_inject_inner` / `extract_arc_inner`
