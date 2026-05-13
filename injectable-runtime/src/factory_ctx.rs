@@ -86,8 +86,8 @@ impl FactoryCtx {
 mod tests {
     use super::*;
     use crate::{
-        DynProvider, EmptySingletonStore, Inject, Injectable, InjectableError, InjectableResult,
-        Provider, ProviderRegistry,
+        DynProvider, EmptySingletonStore, Injectable, InjectableError, InjectableResult, Provider,
+        ProviderRegistry,
     };
     use std::sync::Arc;
 

@@ -226,48 +226,64 @@ impl syn::parse::Parse for BindInput {
 
 /// Expand the `bind!()` macro.
 ///
-/// Generates:
-/// - `Injectable` implementation for `dyn Trait`
-/// - `Extract` implementation for `Inject<dyn Trait>`
-/// - A `Provider` that delegates to the concrete type's provider
+/// Generates an `InjectableArcFactory` inventory entry keyed by
+/// `TypeId::of::<Arc<dyn Trait>>()`.  When `ctx.resolve_external::<Arc<dyn Trait>>()`
+/// is called (from the generated provider code for `Inject<dyn Trait>` fields),
+/// the registry finds this entry and invokes the factory to produce an
+/// `Arc<dyn Trait>` from the concrete type's provider.
+///
+/// This approach avoids the orphan-rule violation that would arise from
+/// `impl Extract for Inject<dyn UserTrait>` (both `Extract` and `Inject` are
+/// foreign to user crates).
 pub fn expand_bind(input: BindInput) -> syn::Result<TokenStream> {
     let trait_ty = &input.trait_ty;
     let concrete_ty = &input.concrete_ty;
 
-    // Generate the provider name for the binding
-    let binding_provider_name = syn::Ident::new(
-        &format!(
-            "{}BindingProvider",
-            quote!(#concrete_ty)
-                .to_string()
-                .replace('<', "_")
-                .replace('>', "")
-        ),
+    // Generate unique function names to satisfy `inventory::submit!` which
+    // requires `const`-constructible values (function pointers, not closures).
+    let slug = quote!(#concrete_ty)
+        .to_string()
+        .replace(['<', '>', ':', ' '], "_");
+    let type_id_fn = syn::Ident::new(
+        &format!("__bind_type_id_{slug}"),
+        proc_macro2::Span::call_site(),
+    );
+    let provide_fn = syn::Ident::new(
+        &format!("__bind_provide_{slug}"),
         proc_macro2::Span::call_site(),
     );
 
     let output = quote! {
-        /// Auto-generated binding provider.
-        pub struct #binding_provider_name;
-
-        #[async_trait::async_trait]
-        impl injectable_runtime::Provider<#concrete_ty> for #binding_provider_name {
-            async fn provide(
-                ctx: &injectable_runtime::ResolveContext,
-            ) -> injectable_runtime::InjectableResult<#concrete_ty> {
-                <#concrete_ty as injectable_runtime::Injectable>::Provider::provide(ctx).await
-            }
+        #[doc(hidden)]
+        #[allow(non_snake_case)]
+        fn #type_id_fn() -> ::std::any::TypeId {
+            // Keyed by Arc<dyn Trait> so resolve_external::<Arc<dyn Trait>>() finds it.
+            ::std::any::TypeId::of::<::std::sync::Arc<#trait_ty>>()
         }
 
-        /// Extract implementation for the trait binding.
-        #[async_trait::async_trait]
-        impl injectable_runtime::Extract for Inject<#trait_ty> {
-            async fn extract(
-                ctx: &injectable_runtime::ResolveContext,
-            ) -> injectable_runtime::InjectableResult<Self> {
-                let value = <#concrete_ty as injectable_runtime::Injectable>::Provider::provide(ctx).await?;
-                Ok(injectable_runtime::Inject::new(std::sync::Arc::new(value) as std::sync::Arc<#trait_ty>))
-            }
+        #[doc(hidden)]
+        #[allow(non_snake_case)]
+        fn #provide_fn(
+            ctx: ::std::sync::Arc<injectable_runtime::ResolveContext>,
+        ) -> ::std::pin::Pin<Box<dyn ::std::future::Future<
+            Output = injectable_runtime::InjectableResult<Box<dyn ::std::any::Any + Send>>
+        > + Send + 'static>> {
+            Box::pin(async move {
+                // Use the fully-qualified Provider call so the trait doesn't need to
+                // be in scope at the call site (inventory submit is generated code).
+                let value = <<#concrete_ty as injectable_runtime::Injectable>::Provider
+                    as injectable_runtime::Provider<#concrete_ty>>::provide(&*ctx).await?;
+                let arc: ::std::sync::Arc<#trait_ty> = ::std::sync::Arc::new(value);
+                Ok(Box::new(arc) as Box<dyn ::std::any::Any + Send>)
+            })
+        }
+
+        injectable_runtime::inventory::submit! {
+            injectable_runtime::InjectableArcFactory::new_const(
+                stringify!(#concrete_ty),
+                #type_id_fn,
+                #provide_fn,
+            )
         }
     };
 

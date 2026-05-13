@@ -7,6 +7,9 @@ error[E0277]: `T` cannot be shared between threads safely
    = note: required because it appears within the type `(T,)`
 note: required because it appears within the type `PhantomData<(T,)>`
   --> $RUST/core/src/marker.rs
+   |
+   | pub struct PhantomData<T: ?Sized>;
+   |            ^^^^^^^^^^^
 note: required because it appears within the type `WrapperProvider<T>`
   --> tests/ui/generic_struct_not_supported.rs
    |
@@ -32,6 +35,9 @@ error[E0277]: `T` cannot be sent between threads safely
    = note: required because it appears within the type `(T,)`
 note: required because it appears within the type `PhantomData<(T,)>`
   --> $RUST/core/src/marker.rs
+   |
+   | pub struct PhantomData<T: ?Sized>;
+   |            ^^^^^^^^^^^
 note: required because it appears within the type `WrapperProvider<T>`
   --> tests/ui/generic_struct_not_supported.rs
    |
@@ -58,7 +64,7 @@ error[E0277]: `T` cannot be shared between threads safely
 note: required because it appears within the type `injectable::Inject<T>`
   --> $WORKSPACE/injectable-runtime/src/inject.rs
    |
-   | pub struct Inject<T>(pub Arc<T>);
+   | pub struct Inject<T: ?Sized>(pub Arc<T>);
    |            ^^^^^^
 note: required because it appears within the type `Wrapper<T>`
   --> tests/ui/generic_struct_not_supported.rs
@@ -85,7 +91,7 @@ error[E0277]: `T` cannot be sent between threads safely
 note: required because it appears within the type `injectable::Inject<T>`
   --> $WORKSPACE/injectable-runtime/src/inject.rs
    |
-   | pub struct Inject<T>(pub Arc<T>);
+   | pub struct Inject<T: ?Sized>(pub Arc<T>);
    |            ^^^^^^
 note: required because it appears within the type `Wrapper<T>`
   --> tests/ui/generic_struct_not_supported.rs
@@ -111,6 +117,9 @@ error[E0277]: `T` cannot be shared between threads safely
    = note: required because it appears within the type `(T,)`
 note: required because it appears within the type `PhantomData<(T,)>`
   --> $RUST/core/src/marker.rs
+   |
+   | pub struct PhantomData<T: ?Sized>;
+   |            ^^^^^^^^^^^
 note: required because it appears within the type `WrapperProvider<T>`
   --> tests/ui/generic_struct_not_supported.rs
    |
@@ -137,6 +146,9 @@ error[E0277]: `T` cannot be sent between threads safely
    = note: required because it appears within the type `(T,)`
 note: required because it appears within the type `PhantomData<(T,)>`
   --> $RUST/core/src/marker.rs
+   |
+   | pub struct PhantomData<T: ?Sized>;
+   |            ^^^^^^^^^^^
 note: required because it appears within the type `WrapperProvider<T>`
   --> tests/ui/generic_struct_not_supported.rs
    |

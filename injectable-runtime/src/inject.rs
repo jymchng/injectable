@@ -6,51 +6,68 @@
 
 use std::sync::Arc;
 
-use crate::{Extract, Injectable, InjectableResult, Provider, ResolveContext};
+use crate::{Extract, InjectableResult, Provider, ResolveContext};
 
 /// A wrapper around `Arc<T>` that can be extracted from a [`ResolveContext`].
 ///
-/// This is the primary type used in constructor parameter lists and Axum
-/// handler parameters:
+/// `T` may be unsized (`dyn Trait`) for trait-object injection set up with
+/// `bind!(dyn Trait => Concrete)`.  For sized concrete types the standard
+/// `Extract` impl applies; for `dyn Trait` the generated provider code uses
+/// `ctx.resolve_external::<Arc<dyn Trait>>()` directly (no `Extract` impl
+/// needed — and no orphan-rule violation).
+///
+/// # Examples
 ///
 /// ```rust,ignore
-/// // In a struct field (field injection)
-/// pub struct UserService {
-///     db: Inject<Database>,
-/// }
+/// // Concrete injectable type
+/// pub struct UserService { db: Inject<Database> }
 ///
-/// // In an Axum handler (destructuring pattern)
-/// async fn handler(Inject(db): Inject<Database>) -> impl IntoResponse {
-///     // db is Arc<Database>
-/// }
+/// // Trait-object injection (set up with bind!)
+/// pub struct NotificationService { mailer: Inject<dyn Mailer> }
+///
+/// // Axum handler destructuring pattern
+/// async fn handler(Inject(svc): Inject<UserService>) -> impl IntoResponse { ... }
 /// ```
-///
-/// The inner field is `pub`, enabling the destructuring pattern
-/// `Inject(db): Inject<Database>` popularized by Axum extractors like
-/// `Path`, `Query`, and `Extension`.
-///
-/// The generated provider calls `<Inject<Database> as Extract>::extract(ctx)`
-/// which delegates to `Database::Provider::provide(ctx)`, fully statically.
-#[derive(Debug, Clone)]
-pub struct Inject<T>(pub Arc<T>);
+pub struct Inject<T: ?Sized>(pub Arc<T>);
 
-impl<T> Inject<T> {
+// ── Clone ─────────────────────────────────────────────────────────────────
+// Manual impl so that the bound is `T: ?Sized` (derive adds `T: Clone`).
+// Cloning an `Inject<T>` just increments the Arc refcount; it does NOT
+// require `T: Clone`.
+impl<T: ?Sized> Clone for Inject<T> {
+    fn clone(&self) -> Self {
+        Inject(Arc::clone(&self.0))
+    }
+}
+
+// ── Debug ─────────────────────────────────────────────────────────────────
+// Manual impl so that the bound is `T: ?Sized + Debug` (derive adds `T: Debug`
+// without the `?Sized` relaxation, which prevents `Inject<dyn Trait>: Debug`).
+impl<T: ?Sized + std::fmt::Debug> std::fmt::Debug for Inject<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("Inject").field(&&*self.0).finish()
+    }
+}
+
+// ── Core methods ──────────────────────────────────────────────────────────
+
+impl<T: ?Sized> Inject<T> {
     /// Create a new `Inject` from an `Arc<T>`.
     pub fn new(value: Arc<T>) -> Self {
         Self(value)
     }
 
-    /// Get a reference to the inner `Arc<T>`.
+    /// Consume the wrapper and return the inner `Arc<T>`.
     pub fn into_inner(self) -> Arc<T> {
         self.0
     }
 
-    /// Access the inner value by reference.
+    /// Borrow the inner `Arc<T>`.
     pub fn inner(&self) -> &Arc<T> {
         &self.0
     }
 
-    /// Get a cloned `Arc<T>`.
+    /// Clone the inner `Arc<T>`.
     pub fn arc(&self) -> Arc<T> {
         Arc::clone(&self.0)
     }
@@ -64,7 +81,9 @@ impl<T> Inject<T> {
     }
 }
 
-impl<T> std::ops::Deref for Inject<T> {
+// ── Deref ─────────────────────────────────────────────────────────────────
+
+impl<T: ?Sized> std::ops::Deref for Inject<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -72,17 +91,21 @@ impl<T> std::ops::Deref for Inject<T> {
     }
 }
 
-impl<T> From<Arc<T>> for Inject<T> {
+// ── Conversions ───────────────────────────────────────────────────────────
+
+impl<T: ?Sized> From<Arc<T>> for Inject<T> {
     fn from(arc: Arc<T>) -> Self {
         Self(arc)
     }
 }
 
-impl<T> From<Inject<T>> for Arc<T> {
+impl<T: ?Sized> From<Inject<T>> for Arc<T> {
     fn from(inject: Inject<T>) -> Self {
         inject.into_inner()
     }
 }
+
+// ── Value-based comparison (requires T: Sized for deref comparisons) ──────
 
 impl<T: PartialEq> PartialEq for Inject<T> {
     fn eq(&self, other: &Self) -> bool {
@@ -98,32 +121,39 @@ impl<T: std::hash::Hash> std::hash::Hash for Inject<T> {
     }
 }
 
-impl<T> AsRef<T> for Inject<T> {
+// ── AsRef / Borrow ────────────────────────────────────────────────────────
+
+impl<T: ?Sized> AsRef<T> for Inject<T> {
     fn as_ref(&self) -> &T {
         self
     }
 }
 
-impl<T> std::borrow::Borrow<T> for Inject<T> {
+impl<T: ?Sized> std::borrow::Borrow<T> for Inject<T> {
     fn borrow(&self) -> &T {
         self
     }
 }
 
-/// `Extract` implementation for `Inject<T>` where `T: Send + Sync + 'static`.
-///
-/// Handles both Injectable types (via singleton cache) and external types
-/// registered with `DynProvider` (e.g. `sqlx::SqlitePool`).
+// ── Extract ───────────────────────────────────────────────────────────────
+//
+// Only implemented for `T: Sized`.  For `Inject<dyn Trait>` the generated
+// provider code calls `ctx.resolve_external::<Arc<dyn Trait>>()` directly
+// (keyed by the `InjectableArcFactory` entry submitted by `bind!`), avoiding
+// both the `T: Sized` requirement and the orphan-rule violation that would
+// arise from `impl Extract for Inject<dyn UserTrait>` in user crates.
+
+/// `Extract` implementation for `Inject<T>` where `T: Sized + Send + Sync + 'static`.
 ///
 /// Resolution order:
 /// 1. Try `resolve_external::<Arc<T>>()` — finds `InjectableArcFactory` entries
-///    submitted by `#[derive(Injectable)]` / `#[injectable_impl]` macros.
+///    submitted by `#[injectable]` macros.
 ///    These entries call `resolve_singleton_arc` internally, so singletons are
 ///    properly cached.
 /// 2. Fall back to `resolve_external::<T>()` — finds `DynProvider<T>` registrations
 ///    for external types, then wraps the result in `Arc::new`.
 #[async_trait::async_trait]
-impl<T: Send + Sync + 'static> Extract for Inject<T> {
+impl<T: Sized + Send + Sync + 'static> Extract for Inject<T> {
     async fn extract(ctx: &ResolveContext) -> InjectableResult<Self> {
         // Path 1: Injectable types via InjectableArcFactory (keyed by Arc<T>).
         if let Some(result) = ctx.try_resolve_external::<Arc<T>>().await {
@@ -146,7 +176,7 @@ impl<T: Send + Sync + 'static> Extract for Inject<T> {
 /// Singletons: returns the cached `Arc` (same pointer every call).
 /// Transients: wraps a fresh instance in `Arc::new`.
 #[async_trait::async_trait]
-impl<T: Injectable> Extract for Arc<T> {
+impl<T: crate::Injectable> Extract for Arc<T> {
     async fn extract(ctx: &ResolveContext) -> InjectableResult<Self> {
         if T::IS_SINGLETON {
             ctx.resolve_singleton_arc::<T>().await

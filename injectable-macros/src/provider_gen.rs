@@ -11,7 +11,10 @@
 use proc_macro2::TokenStream;
 use quote::quote;
 
-use crate::metadata::{extract_arc_inner, extract_arc_inner_str, extract_inject_inner};
+use crate::metadata::{
+    extract_arc_inner, extract_arc_inner_str, extract_inject_dyn_inner, extract_inject_inner,
+    extract_option_inject_dyn_inner,
+};
 
 /// How a field should be handled during injection.
 ///
@@ -78,12 +81,27 @@ pub fn generate_field_injection_provider(
             let field_ty = &field.ty;
             match &field.inject_kind {
                 FieldInjectKind::Inject => {
-                    // All Injectable types — including Arc<T> — now implement Extract
-                    // through either the per-type generated impl (for owned T) or the
-                    // blanket `impl<T: Injectable> Extract for Arc<T>` in injectable_runtime.
-                    // No special-casing needed here.
-                    let var_expr = quote! {
-                        <#field_ty as injectable_runtime::Extract>::extract(ctx).await?
+                    // Special path for Inject<dyn Trait>: go through resolve_external::<Arc<dyn Trait>>
+                    // to avoid both the T: Sized requirement and orphan-rule violations.
+                    let var_expr = if let Some(dyn_ty) = extract_inject_dyn_inner(field_ty) {
+                        quote! {
+                            {
+                                let __arc = ctx.resolve_external::<::std::sync::Arc<#dyn_ty>>().await?;
+                                injectable_runtime::Inject::new(__arc)
+                            }
+                        }
+                    } else if let Some(dyn_ty) = extract_option_inject_dyn_inner(field_ty) {
+                        quote! {
+                            match ctx.resolve_external::<::std::sync::Arc<#dyn_ty>>().await {
+                                Ok(__arc) => Some(injectable_runtime::Inject::new(__arc)),
+                                Err(injectable_runtime::InjectableError::MissingDependency { .. }) => None,
+                                Err(__e) => return Err(__e),
+                            }
+                        }
+                    } else {
+                        quote! {
+                            <#field_ty as injectable_runtime::Extract>::extract(ctx).await?
+                        }
                     };
                     if let Some(name) = &field.name {
                         quote! { let #name = #var_expr; }
@@ -176,7 +194,12 @@ pub fn generate_field_injection_provider(
             let ty_str = &f.ty_string;
             // Use AST-based detection so all path forms are handled:
             // Inject<T>, injectable::Inject<T>, Arc<T>, std::sync::Arc<T>, etc.
-            if let Some(inner) = extract_inject_inner(&f.ty) {
+            // Skip `dyn Trait` inner types — they are not registered graph nodes.
+            if extract_inject_dyn_inner(&f.ty).is_some()
+                || extract_option_inject_dyn_inner(&f.ty).is_some()
+            {
+                None
+            } else if let Some(inner) = extract_inject_inner(&f.ty) {
                 Some(inner)
             } else if let Some(inner) = extract_arc_inner_str(&f.ty) {
                 Some(inner)

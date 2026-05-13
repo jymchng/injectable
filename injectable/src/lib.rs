@@ -113,6 +113,7 @@ pub mod prelude {
         // Macros
         injectable,
         injectable_ctor,
+        injectable_trait,
         post_construct,
         pre_destruct,
     };

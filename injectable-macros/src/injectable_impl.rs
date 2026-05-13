@@ -36,7 +36,10 @@ use syn::spanned::Spanned;
 use syn::visit_mut::VisitMut;
 
 use crate::attrs::Scope;
-use crate::metadata::{extract_arc_inner_str, extract_inject_inner, type_to_string};
+use crate::metadata::{
+    extract_arc_inner_str, extract_inject_dyn_inner, extract_inject_inner,
+    extract_option_inject_dyn_inner, type_to_string,
+};
 
 // ─── Public Entry Point ──────────────────────────────────────────────
 
@@ -650,6 +653,30 @@ fn generate_extraction_code(
             }
             call_args.push(quote! { #name });
             // Factory params are external — not added to dep_strings.
+            continue;
+        }
+
+        // ── Inject<dyn Trait> / Option<Inject<dyn Trait>>: resolve via Arc ──
+        if let Some(dyn_ty) = extract_inject_dyn_inner(ty) {
+            extract_statements.push(quote! {
+                let #name: #ty = {
+                    let __arc = ctx.resolve_external::<::std::sync::Arc<#dyn_ty>>().await?;
+                    injectable_runtime::Inject::new(__arc)
+                };
+            });
+            call_args.push(quote! { #name });
+            // trait bindings are not tracked in the static dep graph
+            continue;
+        }
+        if let Some(dyn_ty) = extract_option_inject_dyn_inner(ty) {
+            extract_statements.push(quote! {
+                let #name: #ty = match ctx.resolve_external::<::std::sync::Arc<#dyn_ty>>().await {
+                    Ok(__arc) => Some(injectable_runtime::Inject::new(__arc)),
+                    Err(injectable_runtime::InjectableError::MissingDependency { .. }) => None,
+                    Err(__e) => return Err(__e),
+                };
+            });
+            call_args.push(quote! { #name });
             continue;
         }
 

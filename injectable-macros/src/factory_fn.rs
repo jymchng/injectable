@@ -23,7 +23,7 @@ use proc_macro2::TokenStream;
 use quote::quote;
 use syn::spanned::Spanned;
 
-use crate::metadata::{extract_inject_inner, type_to_string};
+use crate::metadata::{extract_inject_dyn_inner, extract_inject_inner, type_to_string};
 
 // ─── Entry point ─────────────────────────────────────────────────────────────
 
@@ -84,7 +84,17 @@ pub(crate) fn expand_inject_fn(item: syn::ItemFn) -> syn::Result<TokenStream> {
         if let Some(factory_path) = factory {
             extract_stmts.push(factory_path.gen_extract(name, &ty_string));
         } else {
-            extract_stmts.push(gen_standard_extract(name, &ty));
+            // Special path for Inject<dyn Trait>
+            if let Some(dyn_ty) = extract_inject_dyn_inner(&ty) {
+                extract_stmts.push(quote! {
+                    let #name: #ty = {
+                        let __arc = __ctx.resolve_external::<::std::sync::Arc<#dyn_ty>>().await?;
+                        injectable_runtime::Inject::new(__arc)
+                    };
+                });
+            } else {
+                extract_stmts.push(gen_standard_extract(name, &ty));
+            }
         }
     }
 

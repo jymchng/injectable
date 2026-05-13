@@ -99,3 +99,42 @@ pub fn extract_inject_inner(ty: &syn::Type) -> Option<String> {
     }
     None
 }
+
+/// If `ty` is `Inject<dyn Trait>`, returns the inner `dyn Trait` type.
+///
+/// Used by the code generator to detect trait-object injection fields and
+/// emit `ctx.resolve_external::<Arc<dyn Trait>>()` instead of the regular
+/// `Extract::extract` path (which would violate orphan rules or require
+/// `T: Sized`).
+pub fn extract_inject_dyn_inner(ty: &syn::Type) -> Option<syn::Type> {
+    if let syn::Type::Path(type_path) = ty {
+        if is_known_inject_path(&type_path.path) {
+            let last = type_path.path.segments.last()?;
+            let inner = extract_first_generic_type(last)?;
+            if matches!(inner, syn::Type::TraitObject(_)) {
+                return Some(inner);
+            }
+        }
+    }
+    None
+}
+
+/// If `ty` is `Option<Inject<dyn Trait>>`, returns the inner `dyn Trait` type.
+pub fn extract_option_inject_dyn_inner(ty: &syn::Type) -> Option<syn::Type> {
+    if let syn::Type::Path(tp) = ty {
+        let segs: Vec<_> = tp
+            .path
+            .segments
+            .iter()
+            .map(|s| s.ident.to_string())
+            .collect();
+        let is_option =
+            matches!(segs.last().map(String::as_str), Some("Option")) && segs.len() <= 3;
+        if is_option {
+            let last = tp.path.segments.last()?;
+            let inner = extract_first_generic_type(last)?;
+            return extract_inject_dyn_inner(&inner);
+        }
+    }
+    None
+}
