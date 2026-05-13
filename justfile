@@ -186,6 +186,7 @@ doctor:
 prek:
     #!/usr/bin/env bash
     set -euo pipefail
+    RUSTDOCFLAGS='-D warnings' cargo doc --workspace --features injectable/axum --no-deps
     prek run --all-files
 
 

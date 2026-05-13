@@ -41,7 +41,7 @@ pub type HookResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
 /// # Error Handling
 ///
 /// If a `post_construct` hook returns an error, the entire resolution
-/// fails with [`InjectableError::LifecycleHookFailed`]. The instance
+/// fails with `InjectableError::LifecycleHookFailed`. The instance
 /// is discarded — it will not be available to consumers.
 ///
 /// # Use Cases
@@ -104,7 +104,7 @@ pub trait PostConstruct: Send + Sync {
 /// If a `pre_destruct` hook returns an error, it is collected. All
 /// remaining destructors still run (best-effort cleanup). After all
 /// destructors have been called, the accumulated errors are returned
-/// from [`Container::shutdown`].
+/// from `Container::shutdown()`.
 ///
 /// # Use Cases
 ///

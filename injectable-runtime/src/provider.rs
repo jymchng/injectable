@@ -86,8 +86,8 @@ type DynProviderFn<T> = Box<
 ///
 /// # Registration
 ///
-/// `DynProvider` instances are registered via
-/// [`ContainerBuilder::register`](crate::ContainerBuilder::register):
+/// `DynProvider` instances are registered via `ContainerBuilder::register()`
+/// in the public `injectable` crate:
 ///
 /// ```rust,ignore
 /// let container = Container::builder()

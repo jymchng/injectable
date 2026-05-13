@@ -242,10 +242,12 @@ pub fn container(input: TokenStream) -> TokenStream {
 /// #[injectable]
 /// impl UserService {
 ///     #[injectable_ctor]
-///     pub fn new(weather: Inject<WeatherService>) -> Self { … }
+///     pub fn new(weather: Inject<WeatherService>) -> Self {
+///         Self { weather }
+///     }
 ///
 ///     #[post_construct]
-///     async fn init(&self) { … }
+///     async fn init(&self) {}
 /// }
 /// ```
 ///

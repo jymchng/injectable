@@ -49,7 +49,7 @@ pub struct ResolveContext {
     store: Arc<dyn SingletonStore>,
     registry: Arc<ProviderRegistry>,
     destructors: Arc<tokio::sync::Mutex<Vec<DestructorEntry>>>,
-    /// Runtime singleton cache: TypeId → OnceCell<Arc<dyn Any>>.
+    /// Runtime singleton cache: `TypeId -> OnceCell<Arc<dyn Any>>`.
     /// The stored value is `Arc<T>` erased as `dyn Any`, so downcasting
     /// back to `Arc<T>` is safe via TypeId guarantees.
     singleton_cache: SingletonCache,
@@ -86,7 +86,7 @@ impl ResolveContext {
         &self.registry
     }
 
-    /// Extract a value using the scope-safe [`Extract`] path.
+    /// Extract a value using the scope-safe [`crate::Extract`] path.
     ///
     /// This is the recommended way to resolve a type inside a factory closure
     /// or `DynProvider::with_ctx`. Unlike the old `ctx.resolve::<T>()`, this

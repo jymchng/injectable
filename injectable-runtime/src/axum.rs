@@ -47,9 +47,10 @@ use crate::{Extract, Inject, InjectableError, ResolveContext};
 ///
 /// # Provided Implementations
 ///
-/// - [`Container`](crate::Container) implements `InjectableState` directly
-/// - [`AxumState`](injectable::axum::AxumState) wraps `Arc<Container>` for
-///   efficient cloning in Axum's state management
+/// - `Container` in the public `injectable` crate implements
+///   `InjectableState` directly
+/// - `injectable::axum::AxumState` wraps `Arc<Container>` for efficient
+///   cloning in Axum's state management
 ///
 /// # Custom State
 ///
