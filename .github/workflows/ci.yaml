@@ -67,14 +67,22 @@ jobs:
       - name: Cache cargo registry
         uses: Swatinem/rust-cache@v2
 
-      - name: Build workspace
+      - name: Build (injectable/axum)
         run: cargo build --workspace --features injectable/axum
+
+      - name: Build (all features)
         run: cargo build --workspace --all-features
+
+      - name: Build (no default features)
         run: cargo build --workspace --no-default-features
 
-      - name: Run tests
+      - name: Test (injectable/axum)
         run: cargo test --workspace --features injectable/axum
+
+      - name: Test (all features)
         run: cargo test --workspace --all-features
+
+      - name: Test (no default features)
         run: cargo test --workspace --no-default-features
 
   # ── MSRV (Minimum Supported Rust Version) ────────────────────────────────
@@ -110,3 +118,31 @@ jobs:
         env:
           RUSTDOCFLAGS: "-D rustdoc::broken_intra_doc_links -D warnings"
         run: cargo doc --workspace --features injectable/axum --no-deps
+
+  # ── Minimal dependency versions ───────────────────────────────────────────
+  minimal-versions:
+    name: Minimal dependency versions (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install nightly Rust
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Cache cargo registry
+        uses: Swatinem/rust-cache@v2
+
+      - name: Generate minimal lockfile
+        run: cargo update -Z direct-minimal-versions
+
+      - name: Build with minimal versions
+        run: cargo build --workspace --all-features
+
+      - name: Test with minimal versions
+        run: cargo test --workspace --all-features
