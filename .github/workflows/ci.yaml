@@ -69,9 +69,13 @@ jobs:
 
       - name: Build workspace
         run: cargo build --workspace --features injectable/axum
+        run: cargo build --workspace --all-features
+        run: cargo build --workspace --no-default-features
 
       - name: Run tests
         run: cargo test --workspace --features injectable/axum
+        run: cargo test --workspace --all-features
+        run: cargo test --workspace --no-default-features
 
   # ── MSRV (Minimum Supported Rust Version) ────────────────────────────────
   msrv:
