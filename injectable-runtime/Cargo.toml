@@ -13,4 +13,4 @@ async-trait.workspace = true
 tokio = { workspace = true, features = ["sync"] }
 thiserror.workspace = true
 axum = { version = "0.7", optional = true }
-inventory = "0.3.24"
+inventory.workspace = true

@@ -7,4 +7,4 @@ description = "Compile-time dependency graph validation for the injectable DI fr
 
 [dependencies]
 thiserror.workspace = true
-inventory = "0.3"
+inventory.workspace = true
