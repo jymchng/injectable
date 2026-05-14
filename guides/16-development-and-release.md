@@ -311,6 +311,27 @@ version = "0.2.0"
 
 ### 2. Rebuild and test
 
+The fastest way to run the local release checklist is:
+
+```bash
+just prepare-release
+```
+
+That command runs:
+
+- formatting checks
+- clippy with warnings denied
+- tests for `injectable/axum`
+- tests for `--all-features`
+- tests for `--no-default-features`
+- strict rustdoc build
+- `cargo publish --dry-run --locked` for all published crates
+
+At the end, it prints the exact git commands needed to cut the release tag, but
+it does **not** execute them.
+
+You can also run the steps manually:
+
 ```bash
 cargo fmt --all
 cargo clippy --workspace --features injectable/axum -- -D warnings
@@ -338,6 +359,14 @@ Confirm that:
 - release notes-worthy changes are clear from commits/PR titles
 
 ### 5. Create and push the release tag
+
+After `just prepare-release` passes, print the final release commands:
+
+```bash
+just release
+```
+
+That prints:
 
 ```bash
 git tag -a v0.2.0 -m "Release v0.2.0"

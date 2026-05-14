@@ -24,11 +24,48 @@ build-release:
 release:
     #!/usr/bin/env bash
     set -euo pipefail
-    version="$$(just --quiet version-show)"
+    version="$(just --quiet version-show)"
     echo "Review and run these commands manually to create the release tag:"
     echo
-    printf 'git tag -a v%s -m "Release v%s"\n' "$$version" "$$version"
-    printf 'git push origin v%s\n' "$$version"
+    printf 'git tag -a v%s -m "Release v%s"\n' "$version" "$version"
+    printf 'git push origin v%s\n' "$version"
+
+# Run the local release checklist, then remind the owner how to cut the tag
+prepare-release:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    version="$(just --quiet version-show)"
+
+    echo "Preparing release for version $version"
+    echo
+    echo "==> Checking formatting"
+    cargo fmt --all -- --check
+    echo
+    echo "==> Running clippy"
+    cargo clippy --workspace --features injectable/axum -- -D warnings
+    echo
+    echo "==> Running tests (injectable/axum)"
+    cargo test --workspace --features injectable/axum
+    echo
+    echo "==> Running tests (all features)"
+    cargo test --workspace --all-features
+    echo
+    echo "==> Running tests (no default features)"
+    cargo test --workspace --no-default-features
+    echo
+    echo "==> Building docs with warnings denied"
+    RUSTDOCFLAGS='-D rustdoc::broken_intra_doc_links -D warnings' \
+      cargo doc --workspace --features injectable/axum --no-deps
+    echo
+    echo "==> Running publish dry-runs"
+    cargo publish -p injectable-graph --dry-run --locked
+    cargo publish -p injectable-runtime --dry-run --locked
+    cargo publish -p injectable-macros --dry-run --locked
+    cargo publish -p injectable --dry-run --locked
+    echo
+    echo "Release preparation completed successfully."
+    echo
+    just --quiet release
 
 # Check compilation without producing artifacts (faster than build)
 check:
