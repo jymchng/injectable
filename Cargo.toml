@@ -11,6 +11,8 @@ members = [
 version = "0.2.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
+homepage = "https://github.com/jymchng/injectable"
+repository = "https://github.com/jymchng/injectable"
 rust-version = "1.86"
 
 [workspace.dependencies]
