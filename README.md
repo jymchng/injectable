@@ -279,6 +279,7 @@ dependency graph validation failed:
 | 13 | [Realistic Axum Web App](guides/13-axum-realistic-app.md) |
 | 14 | [Optional Dependencies and Layered Registration](guides/14-optional-deps.md) |
 | 15 | [Organizing a Large Application](guides/15-large-app-organization.md) |
+| 16 | [Development and Release Workflow](guides/16-development-and-release.md) |
 | — | [3 Ways to Inject External Types](guides/3-ways-to-inject-external-types.md) |
 
 ---

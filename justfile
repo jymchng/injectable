@@ -17,8 +17,18 @@ build-axum:
     cargo build --workspace --features injectable/axum
 
 # Build in release mode
-release:
+build-release:
     cargo build --workspace --release --features injectable/axum
+
+# Show the git commands required to publish the current workspace version
+release:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    version="$$(just --quiet version-show)"
+    echo "Review and run these commands manually to create the release tag:"
+    echo
+    printf 'git tag -a v%s -m "Release v%s"\n' "$$version" "$$version"
+    printf 'git push origin v%s\n' "$$version"
 
 # Check compilation without producing artifacts (faster than build)
 check:
@@ -150,6 +160,133 @@ audit:
 # Update all dependencies to latest compatible versions
 update:
     cargo update
+
+# ── Version Management ────────────────────────────────────────────────
+
+# Show the current workspace version
+version-show:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    python3 - <<'PY'
+    import pathlib
+    import tomllib
+
+    data = tomllib.loads(pathlib.Path("Cargo.toml").read_text())
+    print(data["workspace"]["package"]["version"])
+    PY
+
+# Set the workspace version explicitly (e.g. just version-set 0.2.0)
+version-set version:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    python3 - "{{ version }}" <<'PY'
+    import pathlib
+    import re
+    import sys
+
+    new_version = sys.argv[1]
+    cargo_toml = pathlib.Path("Cargo.toml")
+    lines = cargo_toml.read_text().splitlines()
+
+    in_workspace_package = False
+    replaced = False
+    updated = []
+
+    for line in lines:
+        stripped = line.strip()
+
+        if stripped.startswith("[") and stripped.endswith("]"):
+            in_workspace_package = stripped == "[workspace.package]"
+
+        if in_workspace_package and re.match(r'^version\s*=\s*".*"$', stripped):
+            updated.append(f'version = "{new_version}"')
+            replaced = True
+            continue
+
+        updated.append(line)
+
+    if not replaced:
+        raise SystemExit("Could not find workspace.package.version in Cargo.toml")
+
+    cargo_toml.write_text("\n".join(updated) + "\n")
+    print(f"Updated workspace version to {new_version}")
+    PY
+
+# Increase the workspace version: major | minor | patch
+version-up part:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    python3 - "{{ part }}" <<'PY'
+    import pathlib
+    import re
+    import subprocess
+    import sys
+    import tomllib
+
+    cargo = pathlib.Path("Cargo.toml")
+    data = tomllib.loads(cargo.read_text())
+    current = data["workspace"]["package"]["version"]
+    part = sys.argv[1]
+    match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)", current)
+    if not match:
+        raise SystemExit(
+            f"version-up only supports stable semver x.y.z versions, got: {current}"
+        )
+
+    major, minor, patch = map(int, match.groups())
+
+    if part == "major":
+        new_version = f"{major + 1}.0.0"
+    elif part == "minor":
+        new_version = f"{major}.{minor + 1}.0"
+    elif part == "patch":
+        new_version = f"{major}.{minor}.{patch + 1}"
+    else:
+        raise SystemExit("Usage: just version-up [major|minor|patch]")
+
+    subprocess.run(["just", "--quiet", "version-set", new_version], check=True)
+    PY
+
+# Decrease the workspace version: major | minor | patch
+version-down part:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    python3 - "{{ part }}" <<'PY'
+    import pathlib
+    import re
+    import subprocess
+    import sys
+    import tomllib
+
+    cargo = pathlib.Path("Cargo.toml")
+    data = tomllib.loads(cargo.read_text())
+    current = data["workspace"]["package"]["version"]
+    part = sys.argv[1]
+    match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)", current)
+    if not match:
+        raise SystemExit(
+            f"version-down only supports stable semver x.y.z versions, got: {current}"
+        )
+
+    major, minor, patch = map(int, match.groups())
+
+    if part == "major":
+        if major == 0:
+            raise SystemExit("Cannot decrease major version below 0")
+        new_version = f"{major - 1}.0.0"
+    elif part == "minor":
+        if minor == 0:
+            raise SystemExit("Cannot decrease minor version below 0")
+        new_version = f"{major}.{minor - 1}.0"
+    elif part == "patch":
+        if patch == 0:
+            raise SystemExit("Cannot decrease patch version below 0")
+        new_version = f"{major}.{minor}.{patch - 1}"
+    else:
+        raise SystemExit("Usage: just version-down [major|minor|patch]")
+
+    subprocess.run(["just", "--quiet", "version-set", new_version], check=True)
+    PY
 
 # ── Workspace Utilities ───────────────────────────────────────────────
 

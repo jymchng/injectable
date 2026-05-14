@@ -3,28 +3,60 @@ name: Release
 on:
   push:
     tags:
-      - "v[0-9]+.[0-9]+.[0-9]+"         # e.g. v0.3.1
-      - "v[0-9]+.[0-9]+.[0-9]+-*"        # e.g. v0.3.1-rc.1
+      - "v*.*.*"                        # e.g. v0.3.1, v0.3.1-rc.1
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
 
 env:
   CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
   CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+  CARGO_REGISTRY_PROTOCOL: sparse
+  RUST_BACKTRACE: 1
 
 jobs:
   # ── Gate: full CI must pass before publishing ────────────────────────────
   validate:
     name: Validate
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.86.0
         with:
           components: rustfmt, clippy
 
       - name: Cache cargo registry
         uses: Swatinem/rust-cache@v2
+
+      - name: Ensure tag matches workspace version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          python3 - <<'PY'
+          import pathlib
+          import tomllib
+
+          cargo = pathlib.Path("Cargo.toml")
+          data = tomllib.loads(cargo.read_text())
+          expected = data["workspace"]["package"]["version"]
+          ref = "${{ github.ref_name }}"
+          actual = ref.removeprefix("v")
+
+          if actual != expected:
+              raise SystemExit(
+                  f"tag version mismatch: tag={actual!r}, workspace={expected!r}"
+              )
+
+          print(f"release tag matches workspace version: {actual}")
+          PY
 
       - name: Format check
         run: cargo fmt --all -- --check
@@ -35,48 +67,83 @@ jobs:
       - name: Tests
         run: cargo test --workspace --features injectable/axum
 
+      - name: Docs
+        env:
+          RUSTDOCFLAGS: "-D rustdoc::broken_intra_doc_links -D warnings"
+        run: cargo doc --workspace --features injectable/axum --no-deps
+
+      - name: Package dry-run
+        run: |
+          cargo publish -p injectable-graph --dry-run --locked
+          cargo publish -p injectable-runtime --dry-run --locked
+          cargo publish -p injectable-macros --dry-run --locked
+          cargo publish -p injectable --dry-run --locked
+
   # ── Publish to crates.io ──────────────────────────────────────────────────
   publish:
     name: Publish
     runs-on: ubuntu-latest
     needs: validate
+    timeout-minutes: 30
     environment: crates-io        # requires CARGO_REGISTRY_TOKEN secret
     steps:
       - uses: actions/checkout@v4
 
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.86.0
 
       - name: Cache cargo registry
         uses: Swatinem/rust-cache@v2
 
-      # Publish in dependency order — each step waits for the previous.
-      - name: Publish injectable-graph
-        run: cargo publish -p injectable-graph --no-verify
-        continue-on-error: true   # skip if already published at this version
-
-      - name: Publish injectable-runtime
+      - name: Publish crates in dependency order
         run: |
-          sleep 20                 # wait for crates.io index to update
-          cargo publish -p injectable-runtime --no-verify
-        continue-on-error: true
+          set -euo pipefail
 
-      - name: Publish injectable-macros
-        run: |
-          sleep 20
-          cargo publish -p injectable-macros --no-verify
-        continue-on-error: true
+          publish_crate() {
+            local crate="$1"
+            local attempt
+            local output_file
+            output_file="$(mktemp)"
 
-      - name: Publish injectable (facade)
-        run: |
-          sleep 20
-          cargo publish -p injectable --no-verify
+            for attempt in 1 2 3 4 5; do
+              echo "Publishing ${crate} (attempt ${attempt}/5)..."
+
+              if cargo publish -p "${crate}" --locked >"${output_file}" 2>&1; then
+                cat "${output_file}"
+                rm -f "${output_file}"
+                return 0
+              fi
+
+              cat "${output_file}"
+
+              if grep -Eqi "already uploaded|already exists" "${output_file}"; then
+                echo "${crate} is already published for this version; continuing."
+                rm -f "${output_file}"
+                return 0
+              fi
+
+              if [ "${attempt}" -lt 5 ]; then
+                echo "Publish failed for ${crate}; retrying after crates.io index delay..."
+                sleep 30
+              fi
+            done
+
+            echo "Failed to publish ${crate} after 5 attempts."
+            rm -f "${output_file}"
+            return 1
+          }
+
+          publish_crate injectable-graph
+          publish_crate injectable-runtime
+          publish_crate injectable-macros
+          publish_crate injectable
 
   # ── GitHub Release ────────────────────────────────────────────────────────
   github-release:
     name: GitHub Release
     runs-on: ubuntu-latest
     needs: publish
+    timeout-minutes: 10
     permissions:
       contents: write
     steps:
