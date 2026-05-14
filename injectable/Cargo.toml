@@ -2,6 +2,7 @@
 name = "injectable"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
 rust-version.workspace = true
 description = "A compile-time dependency injection framework for Rust using extractor-based DI"
 
@@ -9,26 +10,26 @@ description = "A compile-time dependency injection framework for Rust using extr
 axum = ["injectable-runtime/axum", "dep:axum"]
 
 [dependencies]
-injectable-macros.workspace = true
-injectable-runtime.workspace = true
 injectable-graph.workspace = true
 async-trait.workspace = true
-tokio = { workspace = true, features = ["sync"] }
-thiserror.workspace = true
-axum = { version = "0.7", optional = true }
+axum = { workspace = true, optional = true }
+futures-util.workspace = true
 inventory.workspace = true
-futures-util = "0.3.32"
+injectable-macros.workspace = true
+injectable-runtime.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["sync"] }
 
 [dev-dependencies]
+axum.workspace = true
+http-body-util.workspace = true
+hyper.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+sqlx.workspace = true
 tokio = { workspace = true, features = ["full"] }
-axum = "0.7"
-tower = "0.5"
-http-body-util = "0.1"
-hyper = "1"
-serde = { version = "1", features = ["derive"] }
-trybuild = "1"
-sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite"] }
-reqwest = { version = "0.12", features = ["json"] }
+tower.workspace = true
+trybuild.workspace = true
 
 [[test]]
 name = "axum_integration"

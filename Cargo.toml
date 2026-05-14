@@ -21,6 +21,15 @@ injectable-graph = { path = "injectable-graph" }
 
 # Shared dependencies
 async-trait = "0.1"
+axum = "0.7"
+futures-util = "0.3.32"
+http-body-util = "0.1"
+hyper = "1"
 tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.12", features = ["json"] }
+serde = { version = "1", features = ["derive"] }
+sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite"] }
 thiserror = "2"
 inventory = "0.3.24"
+tower = "0.5"
+trybuild = "1"

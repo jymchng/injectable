@@ -2,6 +2,7 @@
 name = "injectable-runtime"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
 rust-version.workspace = true
 description = "Runtime types and traits for the injectable DI framework"
 
@@ -10,7 +11,7 @@ axum = ["dep:axum"]
 
 [dependencies]
 async-trait.workspace = true
-tokio = { workspace = true, features = ["sync"] }
-thiserror.workspace = true
-axum = { version = "0.7", optional = true }
+axum = { workspace = true, optional = true }
 inventory.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["sync"] }
