@@ -176,6 +176,29 @@ impl UserRepository {
 Option B is preferred when many services need the same pool — `Database` is a
 singleton so the `sqlx::SqlitePool` is constructed once and shared via `Inject<Database>`.
 
+You can also inject the wrapper as `Arc<Database>` instead of `Inject<Database>`
+when you want a plain `Arc` field:
+
+```rust
+#[injectable]
+pub struct AuthService {
+    #[injectable(inject)]
+    db: Arc<Database>,
+}
+
+#[injectable]
+pub struct UserService {
+    #[injectable(inject)]
+    db: Arc<Database>,
+}
+```
+
+`Inject<Database>` and `#[injectable(inject)] Arc<Database>` both use the same
+singleton cache. The difference is ergonomic:
+
+- `Inject<Database>` is auto-injected and keeps the standard injectable wrapper.
+- `Arc<Database>` requires `#[injectable(inject)]` and stores a plain `Arc`.
+
 ## Resolving External Types Directly
 
 | Method | When to use |

@@ -70,6 +70,7 @@ impl WeatherService {
 - The external type is only used by one service.
 - You want the factory logic co-located with the service that uses it.
 - You need lifecycle hooks (`#[injectable(post_construct)]` / `#[injectable(pre_destruct)]`).
+- You do not need one shared instance across multiple services.
 
 ---
 
@@ -116,6 +117,7 @@ impl WeatherService {
 - You prefer the declarative struct style.
 - No complex constructor logic is needed — the factory functions do all the work.
 - All fields are either `Inject<T>` (auto-injected) or factory-annotated.
+- You do not need one shared instance across multiple services.
 
 ---
 
@@ -170,6 +172,25 @@ async fn main() {
 }
 ```
 
+If you prefer plain `Arc` fields, use `#[injectable(inject)] Arc<Database>`:
+
+```rust
+#[injectable]
+pub struct AuthService {
+    #[injectable(inject)]
+    db: Arc<Database>,
+}
+
+#[injectable]
+pub struct UserService {
+    #[injectable(inject)]
+    db: Arc<Database>,
+}
+```
+
+That still resolves the same singleton `Database`; it is equivalent to
+`Inject<Database>` in sharing behavior and differs only in field ergonomics.
+
 Note: if the factory function needs a resolved type (e.g., a config URL), use the
 `DynProvider::with_ctx` pattern in a separate `#[injectable]` impl block instead of
 a free factory function:
@@ -203,6 +224,9 @@ or use `FactoryCtx` in a `DynProvider` if you prefer centralised registration.
 | Needs container setup | No | No | No |
 | Consumer field type | Plain `T` | Plain `T` | `Inject<Wrapper>` |
 | Typical use | Single-service external dep | Declarative struct with external fields | DB pool / HTTP client shared by many |
+
+For wrapper-style sharing, `#[injectable(inject)] Arc<Wrapper>` is also valid and
+shares the same singleton instance as `Inject<Wrapper>`.
 
 ---
 

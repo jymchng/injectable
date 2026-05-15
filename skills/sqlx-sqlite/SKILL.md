@@ -74,9 +74,10 @@ Implementation steps:
 ## Sharing pool across services
 
 ```rust
-// Both services call make_pool — injectable caches Pool per service type.
-// Use a single-connection pool for in-memory SQLite (otherwise each Pool
-// gets a private database).
+// If multiple services each use use_factory_async directly, each service gets
+// its own Pool instance. For sqlite::memory:, that means separate in-memory
+// databases. Use a single-connection pool if you intentionally keep one pool
+// per service.
 #[injectable(factory)]
 async fn make_shared_pool(cfg: Inject<AppConfig>) -> Result<Pool<Sqlite>, sqlx::Error> {
     sqlx::sqlite::SqlitePoolOptions::new()
@@ -87,6 +88,82 @@ async fn make_shared_pool(cfg: Inject<AppConfig>) -> Result<Pool<Sqlite>, sqlx::
         .await
 }
 ```
+
+`#[injectable(inject(use_factory_async = make_db_pool))]` is not a cross-service
+singleton by itself. The factory runs once per construction of the owning
+service type. Since services are singleton by default, that usually means one
+pool per service, not one pool for the entire application.
+
+## One pool shared by many services
+
+Wrap the external pool in your own singleton `#[injectable]` type, then inject
+that wrapper everywhere else:
+
+```rust
+use injectable::prelude::*;
+use sqlx::{Pool, Sqlite};
+
+#[injectable(factory)]
+async fn make_db_pool(cfg: Inject<AppConfig>) -> Result<Pool<Sqlite>, sqlx::Error> {
+    println!("  [DB] Connecting to {}", cfg.database_url);
+    sqlx::sqlite::SqlitePoolOptions::new()
+        .max_connections(1)
+        .idle_timeout(None)
+        .max_lifetime(None)
+        .connect(&cfg.database_url)
+        .await
+}
+
+#[injectable]
+pub struct DbPool {
+    #[injectable(inject(use_factory_async = make_db_pool))]
+    pub pool: Pool<Sqlite>,
+}
+
+#[injectable]
+pub struct AuthService {
+    db: Inject<DbPool>,
+}
+
+#[injectable]
+pub struct UserService {
+    db: Inject<DbPool>,
+}
+```
+
+Why this works:
+
+- `DbPool` is singleton by default.
+- Its `pool` field is built once when `DbPool` is first constructed.
+- `AuthService` and `UserService` both resolve the same `Arc<DbPool>`.
+- `make_db_pool` therefore runs exactly once for the shared wrapper.
+
+## `Inject<DbPool>` vs `Arc<DbPool>`
+
+If you prefer `Arc<DbPool>` instead of `Inject<DbPool>`, that works too:
+
+```rust
+#[injectable]
+pub struct AuthService {
+    #[injectable(inject)]
+    db: Arc<DbPool>,
+}
+
+#[injectable]
+pub struct UserService {
+    #[injectable(inject)]
+    db: Arc<DbPool>,
+}
+```
+
+These two forms use the same singleton cache path:
+
+- `Inject<DbPool>` auto-injects and is the most idiomatic injectable field type.
+- `Arc<DbPool>` requires `#[injectable(inject)]`.
+- Both point to the same shared singleton instance of `DbPool`.
+
+Choose `Inject<DbPool>` when you want the standard injectable wrapper API.
+Choose `Arc<DbPool>` when the service should store a plain `Arc` field.
 
 ## Config
 

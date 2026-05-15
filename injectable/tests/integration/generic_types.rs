@@ -230,3 +230,44 @@ async fn vec_field_via_dyn_provider() {
     let tags: Vec<String> = container.resolve_external().await.unwrap();
     assert_eq!(tags, vec!["alpha", "beta"]);
 }
+
+// ─── Tuple struct injection ───────────────────────────────────────────────────
+
+// Use constructor injection — plain `value: u32` field has no DI dep.
+#[derive(Clone, Debug)]
+struct TupleResource {
+    value: u32,
+}
+
+#[injectable]
+impl TupleResource {
+    #[injectable(ctor)]
+    fn new() -> Self {
+        Self { value: 42 }
+    }
+}
+
+#[injectable]
+struct TupleServiceA(#[injectable(inject)] Arc<TupleResource>);
+
+#[injectable]
+struct TupleServiceB(#[injectable(inject)] Arc<TupleResource>);
+
+#[tokio::test]
+async fn tuple_struct_inject_arc_singleton() {
+    let container = Container::builder().build().await.unwrap();
+    let a: TupleServiceA = container.resolve().await.unwrap();
+    let b: TupleServiceB = container.resolve().await.unwrap();
+
+    assert!(
+        Arc::ptr_eq(&a.0, &b.0),
+        "TupleServiceA and TupleServiceB must share the same Arc<TupleResource>"
+    );
+}
+
+#[tokio::test]
+async fn tuple_struct_inject_deref_works() {
+    let container = Container::builder().build().await.unwrap();
+    let svc: TupleServiceA = container.resolve().await.unwrap();
+    assert_eq!(svc.0.value, 42);
+}
