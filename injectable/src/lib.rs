@@ -56,6 +56,9 @@
 //! let client = container.resolve_external::<reqwest::Client>().await?;
 //! ```
 
+#![doc(
+    html_logo_url = "https://raw.githubusercontent.com/jymchng/injectable/refs/heads/main/assets/injectable-logo-only.png"
+)]
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 

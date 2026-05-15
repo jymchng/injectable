@@ -1,7 +1,7 @@
 # injectable
 
 <div align="center">
-<img src="assets/injectable-logo-vert.png" width=60%>
+<img src="https://raw.githubusercontent.com/jymchng/injectable/refs/heads/main/assets/injectable-logo-vert.png" width=60%>
 </img>
 </div>
 
