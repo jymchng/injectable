@@ -10,6 +10,6 @@ description = "Proc macros for the injectable DI framework"
 proc-macro = true
 
 [dependencies]
-syn = { version = "2", features = ["full", "visit", "visit-mut", "parsing", "extra-traits"] }
-quote = "1.0.25"
-proc-macro2 = "1.0.46"
+syn = { version = "^2.0.87", features = ["full", "visit", "visit-mut", "parsing", "extra-traits"] }
+quote = "^1.0.35"
+proc-macro2 = "^1.0.83"
