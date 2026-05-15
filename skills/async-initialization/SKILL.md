@@ -5,6 +5,18 @@ description: Initializes services that require async work at startup — connect
 
 # Async Initialization
 
+## Which async macro to use?
+
+| Pattern | Best for | Example macro |
+|---|---|---|
+| Async constructor | The service itself owns the async setup | `#[injectable(ctor)] async fn new(...)` |
+| Async external factory | A third-party type such as `sqlx::SqlitePool` must be created first | `#[injectable(inject(use_factory_async = self::make_db_pool))]` |
+| Post-construction warm-up | The service exists, then needs migrations, cache loads, or probes | `#[injectable(post_construct)]` |
+
+For async database pools, prefer a dedicated `#[injectable(factory)]` helper plus
+`use_factory_async` instead of putting connection logic directly inside an
+unrelated service constructor.
+
 ## Async constructor
 
 ```rust

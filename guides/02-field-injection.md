@@ -80,22 +80,37 @@ pub struct Mailer {
 
 Inject a value that cannot be resolved via the normal DI machinery — external
 types, values from env vars, or anything requiring custom construction logic.
+For async database pool setup, pair the field attribute with a
+`#[injectable(factory)]` helper such as `make_db_pool`.
 
 ```rust
-async fn make_pool(_ctx: &ResolveContext) -> Result<sqlx::SqlitePool, sqlx::Error> {
-    sqlx::SqlitePool::connect("sqlite:./app.db").await
+use injectable::prelude::*;
+use sqlx::{Pool, Sqlite};
+
+#[injectable(factory)]
+async fn make_db_pool(cfg: Inject<AppConfig>) -> Result<Pool<Sqlite>, sqlx::Error> {
+    sqlx::sqlite::SqlitePoolOptions::new()
+        .max_connections(5)
+        .connect(&cfg.database_url)
+        .await
 }
 
 #[injectable]
 pub struct Database {
-    #[injectable(inject(use_factory_async = self::make_pool))]
-    pool: sqlx::SqlitePool,
+    #[injectable(inject(use_factory_async = self::make_db_pool))]
+    pool: Pool<Sqlite>,
 }
 ```
 
-The factory function receives `&ResolveContext` and may call
-`ctx.extract::<Inject<T>>()` or `ctx.resolve_external::<T>()` to pull in other
-dependencies.
+Implementation steps:
+
+1. Define a `#[injectable(factory)] async fn make_db_pool(...)`.
+2. Read injectable dependencies such as `Inject<AppConfig>` in the factory
+   signature.
+3. Annotate the field with
+   `#[injectable(inject(use_factory_async = self::make_db_pool))]`.
+4. Add `#[injectable(post_construct)]` in a separate impl block if the pool
+   should run migrations or warm-up queries after construction.
 
 ## Structs with Non-Injectable Fields
 

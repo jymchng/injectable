@@ -8,29 +8,47 @@ description: Transforms regular functions into DI-compatible async factories usi
 Transforms a function with `#[injectable(inject)]`-annotated parameters into an async factory
 compatible with `use_factory_async`.
 
+This is the cleanest way to implement
+`#[injectable(inject(use_factory_async = self::make_db_pool))]` for async
+database pool injection.
+
 ## Basic usage
 
 ```rust
 use injectable::prelude::*;
+use sqlx::{Pool, Sqlite};
 
 // User writes (sync or async):
 #[injectable(factory)]
-async fn make_pool(cfg: Inject<AppConfig>) -> Result<sqlx::SqlitePool, sqlx::Error> {
-    sqlx::SqlitePool::connect(&cfg.db_url).await
+async fn make_db_pool(cfg: Inject<AppConfig>) -> Result<Pool<Sqlite>, sqlx::Error> {
+    sqlx::sqlite::SqlitePoolOptions::new()
+        .max_connections(5)
+        .connect(&cfg.database_url)
+        .await
 }
 
 // Use as factory in a field:
 #[injectable]
 struct Database {
-    #[injectable(inject(use_factory_async = self::make_pool))]
-    pool: sqlx::SqlitePool,
+    #[injectable(inject(use_factory_async = self::make_db_pool))]
+    pool: Pool<Sqlite>,
 }
 ```
 
 The macro generates:
 ```
-async fn make_pool(__ctx: &ResolveContext) -> InjectableResult<sqlx::SqlitePool>
+async fn make_db_pool(__ctx: &ResolveContext) -> InjectableResult<Pool<Sqlite>>
 ```
+
+Implementation steps:
+
+1. Write a normal async Rust function that expresses the dependencies you want,
+   such as `Inject<AppConfig>`.
+2. Add `#[injectable(factory)]` so injectable rewrites the function into a
+   `ResolveContext`-based factory.
+3. Reference that function from a field or constructor parameter with
+   `#[injectable(inject(use_factory_async = self::make_db_pool))]`.
+4. Keep service fields as plain external types like `Pool<Sqlite>`.
 
 ## Parameter annotations
 

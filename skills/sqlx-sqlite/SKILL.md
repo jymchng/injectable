@@ -5,6 +5,9 @@ description: Injects an sqlx::SqlitePool into services using injectable. Use whe
 
 # SQLite with sqlx
 
+Use `#[injectable(inject(use_factory_async = self::make_db_pool))]` when a
+service needs a `sqlx` pool created asynchronously from injectable config.
+
 ## Pool factory
 
 ```rust
@@ -12,7 +15,7 @@ use injectable::prelude::*;
 use sqlx::{Pool, Sqlite};
 
 #[injectable(factory)]
-async fn make_pool(cfg: Inject<AppConfig>) -> Result<Pool<Sqlite>, sqlx::Error> {
+async fn make_db_pool(cfg: Inject<AppConfig>) -> Result<Pool<Sqlite>, sqlx::Error> {
     sqlx::sqlite::SqlitePoolOptions::new()
         .max_connections(5)
         .connect(&cfg.database_url)
@@ -20,12 +23,19 @@ async fn make_pool(cfg: Inject<AppConfig>) -> Result<Pool<Sqlite>, sqlx::Error> 
 }
 ```
 
+Purpose:
+
+- Open the database pool with async I/O before the service is used.
+- Keep connection details in one place instead of duplicating setup logic across
+  services.
+- Let the service keep a plain `Pool<Sqlite>` field while DI handles creation.
+
 ## Service with pool + migration
 
 ```rust
 #[injectable]
 struct Database {
-    #[injectable(inject(use_factory_async = self::make_pool))]
+    #[injectable(inject(use_factory_async = self::make_db_pool))]
     pool: Pool<Sqlite>,
 }
 
@@ -51,6 +61,15 @@ impl Database {
     }
 }
 ```
+
+Implementation steps:
+
+1. Add a `#[injectable(factory)] async fn make_db_pool(...)`.
+2. Read `Inject<AppConfig>` or other injectable dependencies in the factory.
+3. Annotate the field or constructor parameter with
+   `#[injectable(inject(use_factory_async = self::make_db_pool))]`.
+4. Use `#[injectable(post_construct)]` for migrations or warm-up queries.
+5. Use `#[injectable(pre_destruct)]` to close the pool cleanly on shutdown.
 
 ## Sharing pool across services
 
@@ -94,3 +113,9 @@ pub async fn find_user(&self, id: i64) -> Result<User, sqlx::Error> {
         .await
 }
 ```
+
+Related async-init macros to audit alongside this pattern:
+
+- `#[injectable(factory)]` for async pool creation
+- `#[injectable(inject(use_factory_async = ...))]` for injection
+- `#[injectable(post_construct)]` for migrations and warm-up

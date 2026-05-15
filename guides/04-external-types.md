@@ -10,21 +10,36 @@ The most co-located option. Factory functions live next to the service that uses
 them and are called via `#[injectable(inject(use_factory_async/sync = path))]` on a
 constructor parameter.
 
-```rust
-use injectable::*;
+### Recommended async database pool pattern
 
-// factory: async fn(&ResolveContext) -> Result<T, E>
-async fn make_pool(_ctx: &ResolveContext) -> Result<sqlx::SqlitePool, sqlx::Error> {
-    sqlx::SqlitePool::connect("sqlite:./app.db").await
+Use `#[injectable(inject(use_factory_async = self::make_db_pool))]` when a
+service needs a third-party database pool that must be created asynchronously.
+This keeps the async connection logic in one factory function while the service
+still receives a concrete `sqlx` pool value.
+
+```rust
+use injectable::prelude::*;
+use sqlx::{Pool, Sqlite};
+
+#[injectable]
+pub struct AppConfig {
+    pub database_url: String,
 }
 
-// factory: fn(&ResolveContext) -> T
+#[injectable(factory)]
+async fn make_db_pool(cfg: Inject<AppConfig>) -> Result<Pool<Sqlite>, sqlx::Error> {
+    sqlx::sqlite::SqlitePoolOptions::new()
+        .max_connections(10)
+        .connect(&cfg.database_url)
+        .await
+}
+
 fn make_client(_ctx: &ResolveContext) -> reqwest::Client {
     reqwest::Client::new()
 }
 
 pub struct Database {
-    pool:   sqlx::SqlitePool,
+    pool:   Pool<Sqlite>,
     client: reqwest::Client,
 }
 
@@ -32,7 +47,7 @@ pub struct Database {
 impl Database {
     #[injectable(ctor)]
     pub async fn new(
-        #[injectable(inject(use_factory_async = self::make_pool))]   pool:   sqlx::SqlitePool,
+        #[injectable(inject(use_factory_async = self::make_db_pool))] pool: Pool<Sqlite>,
         #[injectable(inject(use_factory_sync  = self::make_client))] client: reqwest::Client,
     ) -> Self {
         Self { pool, client }
@@ -40,30 +55,54 @@ impl Database {
 }
 ```
 
+Implementation steps:
+
+1. Create a `#[injectable(factory)] async fn make_db_pool(...)`.
+2. Accept injectable inputs directly in the factory signature, such as
+   `Inject<AppConfig>`.
+3. Annotate the constructor parameter with
+   `#[injectable(inject(use_factory_async = self::make_db_pool))]`.
+4. Store the returned pool as a plain field on the service.
+5. Add `#[injectable(post_construct)]` in the same impl if the service should
+   run migrations or warm-up queries after the pool is available.
+
 ## Mechanism 2 — Field factory annotations
 
 Use the declarative `#[injectable]`-on-struct style. Every non-`Inject<T>` field
 must carry `#[injectable(inject)]` or a factory annotation.
 
 ```rust
-use injectable::*;
+use injectable::prelude::*;
+use sqlx::{Pool, Sqlite};
 
-async fn make_pool(_ctx: &ResolveContext) -> Result<sqlx::SqlitePool, sqlx::Error> {
-    sqlx::SqlitePool::connect("sqlite:./app.db").await
+#[injectable(factory)]
+async fn make_db_pool(cfg: Inject<AppConfig>) -> Result<Pool<Sqlite>, sqlx::Error> {
+    sqlx::sqlite::SqlitePoolOptions::new()
+        .max_connections(5)
+        .connect(&cfg.database_url)
+        .await
 }
 
 #[injectable]
 pub struct Database {
-    #[injectable(inject(use_factory_async = self::make_pool))]
-    pool: sqlx::SqlitePool,
+    #[injectable(inject(use_factory_async = self::make_db_pool))]
+    pool: Pool<Sqlite>,
 }
 ```
+
+This field form is the most direct answer to "how do I inject an async database
+pool into a struct I own?" The attribute tells generated provider code to call
+`make_db_pool` during construction instead of trying normal `Inject<T>`
+resolution.
 
 ## Mechanism 3 — `DynProvider` in the container builder
 
 Register a closure-based provider at container build time. Any injectable
-constructor that declares an `Arc<T>` parameter (with `#[injectable(inject)]`) for the
-registered type will receive a shared `Arc` to the same instance.
+code path can then resolve the external value explicitly with
+`container.resolve_external::<T>()` or `ctx.resolve_external::<T>()`. If you want
+the external value to appear as a normal service field or constructor parameter,
+prefer wrapping it in your own `#[injectable]` type or using
+`#[injectable(inject(use_factory_async = ...))]`.
 
 ### Three provider variants
 

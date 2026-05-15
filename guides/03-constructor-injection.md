@@ -232,13 +232,20 @@ For constructor parameters that are external types (third-party crates), use
 `#[injectable(inject(use_factory_async/sync = path))]`:
 
 ```rust
+use injectable::prelude::*;
+use sqlx::{Pool, Sqlite};
+
 pub struct WeatherService {
-    pool:   sqlx::SqlitePool,
+    pool:   Pool<Sqlite>,
     client: reqwest::Client,
 }
 
-async fn make_pool(_ctx: &ResolveContext) -> Result<sqlx::SqlitePool, sqlx::Error> {
-    sqlx::SqlitePool::connect("sqlite:./weather.db").await
+#[injectable(factory)]
+async fn make_db_pool(cfg: Inject<AppConfig>) -> Result<Pool<Sqlite>, sqlx::Error> {
+    sqlx::sqlite::SqlitePoolOptions::new()
+        .max_connections(10)
+        .connect(&cfg.database_url)
+        .await
 }
 
 fn make_client(_ctx: &ResolveContext) -> reqwest::Client {
@@ -249,13 +256,30 @@ fn make_client(_ctx: &ResolveContext) -> reqwest::Client {
 impl WeatherService {
     #[injectable(ctor)]
     pub async fn new(
-        #[injectable(inject(use_factory_async = self::make_pool))]   pool:   sqlx::SqlitePool,
+        #[injectable(inject(use_factory_async = self::make_db_pool))] pool: Pool<Sqlite>,
         #[injectable(inject(use_factory_sync  = self::make_client))] client: reqwest::Client,
     ) -> Self {
         Self { pool, client }
     }
 }
 ```
+
+`#[injectable(inject(use_factory_async = self::make_db_pool))]` is the
+recommended constructor form for async database pool injection when:
+
+- the pool type comes from a third-party crate such as `sqlx`
+- the pool requires `.await` during creation
+- the service should receive the concrete pool directly as a constructor input
+
+Implementation steps:
+
+1. Write a `#[injectable(factory)] async fn make_db_pool(...)` helper.
+2. Resolve config or other injectable inputs in that helper's signature.
+3. Apply `#[injectable(inject(use_factory_async = self::make_db_pool))]` to the
+   external constructor parameter.
+4. Store the resulting pool as a plain field on the service.
+5. Add `#[injectable(post_construct)]` if the service should run migrations or
+   warm-up logic after the pool is created.
 
 See the 3-ways-to-inject-external-types guide for all options.
 
