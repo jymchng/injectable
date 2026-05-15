@@ -73,7 +73,7 @@ pub struct NotificationService {
 
 #[injectable]
 impl NotificationService {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     pub fn new(
         email: Option<Inject<SmtpClient>>,
         sms:   Option<Inject<TwilioClient>>,

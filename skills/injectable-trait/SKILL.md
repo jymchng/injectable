@@ -1,9 +1,9 @@
 ---
 name: injectable-trait
-description: Makes traits injectable using injectable_trait and dyn Trait injection. Use when defining injectable service traits, enabling mock implementations, or using trait objects in DI.
+description: Makes traits injectable using #[injectable(trait)] and dyn Trait injection. Use when defining injectable service traits, enabling mock implementations, or using trait objects in DI.
 ---
 
-# injectable_trait Macro
+# Trait Injection with `#[injectable(trait)]`
 
 Generates infrastructure for trait injection, including a type-erased provider and `Inject<dyn Trait>` support.
 
@@ -12,18 +12,16 @@ Generates infrastructure for trait injection, including a type-erased provider a
 ```rust
 use injectable::prelude::*;
 
-#[injectable_trait]
+#[injectable(trait)]
 pub trait EmailSender {
-    async fn send(&self, to: &str, subject: &str, body: &str) -> Result<(), std::error::Error>;
+    fn send(&self, to: &str, subject: &str, body: &str);
 }
 
 pub struct SmtpSender;
 
-#[async_trait]
 impl EmailSender for SmtpSender {
-    async fn send(&self, to: &str, subject: &str, body: &str) -> Result<(), std::error::Error> {
+    fn send(&self, to: &str, subject: &str, body: &str) {
         println!("Sending email to {to}: {subject}");
-        Ok(())
     }
 }
 
@@ -37,14 +35,14 @@ struct NotificationService {
 
 ## How it works
 
-1. `#[injectable_trait]` generates a `Provider` impl for the trait
+1. `#[injectable(trait)]` marks the trait as part of the injectable surface
 2. `bind!()` creates a static binding from `dyn Trait` to `Concrete`
 3. `Inject<dyn Trait>` resolves via the bound concrete type's provider
 
 ## With default implementation
 
 ```rust
-#[injectable_trait]
+#[injectable(trait)]
 pub trait Logger {
     fn log(&self, msg: &str) {
         println!("[LOG] {msg}");
@@ -63,11 +61,9 @@ bind!(dyn Logger => NoOpLogger);
 ```rust
 pub struct MockEmailSender;
 
-#[async_trait]
 impl EmailSender for MockEmailSender {
-    async fn send(&self, to: &str, _subject: &str, _body: &str) -> Result<(), std::error::Error> {
+    fn send(&self, to: &str, _subject: &str, _body: &str) {
         println!("[MOCK] Would send email to {to}");
-        Ok(())
     }
 }
 
@@ -84,18 +80,20 @@ struct UserService {
 }
 
 impl UserService {
-    async fn notify_user(&self, user: &User) -> Result<(), std::error::Error> {
-        self.sender
-            .send(&user.email, "Welcome!", "Hello from injectable!")
-            .await
+    fn notify_user(&self, user: &User) {
+        self.sender.send(&user.email, "Welcome!", "Hello from injectable!");
     }
 }
 ```
 
 ## Guidelines
 
-- Use `#[injectable_trait]` on traits that have a single primary implementation
+- Use `#[injectable(trait)]` on traits that have a single primary implementation
 - Use `bind!()` to declare which concrete type satisfies the trait
-- `Inject<dyn Trait>` requires both `#[injectable_trait]` and `bind!()`
+- `Inject<dyn Trait>` needs a `bind!()` mapping; the trait annotation is the
+  recommended documented pattern
+
+See [skills/bind-macro](../bind-macro/SKILL.md) and
+[guides/README.md](../../guides/README.md).
 
 This pattern enables dependency inversion in your DI graph — depend on abstractions (traits), not concrete types.

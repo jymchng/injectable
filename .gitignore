@@ -28,3 +28,4 @@ rustc-ice-*.txt
 \nCargo.lock\n
 Cargo.lock
 target/
+.codemap/

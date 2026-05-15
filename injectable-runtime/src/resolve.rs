@@ -1,7 +1,7 @@
 //! `ResolveContext` — the runtime resolution context.
 //!
 //! The context holds typed singleton storage, the provider registry,
-//! and a list of registered destructors for `#[pre_destruct]` hooks.
+//! and a list of registered destructors for `#[injectable(pre_destruct)]` hooks.
 //! It is passed through provider chains during resolution.
 
 use std::any::{Any, TypeId};
@@ -31,7 +31,7 @@ struct DestructorEntry {
 /// This struct holds:
 /// - A reference to the typed singleton store
 /// - A reference to the dynamic provider registry (for external types)
-/// - A list of registered destructors (for `#[pre_destruct]` hooks)
+/// - A list of registered destructors (for `#[injectable(pre_destruct)]` hooks)
 ///
 /// # Resolution Strategy
 ///

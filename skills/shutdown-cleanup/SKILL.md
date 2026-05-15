@@ -12,16 +12,16 @@ use injectable::prelude::*;
 
 #[injectable]
 impl WorkerPool {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new() -> Self { Self { running: AtomicBool::new(false), pool: vec![] } }
 
-    #[post_construct]
+    #[injectable(post_construct)]
     fn start(&self) {
         self.running.store(true, Ordering::SeqCst);
         println!("[WorkerPool] started");
     }
 
-    #[pre_destruct]
+    #[injectable(pre_destruct)]
     async fn drain(&self) -> HookResult {
         self.running.store(false, Ordering::SeqCst);
         // Drain in-flight jobs…
@@ -34,7 +34,7 @@ impl WorkerPool {
 ## Trigger shutdown
 
 ```rust
-// Calls all #[pre_destruct] hooks in REVERSE construction order
+// Calls all #[injectable(pre_destruct)] hooks in REVERSE construction order
 container.shutdown().await?;
 ```
 

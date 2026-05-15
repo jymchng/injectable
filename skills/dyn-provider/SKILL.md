@@ -56,8 +56,8 @@ DynProvider::with_ctx(|ctx| async move {
 ```rust
 #[injectable]
 impl UserService {
-    #[injectable_ctor]
-    fn new(#[inject] pool: Arc<sqlx::SqlitePool>) -> Self {
+    #[injectable(ctor)]
+    fn new(#[injectable(inject)] pool: Arc<sqlx::SqlitePool>) -> Self {
         Self { pool }
     }
 }
@@ -68,12 +68,12 @@ impl UserService {
 ```rust
 #[injectable]
 struct Repo {
-    #[inject(use_factory_async = self::make_pool)]
+    #[injectable(inject(use_factory_async = self::make_pool))]
     pool: sqlx::SqlitePool,
 }
 
-// OR via #[inject_fn]:
-#[inject_fn]
+// OR via #[injectable(factory)]:
+#[injectable(factory)]
 async fn make_pool(cfg: Inject<AppConfig>) -> Result<sqlx::SqlitePool, sqlx::Error> {
     sqlx::SqlitePool::connect(&cfg.db_url).await
 }

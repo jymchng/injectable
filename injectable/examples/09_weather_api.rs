@@ -8,7 +8,7 @@
 //!
 //! Injectable wires `WeatherService` by injecting a `sqlx::SqlitePool`
 //! (via `use_factory`) and a `reqwest::Client` (via `DynProvider`) into
-//! a single singleton service.  The `#[post_construct]` hook runs the
+//! a single singleton service.  The `#[injectable(post_construct)]` hook runs the
 //! schema migration automatically on first resolution.
 //!
 //! Routes:
@@ -50,7 +50,7 @@ pub struct AppConfig {
 
 #[injectable]
 impl AppConfig {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new() -> Self {
         Self {
             database_url: std::env::var("DATABASE_URL").unwrap_or_else(|_| ":memory:".into()),
@@ -97,25 +97,25 @@ async fn reqwest_client_provider(
 #[derive(Debug)]
 #[injectable]
 pub struct WeatherService {
-    #[inject(use_factory_async=self::get_sqlite_pool)]
+    #[injectable(inject(use_factory_async=self::get_sqlite_pool))]
     pool: sqlx::SqlitePool,
-    #[inject(use_factory_async=self::reqwest_client_provider)]
+    #[injectable(inject(use_factory_async=self::reqwest_client_provider))]
     client: reqwest::Client,
 }
 
 #[injectable]
 impl WeatherService {
     /// Possible constructor
-    // #[injectable_ctor] //--- IGNORE ---
+    // #[injectable(ctor)] //--- IGNORE ---
     // async fn new(
-    //     #[inject(use_factory_async=self::get_sqlite_pool)] pool: sqlx::SqlitePool,
-    //     #[inject(use_factory_sync=self::reqwest_client_provider)] client: reqwest::Client,
+    //     #[injectable(inject(use_factory_async=self::get_sqlite_pool))] pool: sqlx::SqlitePool,
+    //     #[injectable(inject(use_factory_sync=self::reqwest_client_provider))] client: reqwest::Client,
     // ) -> Self {
     //     Self { pool, client }
     // }
 
     /// Run once after construction — creates the schema if it doesn't exist.
-    #[post_construct]
+    #[injectable(post_construct)]
     async fn migrate(&self) -> Result<(), sqlx::Error> {
         sqlx::query(
             "CREATE TABLE IF NOT EXISTS weather_lookups (

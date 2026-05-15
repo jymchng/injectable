@@ -17,7 +17,7 @@ fn make_weather(_ctx: &ResolveContext) -> WeatherService {
 /// The factory receives &ResolveContext and returns WeatherService directly.
 #[injectable]
 pub struct UserService {
-    #[inject(use_factory_sync = self::make_weather)]
+    #[injectable(inject(use_factory_sync = self::make_weather))]
     weather_svc: WeatherService,
 }
 

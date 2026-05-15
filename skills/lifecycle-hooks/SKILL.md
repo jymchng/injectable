@@ -9,8 +9,8 @@ description: Adds post_construct and pre_destruct lifecycle hooks to injectable 
 
 | Hook | Runs | Common use |
 |---|---|---|
-| `#[post_construct]` | After construction | Migrations, warm-up, cache load |
-| `#[pre_destruct]` | During `container.shutdown()` | Close connections, flush, drain |
+| `#[injectable(post_construct)]` | After construction | Migrations, warm-up, cache load |
+| `#[injectable(pre_destruct)]` | During `container.shutdown()` | Close connections, flush, drain |
 
 ## With constructor injection (same impl block)
 
@@ -19,12 +19,12 @@ use injectable::prelude::*;
 
 #[injectable]
 impl Database {
-    #[injectable_ctor]
-    async fn new(#[inject(use_factory_async = make_pool)] pool: Pool<Sqlite>) -> Self {
+    #[injectable(ctor)]
+    async fn new(#[injectable(inject(use_factory_async = make_pool))] pool: Pool<Sqlite>) -> Self {
         Self { pool }
     }
 
-    #[post_construct]
+    #[injectable(post_construct)]
     async fn migrate(&self) -> Result<(), sqlx::Error> {
         sqlx::query("CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY)")
             .execute(&self.pool).await?;
@@ -32,7 +32,7 @@ impl Database {
         Ok(())
     }
 
-    #[pre_destruct]
+    #[injectable(pre_destruct)]
     async fn close(&self) {
         self.pool.close().await;
         println!("[DB] Pool closed");
@@ -46,9 +46,9 @@ impl Database {
 #[injectable]
 struct Cache { db: Inject<Database> }
 
-#[injectable]          // no #[injectable_ctor] — lifecycle hooks only
+#[injectable]          // no #[injectable(ctor)] — lifecycle hooks only
 impl Cache {
-    #[post_construct]
+    #[injectable(post_construct)]
     async fn warm_up(&self) -> HookResult {
         println!("[Cache] Warming up");
         Ok(())
@@ -60,11 +60,11 @@ impl Cache {
 
 ```rust
 // Returns () — always succeeds
-#[post_construct]
+#[injectable(post_construct)]
 fn init(&self) { println!("initialized"); }
 
 // Returns Result — errors become LifecycleHookFailed
-#[post_construct]
+#[injectable(post_construct)]
 async fn connect(&self) -> Result<(), std::io::Error> {
     Ok(())
 }
@@ -75,7 +75,7 @@ async fn connect(&self) -> Result<(), std::io::Error> {
 ```rust
 let container = Container::builder().build().await?;
 // … use container …
-container.shutdown().await?;   // calls all #[pre_destruct] hooks in reverse order
+container.shutdown().await?;   // calls all #[injectable(pre_destruct)] hooks in reverse order
 ```
 
 Hooks run in **reverse construction order** — the most-recently-constructed type is

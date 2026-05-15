@@ -1,6 +1,14 @@
 # injectable
 
+![injectable logo](assets/injectable-logo-hori.png)
+
 A compile-time dependency injection framework for Rust, inspired by Axum's typed extractor model.
+
+Current docs target `injectable` `0.2.x` on Rust `1.86+`.
+
+- Repository: <https://github.com/jymchng/injectable>
+- Guide index: [guides/README.md](guides/README.md)
+- AI skills index: [skills/README.md](skills/README.md)
 
 ```rust
 use injectable::prelude::*;
@@ -42,7 +50,7 @@ async fn main() {
 
 ```toml
 [dependencies]
-injectable = { version = "0.1", features = ["axum"] }
+injectable = { version = "0.2", features = ["axum"] }
 tokio     = { version = "1", features = ["full"] }
 ```
 
@@ -70,7 +78,7 @@ pub struct Cache;
 pub struct Database;
 
 // Field injection: Inject<T> fields are auto-wired.
-// Arc<T> and plain T fields require an explicit #[inject].
+// Arc<T> and plain T fields require an explicit #[injectable(inject)].
 #[injectable]
 pub struct UserRepository {
     db:    Inject<Database>,    // auto-injected — no annotation needed
@@ -128,28 +136,28 @@ pub struct EmailService {
 
 #[injectable]
 impl EmailService {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     pub async fn new(
-        #[inject(use_factory_async = self::make_pool)] pool: sqlx::SqlitePool,
-        #[inject] config: Arc<AppConfig>,   // Injectable type — receives singleton Arc
+        #[injectable(inject(use_factory_async = self::make_pool))] pool: sqlx::SqlitePool,
+        #[injectable(inject)] config: Arc<AppConfig>,   // Injectable type — receives singleton Arc
     ) -> Self {
         Self { pool, config, retry: 3 }     // retry set manually
     }
 }
 ```
 
-`#[inject] param: Arc<T>` requires `T: Injectable` — it uses the singleton cache and returns the
+`#[injectable(inject)] param: Arc<T>` requires `T: Injectable` — it uses the singleton cache and returns the
 same `Arc` on every resolution. External types (sqlx, reqwest, etc.) are not `Injectable`;
-use `#[inject(use_factory_async/sync = path)]` for those instead.
+use `#[injectable(inject(use_factory_async/sync = path))]` for those instead.
 
 Parameter rewriting rules:
 
 | Declared type | Annotation | What you receive |
 |---|---|---|
 | `Inject<T>` | none | `Inject<T>` — `Arc<T>` wrapper; `T` must be `Injectable` |
-| `Arc<T>` | `#[inject]` | Singleton `Arc<T>`; `T` must be `Injectable` |
-| `T` (Clone) | `#[inject]` | Owned clone of singleton `T`; `T` must be `Injectable` |
-| External type | `#[inject(use_factory_async/sync = path)]` | `T` from factory |
+| `Arc<T>` | `#[injectable(inject)]` | Singleton `Arc<T>`; `T` must be `Injectable` |
+| `T` (Clone) | `#[injectable(inject)]` | Owned clone of singleton `T`; `T` must be `Injectable` |
+| External type | `#[injectable(inject(use_factory_async/sync = path))]` | `T` from factory |
 
 ### Lifecycle Hooks
 
@@ -160,16 +168,16 @@ pub struct ConnectionPool { /* ... */ }
 
 #[injectable]
 impl ConnectionPool {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     pub fn new() -> Self { /* ... */ }
 
-    #[post_construct]       // runs after construction
+    #[injectable(post_construct)]       // runs after construction
     pub async fn warm_up(&self) -> HookResult {
         println!("opening connections");
         Ok(())
     }
 
-    #[pre_destruct]         // runs during container.shutdown()
+    #[injectable(pre_destruct)]         // runs during container.shutdown()
     pub async fn drain(&self) -> HookResult {
         println!("closing connections");
         Ok(())
@@ -266,7 +274,7 @@ dependency graph validation failed:
 |---|---|
 | 01 | [Getting Started](guides/01-getting-started.md) |
 | 02 | [Field Injection with `#[injectable]`](guides/02-field-injection.md) |
-| 03 | [Constructor Injection with `#[injectable_ctor]`](guides/03-constructor-injection.md) |
+| 03 | [Constructor Injection with `#[injectable(ctor)]`](guides/03-constructor-injection.md) |
 | 04 | [External Types with `DynProvider`](guides/04-external-types.md) |
 | 05 | [Lifecycle Hooks](guides/05-lifecycle-hooks.md) |
 | 06 | [The `Inject<T>` Wrapper](guides/06-inject-wrapper.md) |
@@ -281,6 +289,20 @@ dependency graph validation failed:
 | 15 | [Organizing a Large Application](guides/15-large-app-organization.md) |
 | 16 | [Development and Release Workflow](guides/16-development-and-release.md) |
 | — | [3 Ways to Inject External Types](guides/3-ways-to-inject-external-types.md) |
+
+See [guides/README.md](guides/README.md) for a categorized guide index and
+contributor-oriented release/documentation notes.
+
+---
+
+## Project Links
+
+| Resource | Link |
+|---|---|
+| Homepage | <https://github.com/jymchng/injectable> |
+| Repository | <https://github.com/jymchng/injectable> |
+| Development + release guide | [guides/16-development-and-release.md](guides/16-development-and-release.md) |
+| AI skills catalog | [skills/README.md](skills/README.md) |
 
 ---
 

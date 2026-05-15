@@ -11,7 +11,7 @@
 ///
 /// ```rust,ignore
 /// // From:
-/// #[injectable_ctor]
+/// #[injectable(ctor)]
 /// pub async fn new(db: Inject<Database>, cache: Inject<Cache>) -> Self
 ///
 /// // The macro generates:

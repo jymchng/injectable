@@ -9,8 +9,8 @@ auto-injected.
 | Context | Use |
 |---|---|
 | `#[injectable]` struct field, auto-injected | `Inject<T>` (no annotation needed) |
-| `#[injectable]` struct field, explicit | `Arc<T>` with `#[inject]` |
-| `#[injectable_ctor]` constructor parameter | `Inject<T>` (auto) or `Arc<T>` with `#[inject]` |
+| `#[injectable]` struct field, explicit | `Arc<T>` with `#[injectable(inject)]` |
+| `#[injectable(ctor)]` constructor parameter | `Inject<T>` (auto) or `Arc<T>` with `#[injectable(inject)]` |
 | Struct field in a constructor-injected type | `Arc<T>` — store naturally, skip the wrapper |
 | Axum handler parameter | `Inject<T>` — implements `FromRequestParts` |
 
@@ -34,7 +34,7 @@ impl UserRepository {
 
 #[injectable]
 pub struct UserService {
-    repo: Inject<UserRepository>,   // auto-injected — no #[inject] needed
+    repo: Inject<UserRepository>,   // auto-injected — no #[injectable(inject)] needed
 }
 
 impl UserService {
@@ -103,7 +103,7 @@ Resolve dependencies that might not be registered without failing:
 ```rust
 #[injectable]
 pub struct Analytics {
-    #[inject]
+    #[injectable(inject)]
     backend: Option<Arc<MetricsBackend>>,  // None if not registered
 }
 

@@ -46,7 +46,7 @@ pub struct InjectParamService {
 
 #[injectable]
 impl InjectParamService {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new(db: Inject<Database>, cache: Inject<Cache>) -> Self {
         println!("  Constructing InjectParamService");
         Self { db, cache }
@@ -69,8 +69,11 @@ pub struct ArcParamService {
 
 #[injectable]
 impl ArcParamService {
-    #[injectable_ctor]
-    fn new(#[inject] db: Arc<Database>, #[inject] cache: Arc<Cache>) -> Self {
+    #[injectable(ctor)]
+    fn new(
+        #[injectable(inject)] db: Arc<Database>,
+        #[injectable(inject)] cache: Arc<Cache>,
+    ) -> Self {
         println!("  Constructing ArcParamService");
         Self { db, cache }
     }
@@ -90,8 +93,8 @@ pub struct ArcConfigService {
 
 #[injectable]
 impl ArcConfigService {
-    #[injectable_ctor]
-    fn new(#[inject] config: Arc<Config>) -> Self {
+    #[injectable(ctor)]
+    fn new(#[injectable(inject)] config: Arc<Config>) -> Self {
         println!("  Constructing ArcConfigService");
         Self { config }
     }
@@ -112,11 +115,11 @@ pub struct MixedParamService {
 
 #[injectable]
 impl MixedParamService {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new(
         db: Inject<Database>,
-        #[inject] config: Arc<Config>,
-        #[inject] cache: Arc<Cache>,
+        #[injectable(inject)] config: Arc<Config>,
+        #[injectable(inject)] cache: Arc<Cache>,
     ) -> Self {
         println!("  Constructing MixedParamService");
         Self { db, config, cache }
@@ -137,7 +140,7 @@ pub struct NoDepService {
 
 #[injectable]
 impl NoDepService {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new() -> Self {
         println!("  Constructing NoDepService");
         Self {
@@ -160,7 +163,7 @@ pub struct AsyncCtorService {
 
 #[injectable]
 impl AsyncCtorService {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     async fn new(db: Inject<Database>) -> Self {
         println!("  Constructing AsyncCtorService (async)");
         // Simulate async initialization (e.g., connection warmup)

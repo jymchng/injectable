@@ -33,7 +33,7 @@ struct Transaction { pool: Pool<Sqlite> }
 ```rust
 #[injectable(scope = Transient)]
 impl RequestLogger {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new() -> Self {
         Self { request_id: rand::random() }
     }
@@ -60,7 +60,7 @@ assert!(a.ptr_eq(&b));
 // Arc<T> field of a singleton always returns the same Arc (T's own scope is respected).
 #[injectable]
 struct Service {
-    #[inject]
+    #[injectable(inject)]
     cache: Arc<SharedCache>,    // Arc points to the SAME singleton
 }
 ```

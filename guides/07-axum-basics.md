@@ -6,7 +6,7 @@ With the `axum` feature enabled, `Inject<T>` becomes an Axum extractor. Add it t
 
 ```toml
 [dependencies]
-injectable = { version = "0.1", features = ["axum"] }
+injectable = { version = "0.2", features = ["axum"] }
 axum = "0.7"
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
@@ -16,12 +16,12 @@ serde = { version = "1", features = ["derive"] }
 
 ```rust
 use axum::{Json, Router, routing::get};
-use injectable::*;
 use injectable::axum::AxumState;
+use injectable::prelude::*;
 use serde::Serialize;
 
-#[injectable
-#[derive(, Default, Debug)]
+#[injectable]
+#[derive(Default, Debug)]
 pub struct GreetingService;
 
 impl GreetingService {
@@ -67,14 +67,15 @@ Combine as many `Inject<T>` extractors as needed. Axum resolves each extractor i
 
 ```rust
 use axum::{Json, extract::Path};
-use injectable::*;
+use injectable::prelude::*;
 use serde::{Deserialize, Serialize};
 
-#[injectable
-#[derive(, Default)]
+#[injectable]
+#[derive(Default)]
 pub struct UserRepository;
-#[injectable
-#[derive(, Default)]
+
+#[injectable]
+#[derive(Default)]
 pub struct AuditLogger;
 
 #[derive(Serialize)]
@@ -150,14 +151,17 @@ async fn config_handler(
 ```rust
 use axum::{Json, Router, routing::{get, post}};
 use axum::http::StatusCode;
-use injectable::*;
 use injectable::axum::AxumState;
+use injectable::prelude::*;
 use serde::{Deserialize, Serialize};
 
-#[injectable
-#[derive(, Default)] pub struct UserService;
-#[injectable
-#[derive(, Default)] pub struct OrderService;
+#[injectable]
+#[derive(Default)]
+pub struct UserService;
+
+#[injectable]
+#[derive(Default)]
+pub struct OrderService;
 
 impl UserService {
     pub fn list(&self) -> Vec<String> { vec!["Alice".into(), "Bob".into()] }

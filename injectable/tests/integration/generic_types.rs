@@ -135,13 +135,13 @@ struct OrderId;
 static NEXT_USER_ID: AtomicU32 = AtomicU32::new(1);
 static NEXT_ORDER_ID: AtomicU32 = AtomicU32::new(100);
 
-#[inject_fn]
+#[injectable(factory)]
 fn make_user_id(_db: Inject<Db>) -> TypedId<UserId> {
     let id = NEXT_USER_ID.fetch_add(1, Ordering::SeqCst) as u64;
     TypedId(id, PhantomData)
 }
 
-#[inject_fn]
+#[injectable(factory)]
 fn make_order_id(_db: Inject<Db>) -> TypedId<OrderId> {
     let id = NEXT_ORDER_ID.fetch_add(1, Ordering::SeqCst) as u64;
     TypedId(id, PhantomData)
@@ -149,14 +149,14 @@ fn make_order_id(_db: Inject<Db>) -> TypedId<OrderId> {
 
 #[injectable]
 struct UserContext {
-    #[inject(use_factory_async = self::make_user_id)]
+    #[injectable(inject(use_factory_async = self::make_user_id))]
     id: TypedId<UserId>,
     db: Inject<Db>,
 }
 
 #[injectable]
 struct OrderContext {
-    #[inject(use_factory_async = self::make_order_id)]
+    #[injectable(inject(use_factory_async = self::make_order_id))]
     id: TypedId<OrderId>,
     db: Inject<Db>,
 }
@@ -183,10 +183,10 @@ pub struct RecordService {
 
 #[injectable]
 impl RecordService {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new(
-        #[inject] users: Arc<Repository<UserEntity>>,
-        #[inject] products: Arc<Repository<ProductEntity>>,
+        #[injectable(inject)] users: Arc<Repository<UserEntity>>,
+        #[injectable(inject)] products: Arc<Repository<ProductEntity>>,
     ) -> Self {
         Self { users, products }
     }

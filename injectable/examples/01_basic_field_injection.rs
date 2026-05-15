@@ -11,12 +11,12 @@
 //! - `T` where T: Injectable — owned value (fresh copy each resolution)
 //! - Non-Injectable fields require `#[injectable(default)]` to use Default
 //!
-//! ## `#[inject]` annotation
+//! ## `#[injectable(inject)]` annotation
 //!
 //! - `Inject<T>` fields are auto-injected — no annotation needed.
 //! - All other field types (`Arc<T>`, plain `T`, …) must be explicitly
-//!   annotated with `#[inject]` or a factory variant to be injected.
-//! - Fields with no DI dependency belong in a `#[injectable_ctor]` constructor.
+//!   annotated with `#[injectable(inject)]` or a factory variant to be injected.
+//! - Fields with no DI dependency belong in a `#[injectable(ctor)]` constructor.
 //!
 //! Run with: cargo run --example 01_basic_field_injection
 
@@ -80,9 +80,9 @@ impl UserService {
 #[injectable]
 #[derive(Debug)]
 pub struct OwnedService {
-    #[inject]
+    #[injectable(inject)]
     db: Arc<Database>,
-    #[inject]
+    #[injectable(inject)]
     cache: Arc<Cache>,
 }
 
@@ -91,7 +91,7 @@ pub struct OwnedService {
 #[derive(Debug)]
 pub struct MixedService {
     db: Inject<Database>, // shared Arc<Database>
-    #[inject]
+    #[injectable(inject)]
     config: Arc<Config>,
 }
 
@@ -106,7 +106,7 @@ pub struct ConfigWithPort {
 
 #[injectable]
 impl ConfigWithPort {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new(db: Inject<Database>) -> Self {
         Self {
             db,
@@ -127,7 +127,7 @@ pub struct PartialInjectService {
 
 #[injectable]
 impl PartialInjectService {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new(db: Inject<Database>, cache: Inject<Cache>) -> Self {
         Self {
             db,
@@ -187,13 +187,13 @@ async fn main() {
         .expect("resolve MixedService");
     println!("\nResolved MixedService: {mixed:?}");
 
-    // Resolve a type using #[injectable(default)] with #[inject] override
-    println!("\n--- #[inject] in #[injectable(default)] struct ---");
+    // Resolve a type using #[injectable(default)] with #[injectable(inject)] override
+    println!("\n--- #[injectable(inject)] in #[injectable(default)] struct ---");
     let config = container
         .resolve::<ConfigWithPort>()
         .await
         .expect("resolve ConfigWithPort");
-    println!("ConfigWithPort (default + #[inject] on db): {config:?}");
+    println!("ConfigWithPort (default + #[injectable(inject)] on db): {config:?}");
     println!("  db field was INJECTED (not defaulted)");
     println!("  port field was defaulted: {}", config.port);
     println!("  host field was defaulted: {:?}", config.host);

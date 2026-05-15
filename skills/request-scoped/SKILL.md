@@ -13,23 +13,25 @@ description: Implements per-request dependency injection with RequestScoped scop
 use injectable::prelude::*;
 
 #[injectable(scope = RequestScoped)]
-pub struct Transaction {
-    pool: Pool<Sqlite>,
-    request_id: u64,
+pub struct RequestContext {
+    request_id: String,
 }
 
 #[injectable]
-impl Transaction {
-    #[injectable_ctor]
+impl RequestContext {
+    #[injectable(ctor)]
     fn new() -> Self {
         Self {
-            pool: Pool::null(),
-            request_id: rand::random(),
+            request_id: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+                .to_string(),
         }
     }
 
     pub fn begin(&self) {
-        println!("Starting transaction {}", self.request_id);
+        println!("Starting request {}", self.request_id);
     }
 }
 ```
@@ -38,11 +40,11 @@ impl Transaction {
 
 ```rust
 async fn create_user(
-    Inject(tx): Inject<Transaction>,  // fresh Transaction per request
+    Inject(ctx): Inject<RequestContext>,  // fresh RequestContext per request
     Json(body): Json<CreateUser>,
 ) -> impl IntoResponse {
-    tx.begin();
-    // tx.request_id is unique to this request
+    ctx.begin();
+    // ctx.request_id is unique to this request
 }
 ```
 
@@ -51,13 +53,13 @@ async fn create_user(
 The Axum `FromRequestParts` impl creates a per-request `ResolveContext`:
 
 ```rust
-// Each Inject<Transaction> in a handler gets a fresh Transaction
-async fn handler_a(tx: Inject<Transaction>) {
-    println!("Request A: {}", tx.request_id); // e.g., 12345
+// Each Inject<RequestContext> in a handler gets a fresh RequestContext
+async fn handler_a(ctx: Inject<RequestContext>) {
+    println!("Request A: {}", ctx.request_id);
 }
 
-async fn handler_b(tx: Inject<Transaction>) {
-    println!("Request B: {}", tx.request_id); // e.g., 67890
+async fn handler_b(ctx: Inject<RequestContext>) {
+    println!("Request B: {}", ctx.request_id);
 }
 ```
 
@@ -73,11 +75,15 @@ pub struct RequestContext {
 
 #[injectable]
 impl RequestContext {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new() -> Self {
         Self {
             user_id: None,
-            trace_id: uuid::Uuid::new_v4().to_string(),
+            trace_id: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+                .to_string(),
             start_time: std::time::Instant::now(),
         }
     }
@@ -118,4 +124,5 @@ async fn handler(user: AuthenticatedUser, ctx: Inject<RequestContext>) {
 }
 ```
 
-Request-scoped dependencies are ideal for anything that should exist once per HTTP request — transactions, logging context, tenant isolation, etc.
+Request-scoped dependencies are ideal for anything that should exist once per
+HTTP request — transactions, logging context, tenant isolation, and auth data.

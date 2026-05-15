@@ -1,20 +1,20 @@
 # Guide 05 — Lifecycle Hooks
 
 Injectable provides two lifecycle hooks that run at predictable points:
-`#[post_construct]` runs after construction and `#[pre_destruct]` runs during
+`#[injectable(post_construct)]` runs after construction and `#[injectable(pre_destruct)]` runs during
 `container.shutdown()` in reverse construction order.
 
 ## The Two Hooks
 
 | Hook | Runs | Common uses |
 |---|---|---|
-| `#[post_construct]` | After construction, before first use | Schema migration, connection warm-up, cache loading |
-| `#[pre_destruct]` | During `container.shutdown()`, reverse order | Flush buffers, drain queues, close connections |
+| `#[injectable(post_construct)]` | After construction, before first use | Schema migration, connection warm-up, cache loading |
+| `#[injectable(pre_destruct)]` | During `container.shutdown()`, reverse order | Flush buffers, drain queues, close connections |
 
 ## Approach A — Constructor injection (recommended)
 
-Put `#[post_construct]` and `#[pre_destruct]` in the same `#[injectable]` impl
-block as your `#[injectable_ctor]`. The macro generates the trait impls automatically.
+Put `#[injectable(post_construct)]` and `#[injectable(pre_destruct)]` in the same `#[injectable]` impl
+block as your `#[injectable(ctor)]`. The macro generates the trait impls automatically.
 
 ```rust
 use injectable::*;
@@ -27,7 +27,7 @@ pub struct WorkQueue {
 
 #[injectable]
 impl WorkQueue {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     pub fn new() -> Self {
         Self {
             running:   AtomicBool::new(false),
@@ -35,13 +35,13 @@ impl WorkQueue {
         }
     }
 
-    #[post_construct]
+    #[injectable(post_construct)]
     pub async fn start(&self) {
         self.running.store(true, Ordering::SeqCst);
         println!("[WorkQueue] started");
     }
 
-    #[pre_destruct]
+    #[injectable(pre_destruct)]
     pub async fn drain(&self) {
         self.running.store(false, Ordering::SeqCst);
         let n = self.processed.load(Ordering::SeqCst);
@@ -60,7 +60,7 @@ impl WorkQueue {
 ## Approach B — Field injection with lifecycle hooks
 
 Put lifecycle hooks in a **separate** `#[injectable]` impl block when the struct
-uses field injection (no `#[injectable_ctor]`):
+uses field injection (no `#[injectable(ctor)]`):
 
 ```rust
 use injectable::*;
@@ -70,15 +70,15 @@ pub struct ConnectionPool {
     db: Inject<Database>,
 }
 
-#[injectable]          // no #[injectable_ctor] — lifecycle hooks only
+#[injectable]          // no #[injectable(ctor)] — lifecycle hooks only
 impl ConnectionPool {
-    #[post_construct]
+    #[injectable(post_construct)]
     pub async fn warm_up(&self) -> HookResult {
         println!("[Pool] warming up…");
         Ok(())
     }
 
-    #[pre_destruct]
+    #[injectable(pre_destruct)]
     pub async fn drain(&self) -> HookResult {
         println!("[Pool] draining…");
         Ok(())
@@ -92,13 +92,13 @@ Both hooks accept `()` or `Result<(), E>`. The macro adapts accordingly:
 
 ```rust
 // Unit return — always succeeds
-#[post_construct]
+#[injectable(post_construct)]
 fn init(&self) {
     println!("initialized");
 }
 
 // Result return — error is wrapped as InjectableError::LifecycleHookFailed
-#[post_construct]
+#[injectable(post_construct)]
 async fn connect(&self) -> Result<(), std::io::Error> {
     // ...
     Ok(())
@@ -133,14 +133,14 @@ async fn make_pool(_ctx: &ResolveContext) -> Result<sqlx::SqlitePool, sqlx::Erro
 
 #[injectable]
 impl Database {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     pub async fn new(
-        #[inject(use_factory_async = self::make_pool)] pool: sqlx::SqlitePool,
+        #[injectable(inject(use_factory_async = self::make_pool))] pool: sqlx::SqlitePool,
     ) -> Self {
         Self { pool }
     }
 
-    #[post_construct]
+    #[injectable(post_construct)]
     pub async fn migrate(&self) -> Result<(), sqlx::Error> {
         sqlx::query(
             "CREATE TABLE IF NOT EXISTS users (
@@ -154,7 +154,7 @@ impl Database {
         Ok(())
     }
 
-    #[pre_destruct]
+    #[injectable(pre_destruct)]
     pub async fn close(&self) -> HookResult {
         self.pool.close().await;
         println!("[DB] Connection pool closed");

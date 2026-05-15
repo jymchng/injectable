@@ -15,7 +15,7 @@ use injectable::prelude::*;
 #[injectable]
 struct Analytics {
     db: Inject<Database>,
-    #[inject]
+    #[injectable(inject)]
     metrics: Option<Inject<MetricsBackend>>,   // None if not registered
 }
 

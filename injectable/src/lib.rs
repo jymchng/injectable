@@ -69,15 +69,10 @@ pub use injectable_runtime::{
 // Re-export graph types
 pub use injectable_graph::{DependencyGraph, GraphError, GraphNode, ValidationError};
 
-// Re-export proc macros
+// Re-export proc macros — all surface area is under #[injectable(...)]
 pub use injectable_macros::bind;
 pub use injectable_macros::container;
-pub use injectable_macros::inject_fn; // transforms a fn with #[inject] params into a DI factory
-pub use injectable_macros::injectable; // unified #[injectable] — on structs AND impl blocks
-pub use injectable_macros::injectable_ctor; // marks the injection constructor method
-pub use injectable_macros::injectable_trait;
-pub use injectable_macros::post_construct;
-pub use injectable_macros::pre_destruct;
+pub use injectable_macros::injectable;
 
 // Type-safe scope markers — `#[injectable(scope = Singleton)]` etc.
 pub use injectable_runtime::{RequestScoped, Singleton, Transient};
@@ -107,15 +102,10 @@ pub mod prelude {
         // Scope markers
         Singleton,
         Transient,
+        // Macros — all surface area lives under #[injectable(...)]
         bind,
         container,
-        inject_fn,
-        // Macros
         injectable,
-        injectable_ctor,
-        injectable_trait,
-        post_construct,
-        pre_destruct,
     };
     // Arc is used in almost every injectable definition.
     pub use std::sync::Arc;

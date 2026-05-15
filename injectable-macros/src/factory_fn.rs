@@ -1,7 +1,8 @@
-//! `#[inject_fn]` attribute macro.
+//! `#[injectable(factory)]` attribute macro.
 //!
-//! Transforms a regular function whose parameters carry `#[inject]` annotations
-//! into an async context-based factory compatible with `use_factory_async = path`.
+//! Transforms a regular function whose parameters carry `#[injectable(inject)]`
+//! annotations into an async context-based factory compatible with
+//! `#[injectable(inject(use_factory_async = path))]`.
 //!
 //! # Generated signature
 //!
@@ -33,7 +34,7 @@ pub(crate) fn expand_inject_fn(item: syn::ItemFn) -> syn::Result<TokenStream> {
         if matches!(arg, syn::FnArg::Receiver(_)) {
             return Err(syn::Error::new(
                 arg.span(),
-                "#[inject_fn] cannot be applied to a method with `self`",
+                "#[injectable(factory)] cannot be applied to a method with `self`",
             ));
         }
     }
@@ -58,7 +59,7 @@ pub(crate) fn expand_inject_fn(item: syn::ItemFn) -> syn::Result<TokenStream> {
             _ => {
                 return Err(syn::Error::new(
                     pat_type.pat.span(),
-                    "#[inject_fn] parameters must be named",
+                    "#[injectable(factory)] parameters must be named",
                 ));
             }
         };
@@ -74,8 +75,8 @@ pub(crate) fn expand_inject_fn(item: syn::ItemFn) -> syn::Result<TokenStream> {
             return Err(syn::Error::new(
                 ty.span(),
                 format!(
-                    "parameter `{}: {}` requires `#[inject]` annotation in \
-                     `#[inject_fn]`; only `Inject<T>` is auto-injected",
+                    "parameter `{}: {}` requires `#[injectable(inject)]` annotation in \
+                     `#[injectable(factory)]`; only `Inject<T>` is auto-injected",
                     name, ty_string
                 ),
             ));
@@ -123,11 +124,13 @@ pub(crate) fn expand_inject_fn(item: syn::ItemFn) -> syn::Result<TokenStream> {
         quote! { Ok({ #body }) }
     };
 
-    // Preserve non-inject_fn attributes (e.g. #[allow(...)], #[cfg(...)]).
+    // Preserve non-injectable attributes (e.g. #[allow(...)], #[cfg(...)]).
+    // The #[injectable(factory)] proc-macro attr is already consumed by the
+    // invocation, so this is a defensive filter for any residual injectable attrs.
     let other_attrs: Vec<_> = item
         .attrs
         .iter()
-        .filter(|a| !a.path().is_ident("inject_fn"))
+        .filter(|a| !a.path().is_ident("injectable"))
         .collect();
 
     Ok(quote! {
@@ -179,23 +182,34 @@ impl ParamFactory {
     }
 }
 
-/// Parse `#[inject]` / `#[inject(use_factory_async/sync = path)]` from attrs.
+/// Parse `#[injectable(inject)]` / `#[injectable(inject(use_factory_async/sync = path))]`
+/// from a `#[inject_fn]` function parameter's attributes.
 ///
 /// Returns `(has_inject, Option<factory>)`.
 fn parse_inject_attr(attrs: &[syn::Attribute]) -> syn::Result<(bool, Option<ParamFactory>)> {
     for attr in attrs {
-        if !attr.path().is_ident("inject") {
+        if !attr.path().is_ident("injectable") {
             continue;
         }
-        // Bare `#[inject]` with no args.
-        if matches!(attr.meta, syn::Meta::Path(_)) {
-            return Ok((true, None));
-        }
         let factory = attr.parse_args_with(|input: syn::parse::ParseStream| {
+            let kw: syn::Ident = input.parse()?;
+            if kw != "inject" {
+                return Err(syn::Error::new(
+                    kw.span(),
+                    format!(
+                        "expected `inject` inside `#[injectable(...)]` on a parameter, \
+                         found `{kw}`"
+                    ),
+                ));
+            }
             if input.is_empty() {
+                // #[injectable(inject)] — bare, no factory args
                 return Ok(None);
             }
-            let ident: syn::Ident = input.parse()?;
+            // #[injectable(inject(use_factory_async/sync = path))]
+            let content;
+            syn::parenthesized!(content in input);
+            let ident: syn::Ident = content.parse()?;
             let is_async = if ident == "use_factory_async" || ident == "use_factory" {
                 true
             } else if ident == "use_factory_sync" {
@@ -204,13 +218,13 @@ fn parse_inject_attr(attrs: &[syn::Attribute]) -> syn::Result<(bool, Option<Para
                 return Err(syn::Error::new(
                     ident.span(),
                     format!(
-                        "unknown inject attribute: `{ident}`; \
+                        "unknown inject argument: `{ident}`; \
                          expected `use_factory_async = path` or `use_factory_sync = path`"
                     ),
                 ));
             };
-            input.parse::<syn::Token![=]>()?;
-            let path: syn::Path = input.parse()?;
+            content.parse::<syn::Token![=]>()?;
+            let path: syn::Path = content.parse()?;
             if is_async {
                 Ok(Some(ParamFactory::Async(path)))
             } else {

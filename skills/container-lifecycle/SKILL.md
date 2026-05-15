@@ -48,7 +48,7 @@ assert!(types.contains(&"Database"), "Database must be registered");
 ## Shutdown
 
 ```rust
-// Calls all #[pre_destruct] hooks in reverse construction order
+// Calls all #[injectable(pre_destruct)] hooks in reverse construction order
 container.shutdown().await?;
 ```
 

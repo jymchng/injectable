@@ -17,9 +17,9 @@ cargo run --example 10_weather_users_api --features axum
 ## Architecture
 
 ```
-AppConfig (#[injectable_ctor] reads env)
+AppConfig (#[injectable(ctor)] reads env)
     ↓
-make_pool (#[inject_fn])   make_http_client (#[inject_fn])
+make_pool (#[injectable(factory)])   make_http_client (#[injectable(factory)])
     ↓                               ↓
 WeatherService (#[injectable] ← pool, client)
     ↓
@@ -29,7 +29,7 @@ UserService (#[injectable] ← pool, Arc<WeatherService>)
 ## Pool factory with sqlite::memory: note
 
 ```rust
-#[inject_fn]
+#[injectable(factory)]
 async fn make_pool(cfg: Inject<AppConfig>) -> Result<Pool<Sqlite>, InjectableError> {
     sqlx::sqlite::SqlitePoolOptions::new()
         .max_connections(1)        // REQUIRED for sqlite::memory:
@@ -65,12 +65,12 @@ async fn make_http_client(_ctx: &ResolveContext)
 
 | Pattern | Where used |
 |---|---|
-| `#[inject_fn]` for pool | `make_pool` |
+| `#[injectable(factory)]` for pool | `make_pool` |
 | `use_factory_async` field | `pool` on WeatherService |
 | `use_factory_sync` field | `client` on WeatherService (sync factory) |
 | `Arc<WeatherService>` dep | `weather_service` field on UserService |
-| `#[post_construct]` migration | WeatherService, UserService |
-| `#[pre_destruct]` close | Pool close |
+| `#[injectable(post_construct)]` migration | WeatherService, UserService |
+| `#[injectable(pre_destruct)]` close | Pool close |
 | Custom AppState | Implements InjectableState |
 
 See full sources in `examples/`.

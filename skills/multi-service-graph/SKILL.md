@@ -21,38 +21,38 @@ use injectable::prelude::*;
 
 #[injectable]
 pub struct AuthService {
-    #[inject(use_factory_async = crate::make_db_pool)]
+    #[injectable(inject(use_factory_async = crate::make_db_pool))]
     pool: Pool<Sqlite>,
 }
 
 #[injectable]
 pub struct UrlService {
-    #[inject(use_factory_async = crate::make_db_pool)]
+    #[injectable(inject(use_factory_async = crate::make_db_pool))]
     pool:   Pool<Sqlite>,
-    #[inject]
+    #[injectable(inject)]
     config: Arc<AppConfig>,     // depends on AppConfig
 }
 
 #[injectable]
 pub struct AnalyticsService {
-    #[inject(use_factory_async = crate::make_db_pool)]
+    #[injectable(inject(use_factory_async = crate::make_db_pool))]
     pool:    Pool<Sqlite>,
-    #[inject]
+    #[injectable(inject)]
     url_svc: Arc<UrlService>,   // depends on UrlService
 }
 
 #[injectable]
 pub struct RedirectService {
-    #[inject]
+    #[injectable(inject)]
     url_svc:   Arc<UrlService>,       // shared reference
-    #[inject]
+    #[injectable(inject)]
     analytics: Arc<AnalyticsService>, // depends on AnalyticsService
 }
 ```
 
 ## Key points
 
-- `Arc<T>` fields (with `#[inject]`) share the singleton — `url_svc` in both
+- `Arc<T>` fields (with `#[injectable(inject)]`) share the singleton — `url_svc` in both
   `AnalyticsService` and `RedirectService` point to the **same** `Arc<UrlService>`.
 - The factory `make_db_pool` is called once per service type (each service
   gets its own pool by default).

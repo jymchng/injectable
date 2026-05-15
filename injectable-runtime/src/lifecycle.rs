@@ -1,7 +1,7 @@
 //! Lifecycle hook traits for `post_construct` and `pre_destruct`.
 //!
 //! These traits are automatically implemented by the `#[derive(Injectable)]`
-//! macro when `#[post_construct]` or `#[pre_destruct]` annotations are
+//! macro when `#[injectable(post_construct)]` or `#[injectable(pre_destruct)]` annotations are
 //! present on methods.
 //!
 //! # Error Handling
@@ -28,7 +28,7 @@ pub type HookResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
 
 /// Trait for post-construction lifecycle hooks.
 ///
-/// When a type has a method annotated with `#[post_construct]`, the
+/// When a type has a method annotated with `#[injectable(post_construct)]`, the
 /// derive macro generates an implementation of this trait that calls
 /// the annotated method.
 ///
@@ -60,10 +60,10 @@ pub type HookResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
 /// }
 ///
 /// impl Database {
-///     #[injectable_ctor]
+///     #[injectable(ctor)]
 ///     pub async fn new() -> Self { Self { pool_size: 10 } }
 ///
-///     #[post_construct]
+///     #[injectable(post_construct)]
 ///     async fn connect(&self) -> Result<(), std::io::Error> {
 ///         self.establish_connection().await?;
 ///         Ok(())
@@ -74,7 +74,7 @@ pub type HookResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
 /// Hooks that cannot fail may return `()`:
 ///
 /// ```rust,ignore
-/// #[post_construct]
+/// #[injectable(post_construct)]
 /// fn log_startup(&self) {
 ///     println!("Service started");
 /// }
@@ -89,7 +89,7 @@ pub trait PostConstruct: Send + Sync {
 
 /// Trait for pre-destruction lifecycle hooks.
 ///
-/// When a type has a method annotated with `#[pre_destruct]`, the
+/// When a type has a method annotated with `#[injectable(pre_destruct)]`, the
 /// derive macro generates an implementation of this trait that calls
 /// the annotated method.
 ///
@@ -117,7 +117,7 @@ pub trait PostConstruct: Send + Sync {
 ///
 /// ```rust,ignore
 /// impl Database {
-///     #[pre_destruct]
+///     #[injectable(pre_destruct)]
 ///     async fn shutdown(&self) -> Result<(), std::io::Error> {
 ///         self.close_connections().await?;
 ///         Ok(())

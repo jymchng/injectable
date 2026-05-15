@@ -6,20 +6,20 @@
 //! # Parameter Injection Rules
 //!
 //! `Inject<T>` parameters are auto-injected. All other types require an explicit
-//! `#[inject]` annotation (or a factory variant); omitting it is a compile error.
+//! `#[injectable(inject)]` annotation (or a factory variant); omitting it is a compile error.
 //!
-//! | Constructor Parameter | Annotation     | DI Extraction            | Conversion              |
-//! |-----------------------|----------------|--------------------------|-------------------------|
-//! | `Inject<T>`          | (none needed)  | `Inject<T>::extract(ctx)`| Pass directly           |
-//! | `Arc<T>`             | `#[inject]`    | `Inject<T>::extract(ctx)`| `.0` (inner Arc)        |
-//! | `T` (other)          | `#[inject]`    | `Inject<T>::extract(ctx)`| `Arc::unwrap_or_clone`  |
-//! | any                  | `#[inject(use_factory_*=path)]` | factory fn | as declared |
+//! | Constructor Parameter | Annotation                              | DI Extraction             | Conversion              |
+//! |-----------------------|-----------------------------------------|---------------------------|-------------------------|
+//! | `Inject<T>`          | (none needed)                           | `Inject<T>::extract(ctx)` | Pass directly           |
+//! | `Arc<T>`             | `#[injectable(inject)]`                 | `Inject<T>::extract(ctx)` | `.0` (inner Arc)        |
+//! | `T` (other)          | `#[injectable(inject)]`                 | `Inject<T>::extract(ctx)` | `Arc::unwrap_or_clone`  |
+//! | any                  | `#[injectable(inject(use_factory_*=p))]`| factory fn                | as declared             |
 //!
 //! # Auto-detected Lifecycle Hooks
 //!
-//! Methods annotated with `#[post_construct]` or `#[pre_destruct]` are
-//! auto-detected. The macro generates the corresponding trait impls
-//! automatically — no need for `#[injectable(has_post_construct)]`.
+//! Methods annotated with `#[injectable(post_construct)]` or
+//! `#[injectable(pre_destruct)]` are auto-detected. The macro generates
+//! the corresponding trait impls automatically.
 //!
 //! # Hook Return Types
 //!
@@ -81,8 +81,8 @@ pub fn expand_injectable_impl(attrs: TokenStream, item: TokenStream) -> syn::Res
         {
             return Err(syn::Error::new(
                 impl_block.self_ty.span(),
-                "#[injectable] without #[injectable_ctor] requires at least one \
-                 #[post_construct] or #[pre_destruct] method. \
+                "#[injectable] without #[injectable(ctor)] requires at least one \
+                 #[injectable(post_construct)] or #[injectable(pre_destruct)] method. \
                  For field injection without lifecycle hooks, use #[injectable] alone.",
             ));
         }
@@ -228,6 +228,22 @@ struct ScanResult {
     pre_destruct_hooks: Vec<HookInfo>,
 }
 
+/// Returns true if `attr` is `#[injectable(sub_arg)]` where the first token
+/// inside the parens is the given identifier.
+///
+/// Used to detect `#[injectable(ctor)]`, `#[injectable(post_construct)]`,
+/// and `#[injectable(pre_destruct)]` on impl block methods.
+fn is_injectable_sub_arg(attr: &syn::Attribute, sub_arg: &str) -> bool {
+    if !attr.path().is_ident("injectable") {
+        return false;
+    }
+    attr.parse_args_with(|input: syn::parse::ParseStream| {
+        let ident: syn::Ident = input.parse()?;
+        Ok(ident == sub_arg)
+    })
+    .unwrap_or(false)
+}
+
 /// Scan all methods in the impl block for lifecycle annotations.
 fn scan_impl_methods(impl_block: &syn::ItemImpl) -> syn::Result<ScanResult> {
     let mut result = ScanResult {
@@ -241,21 +257,21 @@ fn scan_impl_methods(impl_block: &syn::ItemImpl) -> syn::Result<ScanResult> {
             let has_constructor = method
                 .attrs
                 .iter()
-                .any(|a| a.path().is_ident("injectable_ctor"));
+                .any(|a| is_injectable_sub_arg(a, "ctor"));
             let has_post_construct = method
                 .attrs
                 .iter()
-                .any(|a| a.path().is_ident("post_construct"));
+                .any(|a| is_injectable_sub_arg(a, "post_construct"));
             let has_pre_destruct = method
                 .attrs
                 .iter()
-                .any(|a| a.path().is_ident("pre_destruct"));
+                .any(|a| is_injectable_sub_arg(a, "pre_destruct"));
 
             if has_constructor {
                 if result.constructor.is_some() {
                     return Err(syn::Error::new(
                         method.sig.ident.span(),
-                        "#[injectable] requires exactly one #[injectable_ctor] method, but found multiple",
+                        "#[injectable] requires exactly one #[injectable(ctor)] method, but found multiple",
                     ));
                 }
 
@@ -342,17 +358,17 @@ fn extract_params(sig: &syn::Signature) -> syn::Result<Vec<ParamInfo>> {
             let ty = (*pat_type.ty).clone();
             let ty_string = type_to_string(&ty);
 
-            // Parse optional #[inject] / #[inject(use_factory_*=path)] from parameter attrs
+            // Parse optional #[injectable(inject)] / #[injectable(inject(use_factory_*=path))]
             let (has_inject, factory_fn) = parse_param_inject(&pat_type.attrs)?;
 
-            // Non-Inject<T> params require an explicit #[inject] annotation
+            // Non-Inject<T> params require an explicit #[injectable(inject)] annotation
             if extract_inject_inner(&ty).is_none() && !has_inject {
                 return Err(syn::Error::new(
                     ty.span(),
                     format!(
                         "parameter `{}: {}` is not auto-injectable; \
                          only `Inject<T>` parameters are injected automatically — \
-                         annotate with `#[inject]` to extract this from the container",
+                         annotate with `#[injectable(inject)]` to extract this from the container",
                         name, ty_string
                     ),
                 ));
@@ -371,26 +387,36 @@ fn extract_params(sig: &syn::Signature) -> syn::Result<Vec<ParamInfo>> {
     Ok(params)
 }
 
-/// Parse `#[inject]` / `#[inject(use_factory_async/sync = path)]` from a parameter's attributes.
+/// Parse `#[injectable(inject)]` / `#[injectable(inject(use_factory_async/sync = path))]`
+/// from a constructor parameter's attributes.
 ///
 /// Returns `(has_inject_annotation, optional_factory)`:
-/// - `#[inject]` (no args)            → `(true, None)`
-/// - `#[inject(use_factory_async=…)]` → `(true, Some(FactoryFn::Async(…)))`
-/// - `#[inject(use_factory_sync=…)]`  → `(true, Some(FactoryFn::Sync(…)))`
-/// - no `#[inject]` attr              → `(false, None)`
+/// - `#[injectable(inject)]`                      → `(true, None)`
+/// - `#[injectable(inject(use_factory_async=…))]` → `(true, Some(FactoryFn::Async(…)))`
+/// - `#[injectable(inject(use_factory_sync=…))]`  → `(true, Some(FactoryFn::Sync(…)))`
+/// - no matching attr                             → `(false, None)`
 fn parse_param_inject(attrs: &[syn::Attribute]) -> syn::Result<(bool, Option<FactoryFn>)> {
     for attr in attrs {
-        if attr.path().is_ident("inject") {
-            // Bare #[inject] with no parentheses / args
-            if matches!(attr.meta, syn::Meta::Path(_)) {
-                return Ok((true, None));
-            }
+        if attr.path().is_ident("injectable") {
             let factory = attr.parse_args_with(|input: syn::parse::ParseStream| {
+                let kw: syn::Ident = input.parse()?;
+                if kw != "inject" {
+                    return Err(syn::Error::new(
+                        kw.span(),
+                        format!(
+                            "expected `inject` inside `#[injectable(...)]` on a parameter, \
+                             found `{kw}`"
+                        ),
+                    ));
+                }
                 if input.is_empty() {
-                    // #[inject()] — treat same as bare #[inject]
+                    // #[injectable(inject)] — bare, no factory args
                     return Ok(None);
                 }
-                let ident: syn::Ident = input.parse()?;
+                // #[injectable(inject(use_factory_async/sync = path))]
+                let content;
+                syn::parenthesized!(content in input);
+                let ident: syn::Ident = content.parse()?;
                 let is_async = if ident == "use_factory_async" || ident == "use_factory" {
                     true
                 } else if ident == "use_factory_sync" {
@@ -399,13 +425,13 @@ fn parse_param_inject(attrs: &[syn::Attribute]) -> syn::Result<(bool, Option<Fac
                     return Err(syn::Error::new(
                         ident.span(),
                         format!(
-                            "unknown inject attribute on parameter: `{ident}`; \
+                            "unknown inject argument on parameter: `{ident}`; \
                              expected `use_factory_async = path` or `use_factory_sync = path`"
                         ),
                     ));
                 };
-                input.parse::<syn::Token![=]>()?;
-                let path: syn::Path = input.parse()?;
+                content.parse::<syn::Token![=]>()?;
+                let path: syn::Path = content.parse()?;
                 if is_async {
                     Ok(Some(FactoryFn::Async(path)))
                 } else {
@@ -463,16 +489,14 @@ struct AttrStripper;
 
 impl VisitMut for AttrStripper {
     fn visit_impl_item_fn_mut(&mut self, node: &mut syn::ImplItemFn) {
-        node.attrs.retain(|a| {
-            !a.path().is_ident("injectable_ctor")
-                && !a.path().is_ident("post_construct")
-                && !a.path().is_ident("pre_destruct")
-        });
-        // Strip #[inject] from parameter-level attributes so rustc doesn't
-        // see an unknown attribute in the output impl block.
+        // Strip all #[injectable(...)] from method attrs:
+        // covers #[injectable(ctor)], #[injectable(post_construct)], #[injectable(pre_destruct)].
+        node.attrs.retain(|a| !a.path().is_ident("injectable"));
+        // Strip #[injectable(inject)] from parameter-level attributes so rustc
+        // doesn't see an unknown attribute in the output impl block.
         for input in node.sig.inputs.iter_mut() {
             if let syn::FnArg::Typed(pat_type) = input {
-                pat_type.attrs.retain(|a| !a.path().is_ident("inject"));
+                pat_type.attrs.retain(|a| !a.path().is_ident("injectable"));
             }
         }
         syn::visit_mut::visit_impl_item_fn_mut(self, node);

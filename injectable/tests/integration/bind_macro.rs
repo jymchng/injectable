@@ -1,4 +1,4 @@
-//! Integration tests for the `bind!` macro and `#[injectable_trait]`.
+//! Integration tests for the `bind!` macro and `#[injectable(trait)]`.
 //!
 //! # What is tested
 //!
@@ -6,7 +6,7 @@
 //!   `InjectableArcFactory` keyed by `Arc<dyn Trait>`, making the trait
 //!   object resolvable via `container.resolve_external::<Arc<dyn Trait>>()`.
 //! - Field injection: `Inject<dyn Trait>` as a struct field in `#[injectable]`.
-//! - Constructor injection: `Inject<dyn Trait>` as a `#[injectable_ctor]` param.
+//! - Constructor injection: `Inject<dyn Trait>` as a `#[injectable(ctor)]` param.
 //! - Trait method dispatch through the erased pointer.
 //! - `Deref` ergonomics on `Inject<dyn Trait>`.
 //! - Scope semantics: `bind!` calls `Provider::provide` directly (not through
@@ -15,11 +15,11 @@
 //! - Dependency resolution: the concrete type's own deps (e.g. `Inject<Config>`)
 //!   are resolved through the normal scope-respecting path.
 //! - `Option<Inject<dyn Trait>>`: resolves to `Some` when a binding exists.
-//! - Lifecycle hooks: `#[post_construct]` and `#[pre_destruct]` run correctly.
+//! - Lifecycle hooks: `#[injectable(post_construct)]` and `#[injectable(pre_destruct)]` run correctly.
 //! - Multiple distinct trait bindings in the same container.
 //! - Async trait methods dispatched through the trait object.
 //! - `inject_fn` receiving `Inject<dyn Trait>` parameters.
-//! - `bind!` without `#[injectable_trait]` (any trait qualifies).
+//! - `bind!` without `#[injectable(trait)]` (any trait qualifies).
 //!
 //! # One binding per trait per binary
 //!
@@ -48,7 +48,7 @@ macro_rules! resolve_dyn {
 // Section 1 — Basic resolution and method dispatch
 // ═══════════════════════════════════════════════════════════════════════════
 
-#[injectable_trait]
+#[injectable(trait)]
 trait Greeter: Send + Sync {
     fn greet(&self, name: &str) -> String;
 }
@@ -103,7 +103,7 @@ async fn into_inner_gives_arc_dyn_trait() {
 // Section 2 — Field injection: Inject<dyn Trait> inside an #[injectable] struct
 // ═══════════════════════════════════════════════════════════════════════════
 
-#[injectable_trait]
+#[injectable(trait)]
 trait Logger: Send + Sync {
     fn log(&self, msg: &str) -> String;
 }
@@ -146,10 +146,10 @@ async fn field_inject_dyn_trait_method_dispatch() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Section 3 — Constructor injection: Inject<dyn Trait> as a #[injectable_ctor] param
+// Section 3 — Constructor injection: Inject<dyn Trait> as a #[injectable(ctor)] param
 // ═══════════════════════════════════════════════════════════════════════════
 
-#[injectable_trait]
+#[injectable(trait)]
 trait Serializer: Send + Sync {
     fn serialize(&self, value: u32) -> String;
 }
@@ -172,7 +172,7 @@ struct ApiController {
 
 #[injectable]
 impl ApiController {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new(serializer: Inject<dyn Serializer>) -> Self {
         Self { serializer }
     }
@@ -207,7 +207,7 @@ async fn ctor_inject_dyn_multiple_calls() {
 
 static COUNTER_CTOR_CALLS: AtomicU32 = AtomicU32::new(0);
 
-#[injectable_trait]
+#[injectable(trait)]
 trait Counter: Send + Sync {
     fn id(&self) -> u32;
 }
@@ -219,7 +219,7 @@ struct CounterImpl {
 
 #[injectable]
 impl CounterImpl {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new() -> Self {
         let n = COUNTER_CTOR_CALLS.fetch_add(1, Ordering::SeqCst);
         Self { id: n }
@@ -285,13 +285,13 @@ struct SharedConfig {
 
 #[injectable]
 impl SharedConfig {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new() -> Self {
         Self { value: 0 }
     }
 }
 
-#[injectable_trait]
+#[injectable(trait)]
 trait Reporter: Send + Sync {
     fn report(&self) -> u32;
 }
@@ -303,7 +303,7 @@ struct ConfigReporter {
 
 #[injectable]
 impl ConfigReporter {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new(cfg: Inject<SharedConfig>) -> Self {
         Self { cfg }
     }
@@ -332,7 +332,7 @@ async fn bound_concrete_deps_resolved_through_normal_path() {
 // Section 6 — Option<Inject<dyn Trait>>
 // ═══════════════════════════════════════════════════════════════════════════
 
-#[injectable_trait]
+#[injectable(trait)]
 trait Formatter: Send + Sync {
     fn fmt_num(&self, n: u32) -> String;
 }
@@ -351,7 +351,7 @@ bind!(dyn Formatter => HexFormatter);
 
 #[injectable]
 struct Printer {
-    #[inject]
+    #[injectable(inject)]
     formatter: Option<Inject<dyn Formatter>>,
 }
 
@@ -381,7 +381,7 @@ async fn option_inject_dyn_trait_is_some_when_bound() {
 
 static POST_CONSTRUCT_CALLED: AtomicU32 = AtomicU32::new(0);
 
-#[injectable_trait]
+#[injectable(trait)]
 trait Warmer: Send + Sync {
     fn ping(&self) -> &'static str;
 }
@@ -391,12 +391,12 @@ struct HotCache;
 
 #[injectable]
 impl HotCache {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new() -> Self {
         Self
     }
 
-    #[post_construct]
+    #[injectable(post_construct)]
     async fn warm_up(&self) -> HookResult {
         POST_CONSTRUCT_CALLED.fetch_add(1, Ordering::SeqCst);
         Ok(())
@@ -442,7 +442,7 @@ async fn post_construct_runs_per_bind_resolution() {
 
 static PRE_DESTRUCT_CALLED: AtomicU32 = AtomicU32::new(0);
 
-#[injectable_trait]
+#[injectable(trait)]
 trait Drainable: Send + Sync {
     fn name(&self) -> &'static str;
 }
@@ -452,12 +452,12 @@ struct DrainablePool;
 
 #[injectable]
 impl DrainablePool {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new() -> Self {
         Self
     }
 
-    #[pre_destruct]
+    #[injectable(pre_destruct)]
     async fn drain(&self) -> HookResult {
         PRE_DESTRUCT_CALLED.fetch_add(1, Ordering::SeqCst);
         Ok(())
@@ -482,7 +482,7 @@ async fn pre_destruct_runs_on_shutdown_for_bound_type() {
     assert_eq!(
         after - before,
         1,
-        "#[pre_destruct] should be called once on shutdown"
+        "#[injectable(pre_destruct)] should be called once on shutdown"
     );
 }
 
@@ -490,12 +490,12 @@ async fn pre_destruct_runs_on_shutdown_for_bound_type() {
 // Section 9 — Multiple distinct trait bindings in the same container
 // ═══════════════════════════════════════════════════════════════════════════
 
-#[injectable_trait]
+#[injectable(trait)]
 trait Hasher: Send + Sync {
     fn hash_val(&self, input: &str) -> u64;
 }
 
-#[injectable_trait]
+#[injectable(trait)]
 trait Encoder: Send + Sync {
     fn encode_bytes(&self, bytes: &[u8]) -> String;
 }
@@ -564,7 +564,7 @@ async fn distinct_traits_resolve_independently() {
 // Section 10 — Async trait methods dispatched through the trait object
 // ═══════════════════════════════════════════════════════════════════════════
 
-#[injectable_trait]
+#[injectable(trait)]
 #[async_trait::async_trait]
 trait AsyncFetcher: Send + Sync {
     async fn fetch(&self, id: u32) -> String;
@@ -614,7 +614,7 @@ async fn async_trait_method_multiple_calls() {
 // Section 11 — Deep service graph with a trait-bound leaf
 // ═══════════════════════════════════════════════════════════════════════════
 
-#[injectable_trait]
+#[injectable(trait)]
 trait TokenStore: Send + Sync {
     fn store(&self, token: &str) -> String;
 }
@@ -687,13 +687,13 @@ struct AppVersion {
 
 #[injectable]
 impl AppVersion {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new() -> Self {
         Self { version: "1.2.3" }
     }
 }
 
-#[injectable_trait]
+#[injectable(trait)]
 trait VersionProvider: Send + Sync {
     fn version(&self) -> &str;
 }
@@ -705,7 +705,7 @@ struct BuildInfoProvider {
 
 #[injectable]
 impl BuildInfoProvider {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new(app_version: Inject<AppVersion>) -> Self {
         Self { app_version }
     }
@@ -743,7 +743,7 @@ async fn trait_binding_and_direct_resolve_read_same_dep() {
 // Section 13 — Arc from Inject<dyn Trait> can be cloned and shared
 // ═══════════════════════════════════════════════════════════════════════════
 
-#[injectable_trait]
+#[injectable(trait)]
 trait Validator: Send + Sync {
     fn validate(&self, input: &str) -> bool;
 }
@@ -781,7 +781,7 @@ async fn arc_dyn_trait_can_be_cloned_and_shared() {
 // Section 14 — inject_fn receiving Inject<dyn Trait>
 // ═══════════════════════════════════════════════════════════════════════════
 
-#[injectable_trait]
+#[injectable(trait)]
 trait Signer: Send + Sync {
     fn sign(&self, data: &str) -> String;
 }
@@ -798,7 +798,7 @@ impl Signer for HmacSigner {
 
 bind!(dyn Signer => HmacSigner);
 
-#[inject_fn]
+#[injectable(factory)]
 async fn make_signed_payload(signer: Inject<dyn Signer>) -> String {
     signer.sign("payload")
 }
@@ -809,8 +809,10 @@ struct SignedService {
 
 #[injectable]
 impl SignedService {
-    #[injectable_ctor]
-    async fn new(#[inject(use_factory_async = self::make_signed_payload)] payload: String) -> Self {
+    #[injectable(ctor)]
+    async fn new(
+        #[injectable(inject(use_factory_async = self::make_signed_payload))] payload: String,
+    ) -> Self {
         Self { payload }
     }
 }
@@ -823,10 +825,10 @@ async fn inject_fn_receives_inject_dyn_trait() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Section 15 — bind! works without #[injectable_trait]
+// Section 15 — bind! works without #[injectable(trait)]
 // ═══════════════════════════════════════════════════════════════════════════
 
-// Deliberately NOT annotated with #[injectable_trait].
+// Deliberately NOT annotated with #[injectable(trait)].
 trait RawTrait: Send + Sync {
     fn value(&self) -> i32;
 }

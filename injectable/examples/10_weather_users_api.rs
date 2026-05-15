@@ -16,15 +16,15 @@
 //! ```text
 //! #[injectable]
 //! pub struct WeatherService {
-//!     #[inject(use_factory_async = self::make_pool)]
+//!     #[injectable(inject(use_factory_async = self::make_pool))]
 //!     pool:   sqlx::Pool<Sqlite>,
-//!     #[inject(use_factory_async = self::make_http_client)]
+//!     #[injectable(inject(use_factory_async = self::make_http_client))]
 //!     client: reqwest::Client,
 //! }
 //!
 //! #[injectable]
 //! pub struct UserService {
-//!     #[inject(use_factory_async = self::make_pool)]
+//!     #[injectable(inject(use_factory_async = self::make_pool))]
 //!     pool:            sqlx::Pool<Sqlite>,
 //!     weather_service: Arc<WeatherService>,   // ← plain Arc<T>, auto-injected
 //! }
@@ -67,7 +67,7 @@ pub struct AppConfig {
 
 #[injectable]
 impl AppConfig {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new() -> Self {
         Self {
             database_url: std::env::var("DATABASE_URL")
@@ -84,7 +84,7 @@ impl AppConfig {
 // ─── Shared factories ────────────────────────────────────────────────────────
 //
 // Factories are plain functions.  Each one is referenced by name in
-// `#[inject(use_factory_async = self::make_pool)]` on the field that needs it.
+// `#[injectable(inject(use_factory_async = self::make_pool))]` on the field that needs it.
 // The factory is called once per singleton (i.e. once per container lifetime).
 
 /// Async factory: connects to SQLite, reads URL from AppConfig.
@@ -122,15 +122,15 @@ async fn make_http_client(_ctx: &ResolveContext) -> Result<reqwest::Client, Inje
 /// registration is needed in the container builder.
 #[injectable]
 pub struct WeatherService {
-    #[inject(use_factory_async = self::make_pool)]
+    #[injectable(inject(use_factory_async = self::make_pool))]
     pool: Pool<Sqlite>,
-    #[inject(use_factory_async = self::make_http_client)]
+    #[injectable(inject(use_factory_async = self::make_http_client))]
     client: reqwest::Client,
 }
 
 #[injectable]
 impl WeatherService {
-    #[post_construct]
+    #[injectable(post_construct)]
     async fn migrate(&self) -> Result<(), sqlx::Error> {
         sqlx::query(
             "CREATE TABLE IF NOT EXISTS weather_cache (
@@ -147,7 +147,7 @@ impl WeatherService {
         Ok(())
     }
 
-    #[pre_destruct]
+    #[injectable(pre_destruct)]
     async fn close(&self) {
         println!("  [WeatherService] Closing pool.");
         self.pool.close().await;
@@ -213,15 +213,15 @@ impl WeatherService {
 /// No `Inject<T>` wrapper needed.
 #[injectable]
 pub struct UserService {
-    #[inject(use_factory_async = self::make_pool)]
+    #[injectable(inject(use_factory_async = self::make_pool))]
     pool: Pool<Sqlite>,
-    #[inject]
+    #[injectable(inject)]
     weather_service: Arc<WeatherService>,
 }
 
 #[injectable]
 impl UserService {
-    #[post_construct]
+    #[injectable(post_construct)]
     async fn migrate(&self) -> Result<(), sqlx::Error> {
         sqlx::query(
             "CREATE TABLE IF NOT EXISTS users (
@@ -477,7 +477,7 @@ async fn main() {
     println!();
 
     // Services are resolved lazily on first request.
-    // #[post_construct] hooks (schema migration) run exactly once per service.
+    // #[injectable(post_construct)] hooks (schema migration) run exactly once per service.
 
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
     ::axum::serve(listener, app).await.unwrap();

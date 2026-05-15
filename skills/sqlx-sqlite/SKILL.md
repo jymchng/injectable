@@ -11,7 +11,7 @@ description: Injects an sqlx::SqlitePool into services using injectable. Use whe
 use injectable::prelude::*;
 use sqlx::{Pool, Sqlite};
 
-#[inject_fn]
+#[injectable(factory)]
 async fn make_pool(cfg: Inject<AppConfig>) -> Result<Pool<Sqlite>, sqlx::Error> {
     sqlx::sqlite::SqlitePoolOptions::new()
         .max_connections(5)
@@ -25,13 +25,13 @@ async fn make_pool(cfg: Inject<AppConfig>) -> Result<Pool<Sqlite>, sqlx::Error> 
 ```rust
 #[injectable]
 struct Database {
-    #[inject(use_factory_async = self::make_pool)]
+    #[injectable(inject(use_factory_async = self::make_pool))]
     pool: Pool<Sqlite>,
 }
 
 #[injectable]
 impl Database {
-    #[post_construct]
+    #[injectable(post_construct)]
     async fn migrate(&self) -> Result<(), sqlx::Error> {
         sqlx::query(
             "CREATE TABLE IF NOT EXISTS users (
@@ -45,7 +45,7 @@ impl Database {
         Ok(())
     }
 
-    #[pre_destruct]
+    #[injectable(pre_destruct)]
     async fn close(&self) {
         self.pool.close().await;
     }
@@ -58,7 +58,7 @@ impl Database {
 // Both services call make_pool — injectable caches Pool per service type.
 // Use a single-connection pool for in-memory SQLite (otherwise each Pool
 // gets a private database).
-#[inject_fn]
+#[injectable(factory)]
 async fn make_shared_pool(cfg: Inject<AppConfig>) -> Result<Pool<Sqlite>, sqlx::Error> {
     sqlx::sqlite::SqlitePoolOptions::new()
         .max_connections(1)          // required for sqlite::memory:
@@ -74,7 +74,7 @@ async fn make_shared_pool(cfg: Inject<AppConfig>) -> Result<Pool<Sqlite>, sqlx::
 ```rust
 #[injectable]
 impl AppConfig {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new() -> Self {
         Self {
             database_url: std::env::var("DATABASE_URL")

@@ -6,7 +6,7 @@ External types are types from crates you don't control — `sqlx::SqlitePool`,
 
 ---
 
-## Way 1 — Constructor factory (`#[inject(use_factory_*=path)]` on a parameter)
+## Way 1 — Constructor factory (`#[injectable(inject(use_factory_*=path))]` on a parameter)
 
 Use this when the external type is tightly coupled to one service and you want
 to keep the factory logic close to that service.  Struct fields are plain types
@@ -37,17 +37,17 @@ fn make_client(_ctx: &ResolveContext) -> reqwest::Client {
 
 #[injectable]
 impl WeatherService {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     async fn new(
         // use_factory_async: async fn(&ResolveContext) -> Result<T, E>
-        #[inject(use_factory_async = self::make_pool)]   pool:   sqlx::SqlitePool,
+        #[injectable(inject(use_factory_async = self::make_pool))]   pool:   sqlx::SqlitePool,
         // use_factory_sync: fn(&ResolveContext) -> T
-        #[inject(use_factory_sync  = self::make_client)] client: reqwest::Client,
+        #[injectable(inject(use_factory_sync  = self::make_client))] client: reqwest::Client,
     ) -> Self {
         Self { pool, client }
     }
 
-    #[post_construct]
+    #[injectable(post_construct)]
     async fn migrate(&self) -> Result<(), sqlx::Error> {
         sqlx::query(
             "CREATE TABLE IF NOT EXISTS weather_cache (
@@ -69,11 +69,11 @@ impl WeatherService {
 **When to choose this way:**
 - The external type is only used by one service.
 - You want the factory logic co-located with the service that uses it.
-- You need lifecycle hooks (`#[post_construct]` / `#[pre_destruct]`).
+- You need lifecycle hooks (`#[injectable(post_construct)]` / `#[injectable(pre_destruct)]`).
 
 ---
 
-## Way 2 — Field factory (`#[inject(use_factory_*=path)]` on a field)
+## Way 2 — Field factory (`#[injectable(inject(use_factory_*=path))]` on a field)
 
 Use this with the declarative `#[injectable]` struct syntax when every field
 can be expressed as either `Inject<T>` (auto-injected) or a factory annotation.
@@ -92,17 +92,17 @@ fn make_client(_ctx: &ResolveContext) -> reqwest::Client {
 // Field injection — all fields annotated explicitly
 #[injectable]
 pub struct WeatherService {
-    #[inject(use_factory_async = self::make_pool)]
+    #[injectable(inject(use_factory_async = self::make_pool))]
     pool: sqlx::SqlitePool,
 
-    #[inject(use_factory_sync = self::make_client)]
+    #[injectable(inject(use_factory_sync = self::make_client))]
     client: reqwest::Client,
 }
 
-// Lifecycle hooks in a separate impl block (no #[injectable_ctor])
+// Lifecycle hooks in a separate impl block (no #[injectable(ctor)])
 #[injectable]
 impl WeatherService {
-    #[post_construct]
+    #[injectable(post_construct)]
     async fn migrate(&self) -> Result<(), sqlx::Error> {
         sqlx::query("CREATE TABLE IF NOT EXISTS weather_cache (...)")
             .execute(&self.pool)
@@ -131,7 +131,7 @@ use injectable::*;
 // Wrap the external type in an Injectable struct — constructed once via DynProvider.
 #[injectable]
 pub struct Database {
-    #[inject(use_factory_async = self::make_pool)]
+    #[injectable(inject(use_factory_async = self::make_pool))]
     pub pool: sqlx::SqlitePool,
 }
 
@@ -144,7 +144,7 @@ pub struct UserRepository { db: Inject<Database> }
 
 #[injectable]
 impl UserRepository {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new(db: Inject<Database>) -> Self { Self { db } }
 }
 
@@ -152,7 +152,7 @@ pub struct ReportService { db: Inject<Database> }   // same shared singleton
 
 #[injectable]
 impl ReportService {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new(db: Inject<Database>) -> Self { Self { db } }
 }
 
@@ -177,7 +177,7 @@ a free factory function:
 ```rust
 #[injectable]
 impl Database {
-    #[post_construct]  // or #[injectable_ctor] async fn new(...)
+    #[injectable(post_construct)]  // or #[injectable(ctor)] async fn new(...)
     // ...
 }
 ```
@@ -196,9 +196,9 @@ or use `FactoryCtx` in a `DynProvider` if you prefer centralised registration.
 
 | | Way 1 — ctor factory | Way 2 — field factory | Way 3 — wrapper struct |
 |---|---|---|---|
-| Syntax | `#[inject(use_factory_*=path)]` on param | `#[inject(use_factory_*=path)]` on field | `#[injectable]` wrapper + `Inject<Wrapper>` |
+| Syntax | `#[injectable(inject(use_factory_*=path))]` on param | `#[injectable(inject(use_factory_*=path))]` on field | `#[injectable]` wrapper + `Inject<Wrapper>` |
 | Shared across services | No (each service builds its own) | No | Yes (singleton wrapper) |
-| Lifecycle hooks | `#[post_construct]` in the same impl | Separate `#[injectable]` impl | In the wrapper's `#[injectable]` impl |
+| Lifecycle hooks | `#[injectable(post_construct)]` in the same impl | Separate `#[injectable]` impl | In the wrapper's `#[injectable]` impl |
 | Factory co-location | Yes — factory next to the service | Yes — factory next to the struct | Yes — inside the wrapper |
 | Needs container setup | No | No | No |
 | Consumer field type | Plain `T` | Plain `T` | `Inject<Wrapper>` |

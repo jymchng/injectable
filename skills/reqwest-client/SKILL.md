@@ -20,7 +20,7 @@ fn make_http_client(_ctx: &ResolveContext) -> reqwest::Client {
 
 #[injectable]
 struct WeatherService {
-    #[inject(use_factory_sync = self::make_http_client)]
+    #[injectable(inject(use_factory_sync = self::make_http_client))]
     client: reqwest::Client,
 }
 ```
@@ -28,7 +28,7 @@ struct WeatherService {
 ## Factory that reads config
 
 ```rust
-#[inject_fn]
+#[injectable(factory)]
 async fn make_client(cfg: Inject<AppConfig>) -> Result<reqwest::Client, reqwest::Error> {
     reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(cfg.http_timeout_secs))
@@ -37,7 +37,7 @@ async fn make_client(cfg: Inject<AppConfig>) -> Result<reqwest::Client, reqwest:
 
 #[injectable]
 struct ApiService {
-    #[inject(use_factory_async = self::make_client)]
+    #[injectable(inject(use_factory_async = self::make_client))]
     client: reqwest::Client,
 }
 ```
@@ -56,8 +56,8 @@ let container = Container::builder()
 // Consume in constructor:
 #[injectable]
 impl WeatherService {
-    #[injectable_ctor]
-    fn new(#[inject] client: Arc<reqwest::Client>) -> Self {
+    #[injectable(ctor)]
+    fn new(#[injectable(inject)] client: Arc<reqwest::Client>) -> Self {
         Self { client }
     }
 }

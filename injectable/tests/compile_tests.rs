@@ -10,8 +10,8 @@
 //!   - Duplicate type registrations
 //!
 //! - **Proc-macro structural errors**:
-//!   - Missing `#[injectable_ctor]` in `#[injectable]`
-//!   - Multiple `#[injectable_ctor]` methods
+//!   - Missing `#[injectable(ctor)]` in `#[injectable]`
+//!   - Multiple `#[injectable(ctor)]` methods
 //!   - Unknown `#[injectable(...)]` attributes
 //!   - Unknown `#[injectable_impl(...)]` attributes
 //!

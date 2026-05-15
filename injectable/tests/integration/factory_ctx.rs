@@ -23,7 +23,7 @@ struct IntConfig {
 
 #[injectable]
 impl IntConfig {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new() -> Self {
         CONFIG_CTOR_COUNT.fetch_add(1, Ordering::SeqCst);
         Self { value: 42 }
@@ -37,7 +37,7 @@ struct IntService {
 
 #[injectable]
 impl IntService {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new(cfg: Inject<IntConfig>) -> Self {
         SERVICE_CTOR_COUNT.fetch_add(1, Ordering::SeqCst);
         Self {
@@ -102,7 +102,7 @@ struct TransientSvc;
 
 #[injectable(scope = Transient)]
 impl TransientSvc {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new() -> Self {
         TRANSIENT_CTOR.fetch_add(1, Ordering::SeqCst);
         Self
@@ -158,20 +158,20 @@ async fn resolve_context_extract_is_scope_safe() {
 
 // ─── inject_fn factories are compatible with FactoryCtx usage ────────────────
 
-#[inject_fn]
+#[injectable(factory)]
 async fn make_label(cfg: Inject<IntConfig>) -> String {
     format!("label-{}", cfg.value)
 }
 
 #[injectable]
 struct Labelled {
-    #[inject(use_factory_async = self::make_label)]
+    #[injectable(inject(use_factory_async = self::make_label))]
     label: String,
 }
 
 #[tokio::test]
 async fn inject_fn_factory_still_works_alongside_factory_ctx() {
-    // #[inject_fn] transforms factory functions to take &ResolveContext
+    // #[injectable(factory)] transforms factory functions to take &ResolveContext
     // internally; this test verifies that the two approaches coexist.
     let container = Container::builder().build().await.unwrap();
     let svc = container.resolve::<Labelled>().await.unwrap();

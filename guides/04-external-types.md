@@ -7,7 +7,7 @@ For a quick side-by-side comparison see `3-ways-to-inject-external-types.md`.
 ## Mechanism 1 — Constructor factory parameters
 
 The most co-located option. Factory functions live next to the service that uses
-them and are called via `#[inject(use_factory_async/sync = path)]` on a
+them and are called via `#[injectable(inject(use_factory_async/sync = path))]` on a
 constructor parameter.
 
 ```rust
@@ -30,10 +30,10 @@ pub struct Database {
 
 #[injectable]
 impl Database {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     pub async fn new(
-        #[inject(use_factory_async = self::make_pool)]   pool:   sqlx::SqlitePool,
-        #[inject(use_factory_sync  = self::make_client)] client: reqwest::Client,
+        #[injectable(inject(use_factory_async = self::make_pool))]   pool:   sqlx::SqlitePool,
+        #[injectable(inject(use_factory_sync  = self::make_client))] client: reqwest::Client,
     ) -> Self {
         Self { pool, client }
     }
@@ -43,7 +43,7 @@ impl Database {
 ## Mechanism 2 — Field factory annotations
 
 Use the declarative `#[injectable]`-on-struct style. Every non-`Inject<T>` field
-must carry `#[inject]` or a factory annotation.
+must carry `#[injectable(inject)]` or a factory annotation.
 
 ```rust
 use injectable::*;
@@ -54,7 +54,7 @@ async fn make_pool(_ctx: &ResolveContext) -> Result<sqlx::SqlitePool, sqlx::Erro
 
 #[injectable]
 pub struct Database {
-    #[inject(use_factory_async = self::make_pool)]
+    #[injectable(inject(use_factory_async = self::make_pool))]
     pool: sqlx::SqlitePool,
 }
 ```
@@ -62,7 +62,7 @@ pub struct Database {
 ## Mechanism 3 — `DynProvider` in the container builder
 
 Register a closure-based provider at container build time. Any injectable
-constructor that declares an `Arc<T>` parameter (with `#[inject]`) for the
+constructor that declares an `Arc<T>` parameter (with `#[injectable(inject)]`) for the
 registered type will receive a shared `Arc` to the same instance.
 
 ### Three provider variants
@@ -100,7 +100,7 @@ let container = Container::builder()
 
 ### Consuming a `DynProvider`-registered type
 
-`#[inject] param: Arc<T>` requires `T: Injectable`. External types registered via
+`#[injectable(inject)] param: Arc<T>` requires `T: Injectable`. External types registered via
 `DynProvider` are **not** `Injectable`, so receiving them by `Arc<T>` does not work.
 Instead, receive the value directly and wrap it yourself, or use a factory function:
 
@@ -112,8 +112,8 @@ pub struct UserRepository {
 
 #[injectable]
 impl UserRepository {
-    #[injectable_ctor]
-    pub fn new(#[inject(use_factory_async = self::make_pool)] pool: sqlx::SqlitePool) -> Self {
+    #[injectable(ctor)]
+    pub fn new(#[injectable(inject(use_factory_async = self::make_pool))] pool: sqlx::SqlitePool) -> Self {
         Self { pool: Arc::new(pool) }
     }
 }
@@ -121,7 +121,7 @@ impl UserRepository {
 // ── Option B: wrap the external type in your own Injectable struct ─────────
 #[injectable]
 pub struct Database {
-    #[inject(use_factory_async = self::make_pool)]
+    #[injectable(inject(use_factory_async = self::make_pool))]
     pool: sqlx::SqlitePool,
 }
 
@@ -129,7 +129,7 @@ pub struct UserRepository { db: Inject<Database> }  // auto-injected, singleton
 
 #[injectable]
 impl UserRepository {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     pub fn new(db: Inject<Database>) -> Self { Self { db } }
 }
 ```

@@ -10,8 +10,8 @@ description: Builds a complete realistic Axum application with injectable, inclu
 ```
 src/
 ├── main.rs
-├── config.rs      — AppConfig (#[injectable_ctor] reads env)
-├── db.rs          — make_db_pool (#[inject_fn])
+├── config.rs      — AppConfig (#[injectable(ctor)] reads env)
+├── db.rs          — make_db_pool (#[injectable(factory)])
 ├── auth.rs        — AuthService (#[injectable])
 ├── users.rs       — UserService (#[injectable])
 └── api.rs         — Axum handlers + router
@@ -23,7 +23,7 @@ src/
 // config.rs
 #[injectable]
 impl AppConfig {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new() -> Self {
         Self {
             database_url: std::env::var("DATABASE_URL")
@@ -35,7 +35,7 @@ impl AppConfig {
 }
 
 // db.rs
-#[inject_fn]
+#[injectable(factory)]
 async fn make_db_pool(cfg: Inject<AppConfig>) -> Result<Pool<Sqlite>, sqlx::Error> {
     Pool::<Sqlite>::connect(&cfg.database_url).await
 }
@@ -43,18 +43,18 @@ async fn make_db_pool(cfg: Inject<AppConfig>) -> Result<Pool<Sqlite>, sqlx::Erro
 // auth.rs
 #[injectable]
 struct AuthService {
-    #[inject(use_factory_async = crate::db::make_db_pool)]
+    #[injectable(inject(use_factory_async = crate::db::make_db_pool))]
     pool:   Pool<Sqlite>,
-    #[inject]
+    #[injectable(inject)]
     config: Arc<AppConfig>,
 }
 
 // users.rs
 #[injectable]
 struct UserService {
-    #[inject(use_factory_async = crate::db::make_db_pool)]
+    #[injectable(inject(use_factory_async = crate::db::make_db_pool))]
     pool: Pool<Sqlite>,
-    #[inject]
+    #[injectable(inject)]
     auth: Arc<AuthService>,
 }
 ```

@@ -35,7 +35,7 @@ pub struct AppConfig {
 
 #[injectable]
 impl AppConfig {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     pub fn new() -> Self {
         Self {
             database_url: std::env::var("DATABASE_URL")
@@ -54,12 +54,12 @@ pub struct Database {
 
 #[injectable]
 impl Database {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     pub fn new(pool: Arc<sqlx::SqlitePool>) -> Self {
         Self { pool }
     }
 
-    #[post_construct]
+    #[injectable(post_construct)]
     pub async fn migrate(&self) {
         sqlx::query(
             "CREATE TABLE IF NOT EXISTS users (
@@ -74,7 +74,7 @@ impl Database {
         println!("[Database] migrations applied");
     }
 
-    #[pre_destruct]
+    #[injectable(pre_destruct)]
     pub async fn close(&self) {
         self.pool.close().await;
         println!("[Database] pool closed");
@@ -93,7 +93,7 @@ pub struct UserRepository { db: Arc<Database> }
 
 #[injectable]
 impl UserRepository {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     pub fn new(db: Arc<Database>) -> Self { Self { db } }
 
     pub async fn find(&self, id: i64) -> Option<UserRow> {
@@ -124,7 +124,7 @@ pub struct UserService { repo: Arc<UserRepository> }
 
 #[injectable]
 impl UserService {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     pub fn new(repo: Arc<UserRepository>) -> Self { Self { repo } }
 
     pub async fn get(&self, id: i64) -> Option<UserRow> {
@@ -252,7 +252,7 @@ POST /users        → 201 {"id":2}
 |---|---|
 | Config from env | `#[injectable]` zero-arg constructor |
 | External pool | `DynProvider::new` registered at build time |
-| DB wrapper with lifecycle | `#[injectable]` with `#[post_construct]` / `#[pre_destruct]` |
+| DB wrapper with lifecycle | `#[injectable]` with `#[injectable(post_construct)]` / `#[injectable(pre_destruct)]` |
 | Thin repository layer | `Arc<Database>` constructor param |
 | Service layer | `Arc<UserRepository>` constructor param |
 | Handler injection | `Inject<UserService>` in Axum handler parameters |

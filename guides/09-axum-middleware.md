@@ -42,7 +42,7 @@ impl AuthService {
 
 #[injectable]
 impl AuthService {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     pub fn new() -> Self { Self {} }
 }
 

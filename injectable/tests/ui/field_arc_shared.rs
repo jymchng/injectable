@@ -17,7 +17,7 @@ pub struct WeatherService;
 /// `impl<T: Injectable> Extract for Arc<T>` (singleton-cached).
 #[injectable]
 pub struct UserService {
-    #[inject]
+    #[injectable(inject)]
     weather_svc: Arc<WeatherService>,
 }
 

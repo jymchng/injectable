@@ -39,7 +39,7 @@ pub struct UserService {
 /// A service with bare Injectable fields (owned values).
 #[injectable]
 pub struct Repository {
-    #[inject]
+    #[injectable(inject)]
     db: Arc<Database>,
 }
 
@@ -373,7 +373,7 @@ pub struct SingletonA;
 
 #[injectable]
 impl SingletonA {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new() -> Self {
         CTOR_COUNT_A.fetch_add(1, Ordering::SeqCst);
         Self
@@ -391,7 +391,7 @@ pub struct SingletonB;
 
 #[injectable]
 impl SingletonB {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new() -> Self {
         CTOR_COUNT_B.fetch_add(1, Ordering::SeqCst);
         Self

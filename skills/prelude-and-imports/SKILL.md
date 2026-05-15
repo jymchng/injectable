@@ -11,7 +11,9 @@ description: Shows the correct imports and prelude usage for injectable. Use whe
 use injectable::prelude::*;
 
 // Brings in:
-//   Macros: injectable, injectable_ctor, inject_fn, post_construct, pre_destruct, bind, container
+//   Macros: injectable, bind, container
+//   Attributes: #[injectable], #[injectable(ctor)], #[injectable(factory)]
+//               #[injectable(post_construct)], #[injectable(pre_destruct)]
 //   Types:  Injectable, Inject, Extract, Container, DynProvider, FactoryCtx
 //           InjectableError, InjectableResult, HookResult, ResolveContext
 //   Scopes: Singleton, Transient, RequestScoped
@@ -22,11 +24,10 @@ use injectable::prelude::*;
 
 ```rust
 use injectable::{
-    injectable, injectable_ctor, inject_fn,        // macros
-    Inject, Extract, Container, DynProvider,        // core types
-    InjectableError, InjectableResult,              // error handling
-    ResolveContext,                                  // for factories
-    Singleton, Transient,                           // scope markers
+    bind, container, injectable,
+    Container, DynProvider, Extract, FactoryCtx, HookResult, Inject,
+    Injectable, InjectableError, InjectableResult,
+    RequestScoped, ResolveContext, Singleton, Transient,
 };
 use std::sync::Arc;
 ```
@@ -57,7 +58,11 @@ use injectable_runtime::{Injectable, Provider, ProviderRegistry};
 
 ```toml
 [dependencies]
-injectable = { version = "0.1", features = ["axum"] }  # omit axum if not needed
+injectable = { version = "0.2", features = ["axum"] }  # omit axum if not needed
 tokio      = { version = "1",   features = ["full"] }
 async-trait = "0.1"
 ```
+
+Cross-check import patterns against [skills/README.md](../README.md),
+[guides/01-getting-started.md](../../guides/01-getting-started.md), and
+[README.md](../../README.md).

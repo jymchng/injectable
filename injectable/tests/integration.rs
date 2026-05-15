@@ -49,9 +49,9 @@ pub struct Repository {
 /// A service using bare Injectable types as fields (owned values).
 #[injectable]
 pub struct OwnedService {
-    #[inject]
+    #[injectable(inject)]
     db: Arc<Database>,
-    #[inject]
+    #[injectable(inject)]
     cache: Arc<Cache>,
 }
 
@@ -59,7 +59,7 @@ pub struct OwnedService {
 #[injectable]
 pub struct MixedService {
     db: Inject<Database>, // shared Arc<Database>
-    #[inject]
+    #[injectable(inject)]
     config: Arc<Config>,
 }
 
@@ -74,7 +74,7 @@ pub struct ConfigWithPort {
 
 #[injectable]
 impl ConfigWithPort {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new() -> Self {
         Self::default()
     }
@@ -1204,12 +1204,12 @@ pub struct ServiceWithStatefulPostConstruct {
 
 #[injectable]
 impl ServiceWithStatefulPostConstruct {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new() -> Self {
         Self::default()
     }
 
-    #[post_construct]
+    #[injectable(post_construct)]
     async fn on_ready(&self) -> HookResult {
         self.initialized.store(true, Ordering::SeqCst);
         STATEFUL_POST_CONSTRUCT_RAN.store(true, Ordering::SeqCst);
@@ -1596,7 +1596,7 @@ pub struct CtorServiceWithInject {
 
 #[injectable]
 impl CtorServiceWithInject {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new(db: Inject<Database>) -> Self {
         Self { db }
     }
@@ -1628,8 +1628,8 @@ pub struct CtorServiceWithArc {
 
 #[injectable]
 impl CtorServiceWithArc {
-    #[injectable_ctor]
-    fn new(#[inject] db: Arc<Database>) -> Self {
+    #[injectable(ctor)]
+    fn new(#[injectable(inject)] db: Arc<Database>) -> Self {
         Self { db }
     }
 }
@@ -1660,7 +1660,7 @@ pub struct CloneableConfig {
 
 #[injectable]
 impl CloneableConfig {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new() -> Self {
         Self::default()
     }
@@ -1673,8 +1673,8 @@ pub struct CtorServiceWithOwned {
 
 #[injectable]
 impl CtorServiceWithOwned {
-    #[injectable_ctor]
-    fn new(#[inject] config: Arc<CloneableConfig>, #[inject] db: Arc<Database>) -> Self {
+    #[injectable(ctor)]
+    fn new(#[injectable(inject)] config: Arc<CloneableConfig>, #[injectable(inject)] db: Arc<Database>) -> Self {
         Self { config, db }
     }
 }
@@ -1708,7 +1708,7 @@ pub struct CtorServiceMultiDeps {
 
 #[injectable]
 impl CtorServiceMultiDeps {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new(db: Inject<Database>, cache: Inject<Cache>, config: Inject<Config>) -> Self {
         Self { db, cache, config }
     }
@@ -1735,7 +1735,7 @@ pub struct CtorServiceAsync {
 
 #[injectable]
 impl CtorServiceAsync {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     async fn new(db: Inject<Database>) -> Self {
         // Simulate async initialization
         Self { db }
@@ -1763,7 +1763,7 @@ pub struct CtorServiceNoDeps {
 
 #[injectable]
 impl CtorServiceNoDeps {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new() -> Self {
         Self { initialized: true }
     }
@@ -1790,13 +1790,13 @@ async fn test_injectable_impl_with_no_deps() {
 
 // ─── #[injectable] with Lifecycle Hooks ──────────────────────────
 //
-// These tests verify that #[post_construct] and #[pre_destruct]
+// These tests verify that #[injectable(post_construct)] and #[injectable(pre_destruct)]
 // annotations inside #[injectable] impl blocks are auto-detected
 // and generate the corresponding trait implementations.
 
 static IMPL_POST_CONSTRUCT_COUNT: AtomicUsize = AtomicUsize::new(0);
 
-/// A service with a #[post_construct] hook in the impl block.
+/// A service with a #[injectable(post_construct)] hook in the impl block.
 /// The macro should auto-detect this and generate a PostConstruct impl.
 pub struct CtorServiceWithPostConstruct {
     initialized: std::sync::atomic::AtomicBool,
@@ -1804,14 +1804,14 @@ pub struct CtorServiceWithPostConstruct {
 
 #[injectable]
 impl CtorServiceWithPostConstruct {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new() -> Self {
         Self {
             initialized: std::sync::atomic::AtomicBool::new(false),
         }
     }
 
-    #[post_construct]
+    #[injectable(post_construct)]
     fn init(&self) {
         self.initialized.store(true, Ordering::SeqCst);
         IMPL_POST_CONSTRUCT_COUNT.fetch_add(1, Ordering::SeqCst);
@@ -1850,7 +1850,7 @@ async fn test_injectable_impl_post_construct_hook_runs() {
 
 static IMPL_PRE_DESTRUCT_COUNT: AtomicUsize = AtomicUsize::new(0);
 
-/// A service with a #[pre_destruct] hook in the impl block.
+/// A service with a #[injectable(pre_destruct)] hook in the impl block.
 /// The macro should auto-detect this and generate a PreDestruct impl.
 #[derive(Clone)]
 pub struct CtorServiceWithPreDestruct {
@@ -1859,12 +1859,12 @@ pub struct CtorServiceWithPreDestruct {
 
 #[injectable]
 impl CtorServiceWithPreDestruct {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new() -> Self {
         Self { name: "test" }
     }
 
-    #[pre_destruct]
+    #[injectable(pre_destruct)]
     async fn cleanup(&self) {
         IMPL_PRE_DESTRUCT_COUNT.fetch_add(1, Ordering::SeqCst);
     }
@@ -1918,7 +1918,7 @@ async fn test_injectable_impl_pre_destruct_hook_runs_on_shutdown() {
     );
 }
 
-/// A service with both #[post_construct] and #[pre_destruct] hooks.
+/// A service with both #[injectable(post_construct)] and #[injectable(pre_destruct)] hooks.
 static FULL_LIFECYCLE_POST_COUNT: AtomicUsize = AtomicUsize::new(0);
 static FULL_LIFECYCLE_PRE_COUNT: AtomicUsize = AtomicUsize::new(0);
 
@@ -1929,17 +1929,17 @@ pub struct CtorServiceFullLifecycle {
 
 #[injectable]
 impl CtorServiceFullLifecycle {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new() -> Self {
         Self { initialized: false }
     }
 
-    #[post_construct]
+    #[injectable(post_construct)]
     fn on_ready(&self) {
         FULL_LIFECYCLE_POST_COUNT.fetch_add(1, Ordering::SeqCst);
     }
 
-    #[pre_destruct]
+    #[injectable(pre_destruct)]
     fn on_shutdown(&self) {
         FULL_LIFECYCLE_PRE_COUNT.fetch_add(1, Ordering::SeqCst);
     }
@@ -1994,12 +1994,12 @@ pub struct ServiceWithSucceedingPostConstruct;
 
 #[injectable]
 impl ServiceWithSucceedingPostConstruct {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new() -> Self {
         Self
     }
 
-    #[post_construct]
+    #[injectable(post_construct)]
     fn init(&self) -> Result<(), std::io::Error> {
         Ok(())
     }
@@ -2011,12 +2011,12 @@ pub struct ServiceWithFailingPostConstruct;
 
 #[injectable]
 impl ServiceWithFailingPostConstruct {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new() -> Self {
         Self
     }
 
-    #[post_construct]
+    #[injectable(post_construct)]
     fn init(&self) -> Result<(), std::io::Error> {
         Err(std::io::Error::new(
             std::io::ErrorKind::Other,
@@ -2069,18 +2069,18 @@ async fn test_post_construct_result_err_propagates() {
     }
 }
 
-/// A service whose #[pre_destruct] hook returns a Result.
+/// A service whose #[injectable(pre_destruct)] hook returns a Result.
 #[derive(Debug, Clone)]
 pub struct ServiceWithFalliblePreDestruct;
 
 #[injectable]
 impl ServiceWithFalliblePreDestruct {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new() -> Self {
         Self
     }
 
-    #[pre_destruct]
+    #[injectable(pre_destruct)]
     async fn cleanup(&self) -> Result<(), std::io::Error> {
         Err(std::io::Error::new(
             std::io::ErrorKind::Other,
@@ -2121,18 +2121,18 @@ async fn test_pre_destruct_err_accumulated_on_shutdown() {
     }
 }
 
-/// A service with a unit-returning (infallible) #[post_construct].
+/// A service with a unit-returning (infallible) #[injectable(post_construct)].
 /// The macro should handle both `-> ()` and `-> Result<...>` hooks.
 pub struct ServiceWithInfallibleHook;
 
 #[injectable]
 impl ServiceWithInfallibleHook {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new() -> Self {
         Self
     }
 
-    #[post_construct]
+    #[injectable(post_construct)]
     fn on_ready(&self) {
         // No Result — just a side effect
     }
@@ -2162,7 +2162,7 @@ pub struct TransientCtorService {
 
 #[injectable(scope = Transient)]
 impl TransientCtorService {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new() -> Self {
         Self { id: 42 }
     }
@@ -2200,7 +2200,7 @@ fn test_constructor_callable_outside_di() {
     assert_eq!(service.config.value, 99);
 }
 
-// ─── #[inject] Attribute Tests ────────────────────────────────────────
+// ─── #[injectable(inject)] Attribute Tests ────────────────────────────────────────
 
 /// A struct with a mix of injected and defaulted fields.
 /// Uses explicit constructor (replaces old #[injectable(default)] pattern).
@@ -2212,7 +2212,7 @@ pub struct MixedDefaultAndInject {
 
 #[injectable]
 impl MixedDefaultAndInject {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new(db: Inject<Database>) -> Self {
         Self { db, port: 0, host: String::new() }
     }
@@ -2230,7 +2230,7 @@ async fn test_inject_attribute_in_default_struct() {
     let service = service.unwrap();
     assert_eq!(service.port, 0, "port should be defaulted");
     assert_eq!(service.host, "", "host should be defaulted");
-    // db was injected via #[inject], so it should resolve successfully
+    // db was injected via #[injectable(inject)], so it should resolve successfully
     let _db: &Database = &service.db;
 }
 
@@ -2243,7 +2243,7 @@ pub struct PartialInjectService {
 
 #[injectable]
 impl PartialInjectService {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new(db: Inject<Database>, cache: Inject<Cache>) -> Self {
         Self { db, name: String::new(), cache }
     }
@@ -2298,7 +2298,7 @@ pub struct SharedSvc2;
 
 #[injectable]
 impl SharedSvc2 {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new() -> Self {
         SHARED_SVC2_CTOR.fetch_add(1, Ordering::SeqCst);
         Self
@@ -2308,7 +2308,7 @@ impl SharedSvc2 {
 /// Consumer via shared reference — scope is respected.
 #[injectable]
 pub struct ConsumerArc {
-    #[inject]
+    #[injectable(inject)]
     svc: Arc<SharedSvc2>,
 }
 
@@ -2323,7 +2323,7 @@ async fn make_owned_svc2_from_ctx(ctx: &ResolveContext) -> Result<SharedSvc2, In
 #[injectable]
 #[derive(Clone)]
 pub struct ConsumerOwned {
-    #[inject(use_factory_async=self::make_owned_svc2_from_ctx)]
+    #[injectable(inject(use_factory_async=self::make_owned_svc2_from_ctx))]
     svc: SharedSvc2,
 }
 
@@ -2397,7 +2397,7 @@ pub struct ArcCloneSvc;
 
 #[injectable]
 impl ArcCloneSvc {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new() -> Self {
         ARC_CLONE_SVC_CTOR.fetch_add(1, Ordering::SeqCst);
         Self
@@ -2409,17 +2409,17 @@ pub struct OwnedCloneSvc;
 
 #[injectable]
 impl OwnedCloneSvc {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new() -> Self {
         OWNED_CLONE_SVC_CTOR.fetch_add(1, Ordering::SeqCst);
         Self
     }
 }
 
-/// Arc<T> field — shares the singleton Arc via the normal #[inject] path.
+/// Arc<T> field — shares the singleton Arc via the normal #[injectable(inject)] path.
 #[injectable]
 pub struct ArcCloneConsumer {
-    #[inject]
+    #[injectable(inject)]
     svc: Arc<ArcCloneSvc>,
 }
 
@@ -2435,7 +2435,7 @@ async fn clone_owned_clone_svc(
 #[injectable]
 #[derive(Clone)]
 pub struct OwnedCloneConsumer {
-    #[inject(use_factory_async = self::clone_owned_clone_svc)]
+    #[injectable(inject(use_factory_async = self::clone_owned_clone_svc))]
     svc: OwnedCloneSvc,
 }
 
@@ -2507,7 +2507,7 @@ async fn test_extract_2_tuple() {
 #[injectable]
 pub struct InjectableAttrService {
     db: Inject<Database>,
-    #[inject]
+    #[injectable(inject)]
     config: Arc<Config>,
 }
 
@@ -2524,7 +2524,7 @@ pub struct ImplAttrService {
 
 #[injectable]
 impl ImplAttrService {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new() -> Self {
         Self { name: "impl-attr" }
     }
@@ -2544,56 +2544,56 @@ async fn test_injectable_attr_on_impl() {
     let _ = svc;
 }
 
-// ─── #[inject_fn] ───────────────────────────────────────────────────
+// ─── #[injectable(factory)] ───────────────────────────────────────────────────
 //
-// Verifies that #[inject_fn] transforms a function with #[inject]
+// Verifies that #[injectable(factory)] transforms a function with #[injectable(inject)]
 // parameters into an async factory compatible with use_factory_async.
 
 /// A factory that receives an injectable type and produces a value.
-#[inject_fn]
+#[injectable(factory)]
 fn make_label(_config: Inject<Config>) -> String {
     "label-from-config".to_string()
 }
 
 /// A factory that receives an Arc<T> parameter.
-#[inject_fn]
-fn make_arc_label(#[inject] _db: Arc<Database>) -> String {
+#[injectable(factory)]
+fn make_arc_label(#[injectable(inject)] _db: Arc<Database>) -> String {
     "db-label-from-arc".to_string()
 }
 
 /// A factory returning Result<T, E>.
-#[inject_fn]
+#[injectable(factory)]
 fn make_checked_label(_config: Inject<Config>) -> Result<String, std::convert::Infallible> {
     Ok("checked-label".to_string())
 }
 
 /// An async factory.
-#[inject_fn]
+#[injectable(factory)]
 async fn make_async_label(_config: Inject<Config>) -> String {
     "async-label-value".to_string()
 }
 
 #[injectable]
 pub struct FactoryConsumer {
-    #[inject(use_factory_async = self::make_label)]
+    #[injectable(inject(use_factory_async = self::make_label))]
     label: String,
 }
 
 #[injectable]
 pub struct ArcFactoryConsumer {
-    #[inject(use_factory_async = self::make_arc_label)]
+    #[injectable(inject(use_factory_async = self::make_arc_label))]
     label: String,
 }
 
 #[injectable]
 pub struct ResultFactoryConsumer {
-    #[inject(use_factory_async = self::make_checked_label)]
+    #[injectable(inject(use_factory_async = self::make_checked_label))]
     label: String,
 }
 
 #[injectable]
 pub struct AsyncFactoryConsumer {
-    #[inject(use_factory_async = self::make_async_label)]
+    #[injectable(inject(use_factory_async = self::make_async_label))]
     label: String,
 }
 

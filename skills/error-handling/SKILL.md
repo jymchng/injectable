@@ -44,7 +44,7 @@ let ext: Option<SqlitePool>  = container.try_resolve_external().await?;
 ```rust
 #[injectable]
 impl ValidatedConfig {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new() -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let key = std::env::var("API_KEY")
             .map_err(|_| "API_KEY required")?;
@@ -57,7 +57,7 @@ impl ValidatedConfig {
 ## Errors in lifecycle hooks
 
 ```rust
-#[post_construct]
+#[injectable(post_construct)]
 async fn migrate(&self) -> Result<(), sqlx::Error> {
     sqlx::query("CREATE TABLE …").execute(&self.pool).await?;
     Ok(())

@@ -19,12 +19,12 @@ use crate::metadata::{
 /// How a field should be handled during injection.
 ///
 /// `Inject<T>` fields are auto-injected.  All other field types require an
-/// explicit `#[inject]` or `#[inject(use_factory_*=…)]` annotation; omitting
+/// explicit `#[injectable(inject)]` or `#[injectable(inject(use_factory_*=…))]` annotation; omitting
 /// the annotation is a compile error.
 #[derive(Debug, Clone)]
 pub enum FieldInjectKind {
     /// Extract the field via `Extract::extract(ctx)`.
-    /// Applied automatically to `Inject<T>` fields, or explicitly via `#[inject]`.
+    /// Applied automatically to `Inject<T>` fields, or explicitly via `#[injectable(inject)]`.
     Inject,
     /// Call the given **async** factory `async fn(ctx: &ResolveContext) -> Result<T, E>`.
     Factory(syn::Path),
@@ -56,7 +56,7 @@ pub struct FieldInfo {
 ///
 /// # Rules
 ///
-/// - `Inject<T>` fields are auto-injected; all other fields require `#[inject]`
+/// - `Inject<T>` fields are auto-injected; all other fields require `#[injectable(inject)]`
 ///   (error is emitted at macro-expansion time, not here)
 /// - `FieldInjectKind::Inject` → `<FieldType as Extract>::extract(ctx).await?`
 /// - `FieldInjectKind::Factory` → async factory called with `ctx`
@@ -185,7 +185,7 @@ pub fn generate_field_injection_provider(
 
     // Generate dependency names for graph metadata.
     // Factory fields (use_factory_async/sync) are NOT DI dependencies — the factory
-    // creates the value itself. Only Inject and plain-#[inject] fields contribute.
+    // creates the value itself. Only Inject and plain-#[injectable(inject)] fields contribute.
     #[allow(clippy::unnecessary_filter_map)]
     let dep_strings: Vec<String> = fields
         .iter()

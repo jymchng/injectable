@@ -1,6 +1,6 @@
 ---
 name: field-injection
-description: Implements field injection with #[injectable] on structs. Use when adding injectable to a struct, wiring Inject<T> or Arc<T> fields, or getting "non-Inject<T> fields require #[inject]" errors.
+description: Implements field injection with #[injectable] on structs. Use when adding injectable to a struct, wiring Inject<T> or Arc<T> fields, or getting "non-Inject<T> fields require #[injectable(inject)]" errors.
 ---
 
 # Field Injection
@@ -8,8 +8,8 @@ description: Implements field injection with #[injectable] on structs. Use when 
 ## Rules
 
 - `Inject<T>` fields → auto-injected, no annotation
-- `Arc<T>` or `T` fields → require `#[inject]`
-- External/non-injectable fields → use `#[injectable_ctor]` constructor instead
+- `Arc<T>` or `T` fields → require `#[injectable(inject)]`
+- External/non-injectable fields → use `#[injectable(ctor)]` constructor instead
 
 ## Basic patterns
 
@@ -19,26 +19,26 @@ use injectable::prelude::*;
 // ── Inject<T>: auto-injected (most common) ──────────────────────────────────
 #[injectable]
 struct UserService {
-    db:    Inject<Database>,   // no #[inject] needed
+    db:    Inject<Database>,   // no #[injectable(inject)] needed
     cache: Inject<Cache>,
 }
 
-// ── Arc<T>: explicit #[inject] ──────────────────────────────────────────────
+// ── Arc<T>: explicit #[injectable(inject)] ──────────────────────────────────────────────
 #[injectable]
 struct RepoService {
-    #[inject]
+    #[injectable(inject)]
     db: Arc<Database>,
 }
 
 // ── Fields with factories ────────────────────────────────────────────────────
-#[inject_fn]
+#[injectable(factory)]
 async fn make_pool(cfg: Inject<AppConfig>) -> Result<Pool<Sqlite>, sqlx::Error> {
     sqlx::SqlitePool::connect(&cfg.db_url).await
 }
 
 #[injectable]
 struct Database {
-    #[inject(use_factory_async = self::make_pool)]
+    #[injectable(inject(use_factory_async = self::make_pool))]
     pool: Pool<Sqlite>,
 }
 
@@ -50,7 +50,7 @@ struct Service {
 
 #[injectable]
 impl Service {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new(db: Inject<Database>) -> Self {
         Self { db, name: "default".into() }
     }

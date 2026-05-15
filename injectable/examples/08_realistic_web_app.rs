@@ -55,7 +55,7 @@ pub struct AppConfig {
 
 #[injectable]
 impl AppConfig {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new() -> Self {
         Self {
             database_url: std::env::var("DATABASE_URL")
@@ -130,8 +130,8 @@ async fn get_sqllite_pool(
 
 /// Database service wrapping a real `sqlx::SqlitePool`.
 ///
-/// Uses `#[injectable]` with a `#[injectable_ctor]` that has
-/// `#[inject(use_factory=...)]` on the `pool` parameter.
+/// Uses `#[injectable]` with a `#[injectable(ctor)]` that has
+/// `#[injectable(inject(use_factory=...))]` on the `pool` parameter.
 /// The factory function provides the real sqlx::SqlitePool.
 #[derive(Debug, Clone)]
 pub struct Database {
@@ -141,8 +141,10 @@ pub struct Database {
 
 #[injectable]
 impl Database {
-    #[injectable_ctor]
-    async fn new(#[inject(use_factory=self::get_sqllite_pool)] pool: sqlx::SqlitePool) -> Self {
+    #[injectable(ctor)]
+    async fn new(
+        #[injectable(inject(use_factory=self::get_sqllite_pool))] pool: sqlx::SqlitePool,
+    ) -> Self {
         Self {
             pool,
             active_connections: Arc::new(AtomicUsize::new(0)),
@@ -150,7 +152,7 @@ impl Database {
     }
 
     /// Called automatically after the Database is constructed.
-    #[post_construct]
+    #[injectable(post_construct)]
     async fn connect(&self) {
         println!("  [Database] Verifying connection...");
         // Verify the pool is actually connected by acquiring a connection
@@ -168,7 +170,7 @@ impl Database {
     }
 
     /// Called automatically on container.shutdown().
-    #[pre_destruct]
+    #[injectable(pre_destruct)]
     async fn disconnect(&self) {
         println!(
             "  [Database] Disconnecting... Pool size: {}",
@@ -210,8 +212,8 @@ pub struct UserRepository {
 
 #[injectable]
 impl UserRepository {
-    #[injectable_ctor]
-    fn new(#[inject] db: Arc<Database>) -> Self {
+    #[injectable(ctor)]
+    fn new(#[injectable(inject)] db: Arc<Database>) -> Self {
         println!("  [UserRepository] Created with Database connection");
         Self { db }
     }
@@ -252,8 +254,8 @@ pub struct EmailService {
 
 #[injectable]
 impl EmailService {
-    #[injectable_ctor]
-    fn new(#[inject] config: Arc<AppConfig>) -> Self {
+    #[injectable(ctor)]
+    fn new(#[injectable(inject)] config: Arc<AppConfig>) -> Self {
         println!(
             "  [EmailService] Created with config from {}",
             config.server_host
@@ -281,8 +283,11 @@ pub struct UserService {
 
 #[injectable]
 impl UserService {
-    #[injectable_ctor]
-    fn new(#[inject] repo: Arc<UserRepository>, #[inject] email: Arc<EmailService>) -> Self {
+    #[injectable(ctor)]
+    fn new(
+        #[injectable(inject)] repo: Arc<UserRepository>,
+        #[injectable(inject)] email: Arc<EmailService>,
+    ) -> Self {
         println!("  [UserService] Created with UserRepository + EmailService");
         Self { repo, email }
     }

@@ -35,8 +35,8 @@ struct Repository<Entity: 'static + Send + Sync + Clone> {
 
 #[injectable]
 impl<Entity: 'static + Send + Sync + Clone> Repository<Entity> {
-    #[injectable_ctor]
-    fn new(#[inject] db: Arc<Database>) -> Self {
+    #[injectable(ctor)]
+    fn new(#[injectable(inject)] db: Arc<Database>) -> Self {
         Self { db, _phantom: std::marker::PhantomData }
     }
 }
@@ -53,9 +53,9 @@ Use `Arc<T>` (not `Inject<T>`) for generic injectable field types:
 ```rust
 #[injectable]
 struct App {
-    #[inject]
+    #[injectable(inject)]
     user_repo: Arc<Repository<UserEntity>>,    // works via blanket Extract for Arc<T>
-    #[inject]
+    #[injectable(inject)]
     order_repo: Arc<Repository<OrderEntity>>,
 }
 ```
@@ -70,14 +70,14 @@ cannot be generated for generic types. Use `Arc<Wrapper<Database>>` instead.
 ```rust
 struct TypedId<Marker: 'static + Send + Sync>(u64, std::marker::PhantomData<fn() -> Marker>);
 
-#[inject_fn]
+#[injectable(factory)]
 fn make_user_id(_db: Inject<Database>) -> TypedId<UserMarker> {
     TypedId(next_id(), std::marker::PhantomData)
 }
 
 #[injectable]
 struct UserContext {
-    #[inject(use_factory_async = self::make_user_id)]
+    #[injectable(inject(use_factory_async = self::make_user_id))]
     id: TypedId<UserMarker>,
 }
 ```

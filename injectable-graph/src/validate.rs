@@ -26,7 +26,7 @@ pub enum ValidationError {
         name: String,
     },
 
-    /// A type has multiple constructors annotated with `#[injectable_ctor]`.
+    /// A type has multiple constructors annotated with `#[injectable(ctor)]`.
     MultipleConstructors {
         /// The type with multiple constructors.
         type_name: String,

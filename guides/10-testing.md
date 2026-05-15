@@ -26,7 +26,7 @@ pub struct UserService {
 
 #[injectable]
 impl UserService {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     pub fn new(db: Arc<Database>) -> Self { Self { db } }
 
     pub async fn list_users(&self) -> Vec<String> {
@@ -89,7 +89,7 @@ pub struct ApiService {
 
 #[injectable]
 impl ApiService {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     pub fn new(http: Arc<FakeHttpClient>) -> Self { Self { http } }
 
     pub fn fetch_data(&self) -> String {
@@ -147,7 +147,7 @@ pub struct UserService {
 
 #[injectable]
 impl UserService {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     pub fn new(store: Arc<PgUserStore>) -> Self {
         Self { store: store as Arc<dyn UserStore> }
     }
@@ -193,15 +193,15 @@ pub struct TrackedService;
 
 #[injectable]
 impl TrackedService {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     pub fn new() -> Self { Self }
 
-    #[post_construct]
+    #[injectable(post_construct)]
     pub async fn init(&self) {
         POST_CONSTRUCT_CALLED.store(true, Ordering::SeqCst);
     }
 
-    #[pre_destruct]
+    #[injectable(pre_destruct)]
     pub async fn cleanup(&self) {
         PRE_DESTRUCT_CALLED.store(true, Ordering::SeqCst);
     }

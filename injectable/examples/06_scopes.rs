@@ -45,7 +45,7 @@ pub struct RequestHandler {
 
 #[injectable(scope = Transient)]
 impl RequestHandler {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new() -> Self {
         Self::default()
     }
@@ -62,7 +62,7 @@ pub struct TransientProcessor {
 
 #[injectable(scope = Transient)]
 impl TransientProcessor {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new() -> Self {
         static COUNTER: AtomicU32 = AtomicU32::new(0);
         let id = COUNTER.fetch_add(1, Ordering::SeqCst);

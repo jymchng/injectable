@@ -1,4 +1,4 @@
-error: #[injectable] without #[injectable_ctor] requires at least one #[post_construct] or #[pre_destruct] method. For field injection without lifecycle hooks, use #[injectable] alone.
+error: #[injectable] without #[injectable(ctor)] requires at least one #[injectable(post_construct)] or #[injectable(pre_destruct)] method. For field injection without lifecycle hooks, use #[injectable] alone.
  --> tests/ui/missing_constructor.rs
   |
   | impl MyService {

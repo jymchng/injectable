@@ -8,7 +8,7 @@ from the resolve context.
 
 - **`Inject<T>` fields** — auto-injected. No annotation needed.
 - **All other fields** (`Arc<T>`, plain `T`, external types) — require an explicit
-  `#[inject]` annotation or a factory variant. Omitting the annotation is a
+  `#[injectable(inject)]` annotation or a factory variant. Omitting the annotation is a
   compile error.
 
 This keeps the DI surface explicit: only `Inject<T>` is wired silently; everything
@@ -27,7 +27,7 @@ pub struct Database;
 
 #[injectable]
 pub struct UserRepository {
-    db: Inject<Database>,   // auto-injected — no #[inject] needed
+    db: Inject<Database>,   // auto-injected — no #[injectable(inject)] needed
 }
 
 impl UserRepository {
@@ -44,13 +44,13 @@ directly.
 ## Pattern B — `Arc<T>` (Shared Arc, explicit)
 
 Same singleton cache as `Inject<T>`, but the field holds a raw `Arc<T>`.
-Requires `#[inject]`.
+Requires `#[injectable(inject)]`.
 
 ```rust
 #[injectable]
 pub struct OwnedRepo {
-    #[inject]
-    db: Arc<Database>,  // explicit #[inject] required
+    #[injectable(inject)]
+    db: Arc<Database>,  // explicit #[injectable(inject)] required
 }
 ```
 
@@ -60,7 +60,7 @@ doesn't know about `Inject<T>`, or when you prefer the standard library type.
 ## Pattern C — Owned `T` (requires `T: Clone`)
 
 The framework resolves the singleton `Arc<T>` and calls `Arc::unwrap_or_clone`
-to give you an owned copy. Requires `#[inject]`.
+to give you an owned copy. Requires `#[injectable(inject)]`.
 
 ```rust
 #[injectable]
@@ -71,12 +71,12 @@ pub struct Config {
 
 #[injectable]
 pub struct Mailer {
-    #[inject]
+    #[injectable(inject)]
     config: Config,   // owned copy — requires Config: Clone
 }
 ```
 
-## Pattern D — Factory (`#[inject(use_factory_async/sync = path)]`)
+## Pattern D — Factory (`#[injectable(inject(use_factory_async/sync = path))]`)
 
 Inject a value that cannot be resolved via the normal DI machinery — external
 types, values from env vars, or anything requiring custom construction logic.
@@ -88,7 +88,7 @@ async fn make_pool(_ctx: &ResolveContext) -> Result<sqlx::SqlitePool, sqlx::Erro
 
 #[injectable]
 pub struct Database {
-    #[inject(use_factory_async = self::make_pool)]
+    #[injectable(inject(use_factory_async = self::make_pool))]
     pool: sqlx::SqlitePool,
 }
 ```
@@ -114,7 +114,7 @@ pub struct UserService {
 
 #[injectable]
 impl UserService {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new(db: Inject<Database>) -> Self {
         Self { db, max_retries: 3 }
     }
@@ -124,7 +124,7 @@ impl UserService {
 ## Lifecycle Hooks with Field Injection
 
 Annotate methods in a **separate** `#[injectable]` impl block with
-`#[post_construct]` or `#[pre_destruct]`:
+`#[injectable(post_construct)]` or `#[injectable(pre_destruct)]`:
 
 ```rust
 #[injectable]
@@ -132,15 +132,15 @@ pub struct ConnectionPool {
     db: Inject<Database>,
 }
 
-#[injectable]              // no #[injectable_ctor] — lifecycle only
+#[injectable]              // no #[injectable(ctor)] — lifecycle only
 impl ConnectionPool {
-    #[post_construct]
+    #[injectable(post_construct)]
     async fn warm_up(&self) -> HookResult {
         println!("Warming up pool…");
         Ok(())
     }
 
-    #[pre_destruct]
+    #[injectable(pre_destruct)]
     async fn drain(&self) -> HookResult {
         println!("Draining pool…");
         Ok(())
@@ -192,8 +192,8 @@ pub struct UserRepository {
 pub struct UserService {
     repo:  Inject<UserRepository>,
     cache: Inject<Cache>,
-    #[inject]
-    db:    Arc<Database>,   // Arc<T> field — explicit #[inject]
+    #[injectable(inject)]
+    db:    Arc<Database>,   // Arc<T> field — explicit #[injectable(inject)]
 }
 
 #[tokio::main]

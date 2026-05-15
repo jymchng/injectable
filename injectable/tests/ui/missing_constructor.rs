@@ -1,7 +1,7 @@
-//! Compile-fail test: #[injectable] without #[injectable_ctor].
+//! Compile-fail test: #[injectable] without #[injectable(ctor)].
 //!
 //! The #[injectable] attribute on an impl block requires either a
-//! #[injectable_ctor] method or at least one lifecycle hook.
+//! #[injectable(ctor)] method or at least one lifecycle hook.
 
 use injectable::injectable;
 

@@ -82,8 +82,8 @@ static POST_CONSTRUCT_CALLED: AtomicBool = AtomicBool::new(false);
 struct TestService;
 #[injectable]
 impl TestService {
-    #[injectable_ctor] fn new() -> Self { Self }
-    #[post_construct] fn init(&self) { POST_CONSTRUCT_CALLED.store(true, Ordering::SeqCst); }
+    #[injectable(ctor)] fn new() -> Self { Self }
+    #[injectable(post_construct)] fn init(&self) { POST_CONSTRUCT_CALLED.store(true, Ordering::SeqCst); }
 }
 
 let container = Container::builder().build().await.unwrap();

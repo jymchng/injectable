@@ -17,7 +17,7 @@ cargo run --example 11_url_shortener --features axum
 
 ```
 AppConfig            (level 0 — constructor injection, reads env)
-    ↓ make_db_pool   (#[inject_fn] — called once per service type)
+    ↓ make_db_pool   (#[injectable(factory)] — called once per service type)
 AuthService          (level 1 ← pool)
 UrlService           (level 1 ← pool, Arc<AppConfig>)
 AnalyticsService     (level 2 ← pool, Arc<UrlService>)
@@ -29,11 +29,11 @@ LinkPreviewService   (level 2 ← Arc<UrlService>, Arc<AppConfig>)
 
 | Feature | Where used |
 |---|---|
-| `#[inject_fn]` factory | `make_db_pool` reads `Inject<AppConfig>` |
+| `#[injectable(factory)]` factory | `make_db_pool` reads `Inject<AppConfig>` |
 | `use_factory_async` | pool field on AuthService, UrlService, AnalyticsService |
 | `Arc<T>` service deps | AnalyticsService holds `Arc<UrlService>` |
-| `#[post_construct]` | DB migrations on each service |
-| `#[pre_destruct]` | Pool shutdown on AuthService |
+| `#[injectable(post_construct)]` | DB migrations on each service |
+| `#[injectable(pre_destruct)]` | Pool shutdown on AuthService |
 | Custom Axum extractor | `AuthenticatedUser` calls `Inject::<AuthService>::extract` |
 | Multiple `Inject<T>` in one handler | dashboard handler injects AnalyticsService |
 

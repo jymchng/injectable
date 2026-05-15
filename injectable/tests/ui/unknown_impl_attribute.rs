@@ -4,7 +4,7 @@
 
 #![allow(unused_imports)]
 
-use injectable::{injectable_ctor, injectable};
+use injectable::injectable;
 
 pub struct MyService {
     name: String,
@@ -12,7 +12,7 @@ pub struct MyService {
 
 #[injectable(bad = "value")]
 impl MyService {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     pub fn new() -> Self {
         Self { name: "default".to_string() }
     }

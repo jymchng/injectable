@@ -5,11 +5,13 @@ description: Sets up injectable in a new Rust project from scratch. Use when add
 
 # Getting Started with injectable
 
+Targets `injectable` `0.2.x` on Rust `1.86+`.
+
 ## 1. Add dependency
 
 ```toml
 [dependencies]
-injectable  = { version = "0.1", features = ["axum"] }  # omit axum if not needed
+injectable  = { version = "0.2", features = ["axum"] }  # omit axum if not needed
 tokio       = { version = "1",   features = ["full"] }
 async-trait = "0.1"
 ```
@@ -57,14 +59,14 @@ struct OrderService {
 ## 4. Add an external type (e.g., DB pool)
 
 ```rust
-#[inject_fn]
+#[injectable(factory)]
 async fn make_pool(cfg: Inject<AppConfig>) -> Result<Pool<Sqlite>, sqlx::Error> {
     sqlx::SqlitePool::connect(&cfg.db_url).await
 }
 
 #[injectable]
 struct Repository {
-    #[inject(use_factory_async = self::make_pool)]
+    #[injectable(inject(use_factory_async = self::make_pool))]
     pool: Pool<Sqlite>,
 }
 ```
@@ -77,4 +79,5 @@ struct Repository {
 - Read env vars at startup → see `config-injection` skill
 - Debug errors → see `troubleshooting` skill
 
-See [guides/01-getting-started.md](../../guides/01-getting-started.md).
+See [guides/01-getting-started.md](../../guides/01-getting-started.md),
+[guides/README.md](../../guides/README.md), and [README.md](../../README.md).

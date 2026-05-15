@@ -11,8 +11,8 @@ Single import that brings in everything commonly needed:
 use injectable::prelude::*;
 
 // Now available:
-// Macros:   #[injectable], #[injectable_ctor], #[inject_fn],
-//           #[post_construct], #[pre_destruct], bind!, container!
+// Macros:   #[injectable], #[injectable(ctor)], #[injectable(factory)],
+//           #[injectable(post_construct)], #[injectable(pre_destruct)], bind!, container!
 // Types:    Injectable, Inject, Extract, Container, DynProvider, FactoryCtx
 //           InjectableError, InjectableResult, HookResult, ResolveContext
 // Scopes:   Singleton, Transient, RequestScoped
@@ -58,7 +58,10 @@ use async_trait::async_trait;
 
 ```toml
 [dependencies]
-injectable  = { version = "0.1", features = ["axum"] }
+injectable  = { version = "0.2", features = ["axum"] }
 tokio       = { version = "1",   features = ["full"] }
 async-trait = "0.1"
 ```
+
+For repository-level context and guide navigation, see
+[skills/README.md](../README.md) and [guides/README.md](../../guides/README.md).

@@ -1,4 +1,4 @@
-error: non-`Inject<T>` fields require an explicit `#[inject]` annotation; if this field has no DI dependency, use a `#[injectable_ctor]` constructor instead
+error: non-`Inject<T>` fields require an explicit `#[injectable(inject)]` annotation; if this field has no DI dependency, use a `#[injectable_ctor]` constructor instead
  --> tests/ui/field_owned_non_clone_singleton.rs
   |
   |     weather: WeatherService,  // ERROR: Extract not implemented for WeatherService

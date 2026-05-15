@@ -1,6 +1,6 @@
 ---
 name: async-initialization
-description: Initializes services that require async work at startup — connecting to databases, loading config from remote, seeding caches. Use when #[injectable_ctor] or #[post_construct] need to .await async operations.
+description: Initializes services that require async work at startup — connecting to databases, loading config from remote, seeding caches. Use when #[injectable(ctor)] or #[injectable(post_construct)] need to .await async operations.
 ---
 
 # Async Initialization
@@ -15,7 +15,7 @@ struct DbPool { inner: sqlx::SqlitePool }
 
 #[injectable]
 impl DbPool {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     pub async fn new(cfg: Inject<AppConfig>) -> Result<Self, sqlx::Error> {
         let pool = sqlx::SqlitePool::connect(&cfg.db_url).await?;
         Ok(Self { inner: pool })
@@ -28,12 +28,12 @@ impl DbPool {
 ```rust
 #[injectable]
 impl CacheService {
-    #[injectable_ctor]
-    fn new(#[inject] db: Arc<Database>) -> Self {
+    #[injectable(ctor)]
+    fn new(#[injectable(inject)] db: Arc<Database>) -> Self {
         Self { db, cache: DashMap::new() }
     }
 
-    #[post_construct]
+    #[injectable(post_construct)]
     async fn warm_up(&self) -> HookResult {
         let items = self.db.load_hot_items().await
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
@@ -53,7 +53,7 @@ struct Clock { started: std::time::Instant }
 
 #[injectable]
 impl Clock {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     pub async fn new() -> Self {
         // Simulate async init (e.g., NTP sync)
         tokio::time::sleep(std::time::Duration::from_millis(10)).await;

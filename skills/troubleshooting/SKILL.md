@@ -20,9 +20,9 @@ Container::builder()
     .build().await?;
 ```
 
-## "non-`Inject<T>` fields require an explicit `#[inject]` annotation"
+## "non-`Inject<T>` fields require an explicit `#[injectable(inject)]` annotation"
 
-**Cause:** Field is `Arc<T>` or plain `T` without `#[inject]`.
+**Cause:** Field is `Arc<T>` or plain `T` without `#[injectable(inject)]`.
 
 ```rust
 // Wrong:
@@ -32,8 +32,8 @@ struct Service { db: Arc<Database> }
 // Right:
 #[injectable]
 struct Service {
-    #[inject]
-    db: Arc<Database>,  // explicit #[inject] required
+    #[injectable(inject)]
+    db: Arc<Database>,  // explicit #[injectable(inject)] required
 }
 ```
 
@@ -47,19 +47,19 @@ struct Service {
 struct Foo { name: String }
 
 #[injectable]          // ← keep this one
-impl Foo { #[injectable_ctor] fn new() -> Self { … } }
+impl Foo { #[injectable(ctor)] fn new() -> Self { … } }
 ```
 
 ## "parameter `x: Arc<T>` is not auto-injectable"
 
-**Cause:** `#[injectable_ctor]` parameter is `Arc<T>` without `#[inject]`.
+**Cause:** `#[injectable(ctor)]` parameter is `Arc<T>` without `#[injectable(inject)]`.
 
 ```rust
 // Wrong:
 fn new(db: Arc<Database>) -> Self { … }
 
 // Right:
-fn new(#[inject] db: Arc<Database>) -> Self { … }
+fn new(#[injectable(inject)] db: Arc<Database>) -> Self { … }
 ```
 
 ## "GraphValidationFailed — `X` depends on `Y`, which is not registered"
@@ -78,7 +78,7 @@ UserService → OrderService → UserService
 
 Refactor: extract a shared dependency, or use `Option<Inject<T>>` for one direction.
 
-## "#[injectable] without #[injectable_ctor] requires at least one hook"
+## "#[injectable] without #[injectable(ctor)] requires at least one hook"
 
 ```rust
 // Wrong: empty impl block
@@ -86,10 +86,10 @@ Refactor: extract a shared dependency, or use `Option<Inject<T>>` for one direct
 impl Service {}
 
 // Right: use #[injectable] on struct for field injection with no impl block
-// OR add #[injectable_ctor]:
+// OR add #[injectable(ctor)]:
 #[injectable]
 impl Service {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new() -> Self { Self }
 }
 ```

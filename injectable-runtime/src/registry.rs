@@ -266,7 +266,7 @@ inventory::collect!(InjectableArcFactory);
 // lifecycle hooks without requiring any extra struct annotation.
 
 /// Function pointer that receives a type-erased `Arc<T>` and calls the
-/// `#[post_construct]` hook(s) on the instance.
+/// `#[injectable(post_construct)]` hook(s) on the instance.
 pub type PostConstructFnPtr = fn(
     std::sync::Arc<dyn std::any::Any + std::marker::Send + std::marker::Sync>,
 ) -> std::pin::Pin<
@@ -283,7 +283,7 @@ pub type MakePreDestructFnPtr = fn(
 /// Injectable type.
 ///
 /// Submitted by:
-/// - `#[injectable_impl]` (no `#[injectable_ctor]`) — direct method call wrappers
+/// - `#[injectable_impl]` (no `#[injectable(ctor)]`) — direct method call wrappers
 /// - `#[derive(Injectable)]` with `has_post_construct`/`has_pre_destruct` —
 ///   delegates to the `PostConstruct`/`PreDestruct` trait impls
 ///

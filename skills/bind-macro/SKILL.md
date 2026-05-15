@@ -6,6 +6,8 @@ description: Binds trait objects to concrete implementations using bind!(). Use 
 # bind! Macro
 
 Creates a static binding from a trait to a concrete type for `Inject<dyn Trait>`.
+Use it with `#[injectable(trait)]` when you want the trait itself to opt into
+the injectable docs/discovery flow.
 
 ## Basic pattern
 
@@ -13,17 +15,16 @@ Creates a static binding from a trait to a concrete type for `Inject<dyn Trait>`
 use injectable::prelude::*;
 
 // Define the trait
-#[injectable_trait]
+#[injectable(trait)]
 pub trait EmailSender {
-    async fn send(&self, to: &str, subject: &str, body: &str);
+    fn send(&self, to: &str, subject: &str, body: &str);
 }
 
 // Implement the trait
 pub struct SmtpSender;
 
-#[async_trait]
 impl EmailSender for SmtpSender {
-    async fn send(&self, to: &str, subject: &str, body: &str) {
+    fn send(&self, to: &str, subject: &str, body: &str) {
         println!("Sending email to {to}: {subject}");
     }
 }
@@ -43,7 +44,7 @@ struct NotificationService {
 ```rust
 use injectable::prelude::*;
 
-#[injectable_trait]
+#[injectable(trait)]
 pub trait Cache {
     fn get(&self, key: &str) -> Option<String>;
     fn set(&self, key: &str, value: String);
@@ -66,7 +67,6 @@ bind!(dyn Cache => InMemoryCache);
 
 #[injectable]
 struct UserService {
-    #[inject]
     cache: Inject<dyn Cache>,
 }
 ```
@@ -76,9 +76,8 @@ struct UserService {
 ```rust
 pub struct MockEmailSender;
 
-#[async_trait]
 impl EmailSender for MockEmailSender {
-    async fn send(&self, to: &str, _subject: &str, _body: &str) {
+    fn send(&self, to: &str, _subject: &str, _body: &str) {
         println!("[MOCK] Would send email to {to}");
     }
 }
@@ -97,4 +96,13 @@ bind!(dyn EmailSender => MockEmailSender);
 
 The `bind!` macro generates the `Extract` impl for `Inject<dyn Trait>` that delegates to `Concrete::Provider`.
 
-See [guides/04-external-types.md](../../guides/04-external-types.md) for more on external types.
+Notes:
+
+- `bind!` resolves through the concrete provider and does not go through the
+  singleton cache for `Inject<dyn Trait>`.
+- The trait annotation is recommended for clarity, but `bind!` can still work
+  with unannotated traits when the trait object is otherwise valid.
+
+See [skills/injectable-trait](../injectable-trait/SKILL.md),
+[guides/04-external-types.md](../../guides/04-external-types.md), and
+[guides/README.md](../../guides/README.md).

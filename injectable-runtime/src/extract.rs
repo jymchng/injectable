@@ -49,7 +49,7 @@ impl Extract for () {
 ///
 /// ```rust,ignore
 /// // field svc: Arc<WeatherService>
-/// #[inject(use_factory_sync = Clone::clone)]
+/// #[injectable(inject(use_factory_sync = Clone::clone))]
 /// svc: Arc<WeatherService>,
 /// ```
 ///

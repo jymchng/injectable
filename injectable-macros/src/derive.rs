@@ -15,24 +15,11 @@ use crate::provider_gen::{self, FieldInfo, FieldInjectKind};
 /// must implement `Extract`. The generated provider extracts each field from
 /// the context and constructs the struct.
 ///
-/// Individual fields can opt out of injection with `#[inject(skip)]`,
-/// which uses `Default::default()` for that field instead.
-///
-/// # Default Construction
-///
-/// When `#[injectable(default)]` is specified, the generated provider uses
-/// `Default::default()` for all fields by default. Individual fields can
-/// opt IN to injection with `#[inject]`, which extracts them from the context.
-///
 /// # Field Injection Rules
 ///
-/// - All field types must implement `Extract` (unless `#[inject(skip)]` is used)
-/// - `Inject<T>` fields → shared `Arc<T>` access
-/// - `T` fields (where `T: Injectable`) → owned value access
-/// - `Option<Inject<T>>` fields → optional shared access
-/// - Unit structs (no fields) → constructed without extraction
-/// - `#[inject]` on a field → force extraction (in a `default` struct)
-/// - `#[inject(skip)]` on a field → use `Default::default()` (in a non-default struct)
+/// - `Inject<T>` fields → auto-injected, no annotation needed
+/// - All other field types require `#[injectable(inject)]` or a factory variant
+/// - `Option<Inject<T>>` fields → optional shared access (requires `#[injectable(inject)]`)
 pub fn expand_derive_injectable(input: syn::DeriveInput) -> syn::Result<TokenStream> {
     let type_name = &input.ident;
     let generics = &input.generics;
@@ -55,9 +42,9 @@ pub fn expand_derive_injectable(input: syn::DeriveInput) -> syn::Result<TokenStr
 /// Field injection rules:
 /// - `Inject<T>` field, no annotation → auto-injected
 /// - Any other type, no annotation → compile error
-/// - `#[inject]` → explicitly injected (extract via DI)
-/// - `#[inject(use_factory_async = path)]` → async factory call
-/// - `#[inject(use_factory_sync = path)]` → sync factory call
+/// - `#[injectable(inject)]` → explicitly injected (extract via DI)
+/// - `#[injectable(inject(use_factory_async = path))]` → async factory call
+/// - `#[injectable(inject(use_factory_sync = path))]` → sync factory call
 fn parse_struct_fields(data: &syn::Data) -> syn::Result<Vec<FieldInfo>> {
     match data {
         syn::Data::Struct(data_struct) => match &data_struct.fields {
@@ -98,33 +85,21 @@ fn parse_struct_fields(data: &syn::Data) -> syn::Result<Vec<FieldInfo>> {
     }
 }
 
-/// Determine the injection kind for a field based on its `#[inject]` attributes and type.
+/// Determine the injection kind for a field based on its `#[injectable(inject)]` attributes and type.
 ///
 /// Rules:
 /// - `Inject<T>` with no annotation → `Inject` (auto-inject)
-/// - Any type with `#[inject]` (no args) → `Inject`
-/// - Any type with `#[inject(use_factory_async = path)]` → `Factory(path)`
-/// - Any type with `#[inject(use_factory_sync = path)]` → `Provider(path)`
+/// - Any type with `#[injectable(inject)]` (no factory args) → `Inject`
+/// - Any type with `#[injectable(inject(use_factory_async = path))]` → `Factory(path)`
+/// - Any type with `#[injectable(inject(use_factory_sync = path))]` → `Provider(path)`
 /// - Non-`Inject<T>` with no annotation → compile error
 fn parse_field_inject_kind(
     attrs: &[syn::Attribute],
     ty: &syn::Type,
 ) -> syn::Result<FieldInjectKind> {
     for attr in attrs {
-        if attr.path().is_ident("inject") {
-            let parsed: Result<syn::punctuated::Punctuated<InjectArg, syn::Token![,]>, _> =
-                attr.parse_args_with(syn::punctuated::Punctuated::parse_terminated);
-
-            if let Ok(args) = parsed {
-                if let Some(arg) = args.into_iter().next() {
-                    match arg {
-                        InjectArg::FactoryAsync(path) => return Ok(FieldInjectKind::Factory(path)),
-                        InjectArg::FactorySync(path) => return Ok(FieldInjectKind::Provider(path)),
-                    }
-                }
-            }
-            // #[inject] with no args → explicit inject
-            return Ok(FieldInjectKind::Inject);
+        if attr.path().is_ident("injectable") {
+            return attr.parse_args_with(parse_inject_sub_arg);
         }
     }
     // No annotation: only Inject<T> is auto-injected
@@ -134,40 +109,52 @@ fn parse_field_inject_kind(
         use syn::spanned::Spanned;
         Err(syn::Error::new(
             ty.span(),
-            "non-`Inject<T>` fields require an explicit `#[inject]` annotation; \
+            "non-`Inject<T>` fields require an explicit `#[injectable(inject)]` annotation; \
              if this field has no DI dependency, use a `#[injectable_ctor]` constructor instead",
         ))
     }
 }
 
-/// A single argument within `#[inject(...)]`.
-enum InjectArg {
-    /// `use_factory_async = path` — call the given async factory function
-    FactoryAsync(syn::Path),
-    /// `use_factory_sync = path` — call the given sync factory function (no .await)
-    FactorySync(syn::Path),
-}
-
-impl syn::parse::Parse for InjectArg {
-    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let ident: syn::Ident = input.parse()?;
-        if ident == "use_factory_async" || ident == "use_factory" {
-            input.parse::<syn::Token![=]>()?;
-            let path: syn::Path = input.parse()?;
-            Ok(InjectArg::FactoryAsync(path))
-        } else if ident == "use_factory_sync" {
-            input.parse::<syn::Token![=]>()?;
-            let path: syn::Path = input.parse()?;
-            Ok(InjectArg::FactorySync(path))
-        } else {
-            Err(syn::Error::new(
-                ident.span(),
-                format!(
-                    "unknown inject attribute: `{ident}`; \
-                     expected `use_factory_async = path` or `use_factory_sync = path`"
-                ),
-            ))
-        }
+/// Parse the inner `inject` / `inject(use_factory_*)` sub-argument from
+/// `#[injectable(inject)]` or `#[injectable(inject(use_factory_async = path))]`.
+///
+/// Called via `attr.parse_args_with(parse_inject_sub_arg)` after confirming
+/// the attribute path is `injectable`.
+fn parse_inject_sub_arg(input: syn::parse::ParseStream) -> syn::Result<FieldInjectKind> {
+    let kw: syn::Ident = input.parse()?;
+    if kw != "inject" {
+        return Err(syn::Error::new(
+            kw.span(),
+            format!("expected `inject` inside `#[injectable(...)]` on a field, found `{kw}`"),
+        ));
+    }
+    if input.is_empty() {
+        // #[injectable(inject)] — bare, no factory args
+        return Ok(FieldInjectKind::Inject);
+    }
+    // #[injectable(inject(use_factory_async/sync = path))]
+    let content;
+    syn::parenthesized!(content in input);
+    let factory_ident: syn::Ident = content.parse()?;
+    let is_async = if factory_ident == "use_factory_async" || factory_ident == "use_factory" {
+        true
+    } else if factory_ident == "use_factory_sync" {
+        false
+    } else {
+        return Err(syn::Error::new(
+            factory_ident.span(),
+            format!(
+                "unknown inject argument: `{factory_ident}`; \
+                 expected `use_factory_async = path` or `use_factory_sync = path`"
+            ),
+        ));
+    };
+    content.parse::<syn::Token![=]>()?;
+    let path: syn::Path = content.parse()?;
+    if is_async {
+        Ok(FieldInjectKind::Factory(path))
+    } else {
+        Ok(FieldInjectKind::Provider(path))
     }
 }
 

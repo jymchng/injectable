@@ -13,7 +13,7 @@ src/
 ├── config.rs          (#[injectable] AppConfig)
 ├── db/
 │   ├── mod.rs
-│   ├── pool.rs        (make_db_pool #[inject_fn])
+│   ├── pool.rs        (make_db_pool #[injectable(factory)])
 │   └── migrations.rs
 ├── services/
 │   ├── auth.rs        (#[injectable] AuthService)
@@ -30,25 +30,25 @@ src/
 // services/auth.rs
 #[injectable]
 pub struct AuthService {
-    #[inject(use_factory_async = crate::db::pool::make_db_pool)]
+    #[injectable(inject(use_factory_async = crate::db::pool::make_db_pool))]
     pool: Pool<Sqlite>,
 }
 
 // services/users.rs
 #[injectable]
 pub struct UserService {
-    #[inject(use_factory_async = crate::db::pool::make_db_pool)]
+    #[injectable(inject(use_factory_async = crate::db::pool::make_db_pool))]
     pool: Pool<Sqlite>,
-    #[inject]
+    #[injectable(inject)]
     auth: Arc<AuthService>,         // depends on AuthService
 }
 
 // services/orders.rs
 #[injectable]
 pub struct OrderService {
-    #[inject]
+    #[injectable(inject)]
     users: Arc<UserService>,        // depends on UserService
-    #[inject]
+    #[injectable(inject)]
     auth:  Arc<AuthService>,
 }
 ```

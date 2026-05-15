@@ -1,11 +1,11 @@
-//! Compile-fail test: multiple #[injectable_ctor] methods.
+//! Compile-fail test: multiple #[injectable(ctor)] methods.
 //!
 //! The #[injectable] attribute requires exactly one method
-//! annotated with #[injectable_ctor]. Having multiple is a compile error.
+//! annotated with #[injectable(ctor)]. Having multiple is a compile error.
 
 #![allow(unused_imports)]
 
-use injectable::{injectable_ctor, injectable};
+use injectable::injectable;
 
 pub struct MyService {
     name: String,
@@ -13,12 +13,12 @@ pub struct MyService {
 
 #[injectable]
 impl MyService {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     pub fn new() -> Self {
         Self { name: "default".to_string() }
     }
 
-    #[injectable_ctor]
+    #[injectable(ctor)]
     pub fn from_name(name: String) -> Self {
         Self { name }
     }

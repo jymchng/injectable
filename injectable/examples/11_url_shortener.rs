@@ -24,21 +24,21 @@
 //!                     ◀── Arc<AppConfig> ───────────────┘
 //! ```
 //!
-//! Key: every arrow is an `Arc<T>` field with `#[inject]`.  The single
-//! `make_db_pool` factory — annotated with `#[inject_fn]` — is referenced by
+//! Key: every arrow is an `Arc<T>` field with `#[injectable(inject)]`.  The single
+//! `make_db_pool` factory — annotated with `#[injectable(factory)]` — is referenced by
 //! three services; injectable calls it once per singleton and caches the pool.
 //!
 //! # Features demonstrated
 //!
-//! - `#[inject_fn]`         — factory that resolves its own `Inject<AppConfig>`
+//! - `#[injectable(factory)]`         — factory that resolves its own `Inject<AppConfig>`
 //! - `use_factory_async`    — one pool shared across AuthService, UrlService,
 //!                            AnalyticsService
-//! - `#[injectable_ctor]`   — constructor injection for env-var config
+//! - `#[injectable(ctor)]`   — constructor injection for env-var config
 //! - `Arc<T>` fields        — service-to-service dependencies (AnalyticsService
 //!                            holds Arc<UrlService>; RedirectService holds both
 //!                            Arc<UrlService> and Arc<AnalyticsService>)
-//! - `#[post_construct]`    — per-service DB migration, runs once per singleton
-//! - `#[pre_destruct]`      — ordered shutdown (reverse construction order)
+//! - `#[injectable(post_construct)]`    — per-service DB migration, runs once per singleton
+//! - `#[injectable(pre_destruct)]`      — ordered shutdown (reverse construction order)
 //! - Custom extractor       — `AuthenticatedUser` calls `Inject::<AuthService>`
 //!                            inside `FromRequestParts`
 //! - Multiple `Inject<T>`s  — dashboard handler injects three services at once
@@ -109,7 +109,7 @@ use injectable_runtime::InjectableError;
 
 /// Application configuration loaded from environment variables.
 ///
-/// Constructor injection: `#[injectable_ctor]` lets the constructor read
+/// Constructor injection: `#[injectable(ctor)]` lets the constructor read
 /// `std::env` freely and return a `Result` if mandatory vars are missing.
 #[derive(Debug, Clone)]
 pub struct AppConfig {
@@ -121,7 +121,7 @@ pub struct AppConfig {
 
 #[injectable]
 impl AppConfig {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new() -> Self {
         Self {
             database_url: std::env::var("DATABASE_URL")
@@ -140,13 +140,13 @@ impl AppConfig {
 // Shared DB-pool factory — level 1
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// `#[inject_fn]` transforms this function so the macro resolves its
+/// `#[injectable(factory)]` transforms this function so the macro resolves its
 /// `Inject<AppConfig>` parameter from the container, then calls the body.
 ///
 /// Three services reference this factory with `use_factory_async`.  Injectable
 /// calls it once per service type and caches the `Pool<Sqlite>` as a singleton
 /// — so the pool is actually shared across the process.
-#[inject_fn]
+#[injectable(factory)]
 async fn make_db_pool(cfg: Inject<AppConfig>) -> Result<Pool<Sqlite>, sqlx::Error> {
     println!("  [DB] Connecting to {}", cfg.database_url);
     // Single connection + no idle / lifetime recycling keeps the same SQLite
@@ -170,13 +170,13 @@ async fn make_db_pool(cfg: Inject<AppConfig>) -> Result<Pool<Sqlite>, sqlx::Erro
 /// Dependency: `Pool<Sqlite>` via `make_db_pool`.
 #[injectable]
 pub struct AuthService {
-    #[inject(use_factory_async = make_db_pool)]
+    #[injectable(inject(use_factory_async = make_db_pool))]
     pool: Pool<Sqlite>,
 }
 
 #[injectable]
 impl AuthService {
-    #[post_construct]
+    #[injectable(post_construct)]
     async fn migrate(&self) -> Result<(), sqlx::Error> {
         sqlx::query(
             "CREATE TABLE IF NOT EXISTS users (
@@ -192,7 +192,7 @@ impl AuthService {
         Ok(())
     }
 
-    #[pre_destruct]
+    #[injectable(pre_destruct)]
     async fn shutdown(&self) {
         println!("  [AuthService] Closing pool.");
         self.pool.close().await;
@@ -239,15 +239,15 @@ impl AuthService {
 ///   • `Arc<AppConfig>` — to build full short URLs
 #[injectable]
 pub struct UrlService {
-    #[inject(use_factory_async = self::make_db_pool)]
+    #[injectable(inject(use_factory_async = self::make_db_pool))]
     pool: Pool<Sqlite>,
-    #[inject]
+    #[injectable(inject)]
     config: Arc<AppConfig>,
 }
 
 #[injectable]
 impl UrlService {
-    #[post_construct]
+    #[injectable(post_construct)]
     async fn migrate(&self) -> Result<(), sqlx::Error> {
         sqlx::query(
             "CREATE TABLE IF NOT EXISTS links (
@@ -346,15 +346,15 @@ impl UrlService {
 /// shared reference to `UrlService` and calls it before recording analytics.
 #[injectable]
 pub struct AnalyticsService {
-    #[inject(use_factory_async = self::make_db_pool)]
+    #[injectable(inject(use_factory_async = self::make_db_pool))]
     pool: Pool<Sqlite>,
-    #[inject]
+    #[injectable(inject)]
     url_svc: Arc<UrlService>,
 }
 
 #[injectable]
 impl AnalyticsService {
-    #[post_construct]
+    #[injectable(post_construct)]
     async fn migrate(&self) -> Result<(), sqlx::Error> {
         sqlx::query(
             "CREATE TABLE IF NOT EXISTS click_events (
@@ -457,9 +457,9 @@ impl AnalyticsService {
 /// manual construction anywhere.
 #[injectable]
 pub struct RedirectService {
-    #[inject]
+    #[injectable(inject)]
     url_svc: Arc<UrlService>,
-    #[inject]
+    #[injectable(inject)]
     analytics: Arc<AnalyticsService>,
 }
 
@@ -494,9 +494,9 @@ impl RedirectService {
 ///   • `Arc<AppConfig>`   — build absolute URLs in the HTML
 #[injectable]
 pub struct LinkPreviewService {
-    #[inject]
+    #[injectable(inject)]
     url_svc: Arc<UrlService>,
-    #[inject]
+    #[injectable(inject)]
     config: Arc<AppConfig>,
 }
 

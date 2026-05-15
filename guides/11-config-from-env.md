@@ -19,7 +19,7 @@ pub struct AppConfig {
 impl AppConfig {
     /// Reads env vars at construction time.
     /// The container builds this once; all dependents share the same instance.
-    #[injectable_ctor]
+    #[injectable(ctor)]
     pub fn new() -> Self {
         Self {
             database_url: std::env::var("DATABASE_URL")
@@ -53,7 +53,7 @@ pub struct Database {
 
 #[injectable]
 impl Database {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     pub async fn new(config: Arc<AppConfig>) -> Self {
         let pool = sqlx::SqlitePool::connect(&config.database_url)
             .await
@@ -68,7 +68,7 @@ pub struct EmailService {
 
 #[injectable]
 impl EmailService {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     pub fn new(config: Arc<AppConfig>) -> Self {
         Self { config }
     }
@@ -99,7 +99,7 @@ pub struct SecureConfig {
 
 #[injectable]
 impl SecureConfig {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     pub fn new() -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let api_key = std::env::var("API_KEY")
             .map_err(|_| "API_KEY is required")?;
@@ -145,7 +145,7 @@ pub struct CacheConfig {
 
 #[injectable]
 impl DatabaseConfig {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     pub fn new() -> Self {
         Self {
             url: std::env::var("DATABASE_URL")
@@ -160,7 +160,7 @@ impl DatabaseConfig {
 
 #[injectable]
 impl CacheConfig {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     pub fn new() -> Self {
         Self {
             redis_url: std::env::var("REDIS_URL")
@@ -180,13 +180,13 @@ pub struct CacheService    { config: Arc<CacheConfig>    }
 
 #[injectable]
 impl DatabaseService {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     pub fn new(config: Arc<DatabaseConfig>) -> Self { Self { config } }
 }
 
 #[injectable]
 impl CacheService {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     pub fn new(config: Arc<CacheConfig>) -> Self { Self { config } }
 }
 ```
@@ -242,7 +242,7 @@ async fn server_info(
 
 | Config requirement | Pattern |
 |---|---|
-| Simple key-value from env | Zero-arg `#[injectable_ctor]` with `std::env::var` |
+| Simple key-value from env | Zero-arg `#[injectable(ctor)]` with `std::env::var` |
 | Validation at startup | Return `Result<Self, _>` from constructor |
 | Multiple services, different config | Split into focused config structs |
 | `.env` file | `dotenvy::dotenv()` before `Container::builder().build()` |

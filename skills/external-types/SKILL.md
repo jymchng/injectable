@@ -7,21 +7,21 @@ description: Injects external/third-party types (sqlx::SqlitePool, reqwest::Clie
 
 Three approaches — see [3-ways-to-inject-external-types.md](../../guides/3-ways-to-inject-external-types.md).
 
-## Way 1 — `#[inject_fn]` factory (co-located with service)
+## Way 1 — `#[injectable(factory)]` factory (co-located with service)
 
 Best when the external type is only used by one service.
 
 ```rust
 use injectable::prelude::*;
 
-#[inject_fn]
+#[injectable(factory)]
 async fn make_pool(cfg: Inject<AppConfig>) -> Result<sqlx::SqlitePool, sqlx::Error> {
     sqlx::SqlitePool::connect(&cfg.db_url).await
 }
 
 #[injectable]
 struct Database {
-    #[inject(use_factory_async = self::make_pool)]
+    #[injectable(inject(use_factory_async = self::make_pool))]
     pool: sqlx::SqlitePool,
 }
 ```
@@ -35,7 +35,7 @@ fn make_client(_ctx: &ResolveContext) -> reqwest::Client {
 
 #[injectable]
 struct ApiService {
-    #[inject(use_factory_sync = self::make_client)]
+    #[injectable(inject(use_factory_sync = self::make_client))]
     client: reqwest::Client,
 }
 ```
@@ -61,11 +61,11 @@ let container = Container::builder()
     }))
     .build().await?;
 
-// Consume via #[inject] field:
+// Consume via #[injectable(inject)] field:
 #[injectable]
 impl UserRepo {
-    #[injectable_ctor]
-    fn new(#[inject] pool: Arc<sqlx::SqlitePool>) -> Self { Self { pool } }
+    #[injectable(ctor)]
+    fn new(#[injectable(inject)] pool: Arc<sqlx::SqlitePool>) -> Self { Self { pool } }
 }
 ```
 

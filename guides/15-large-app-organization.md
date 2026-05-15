@@ -108,7 +108,7 @@ pub struct UserService {
 
 #[injectable]
 impl UserService {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     pub fn new(repo: Arc<UserRepository>) -> Self { Self { repo } }
 
     pub async fn get(&self, id: i64) -> Option<UserRow> {
@@ -205,7 +205,7 @@ pub struct Mailer { config: Arc<AppConfig>, smtp: Arc<SmtpClient> }
 pub struct RateLimiter { max_rps: u32 }
 #[injectable]
 impl RateLimiter {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     pub fn new(config: Arc<AppConfig>) -> Self {
         Self { max_rps: config.rate_limit_rps }
     }

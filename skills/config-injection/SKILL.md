@@ -1,6 +1,6 @@
 ---
 name: config-injection
-description: Injects application configuration from environment variables or config files using #[injectable_ctor]. Use when services need database URLs, API keys, ports, or other startup configuration.
+description: Injects application configuration from environment variables or config files using #[injectable(ctor)]. Use when services need database URLs, API keys, ports, or other startup configuration.
 ---
 
 # Configuration Injection
@@ -19,7 +19,7 @@ struct AppConfig {
 
 #[injectable]
 impl AppConfig {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new() -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         Ok(Self {
             database_url: std::env::var("DATABASE_URL")
@@ -36,21 +36,21 @@ impl AppConfig {
 ## Consuming config in other services
 
 ```rust
-#[inject_fn]
+#[injectable(factory)]
 async fn make_pool(cfg: Inject<AppConfig>) -> Result<sqlx::SqlitePool, sqlx::Error> {
     sqlx::SqlitePool::connect(&cfg.database_url).await
 }
 
 #[injectable]
 struct Database {
-    #[inject(use_factory_async = self::make_pool)]
+    #[injectable(inject(use_factory_async = self::make_pool))]
     pool: sqlx::SqlitePool,
 }
 
 // Or via constructor:
 #[injectable]
 impl ApiClient {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new(cfg: Inject<AppConfig>) -> Self {
         Self {
             base_url: format!("https://api.example.com"),

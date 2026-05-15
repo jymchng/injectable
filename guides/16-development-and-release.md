@@ -28,6 +28,10 @@ cargo install cargo-outdated
 cargo install cargo-audit
 ```
 
+GitHub Actions uses `dtolnay/rust-toolchain@stable` with
+`toolchain: 1.86.0`. Keep local validation on the same compiler family when
+investigating CI-only failures.
+
 For SQLite-backed examples:
 
 ```bash
@@ -48,6 +52,7 @@ just doctor
 ```text
 .
 ├── Cargo.toml                 # workspace manifest
+├── assets/                    # README logos and other project branding assets
 ├── justfile                   # local developer commands
 ├── guides/                    # end-user and contributor documentation
 ├── injectable/                # facade crate, examples, integration tests
@@ -196,6 +201,16 @@ Shared dependency versions are standardized in the workspace manifest:
 - keep crate-local dependency declarations only when they are truly unique to
   one crate
 - update all internal crates consistently when changing shared versions
+
+Shared package metadata also lives in the workspace manifest. Published crates
+inherit these values from `[workspace.package]`:
+
+- `version`
+- `edition`
+- `license`
+- `rust-version`
+- `homepage`
+- `repository`
 
 Useful commands:
 
@@ -355,7 +370,9 @@ Confirm that:
 
 - README examples still compile conceptually
 - guide links are valid
+- package metadata links (`homepage`, `repository`) resolve correctly
 - new features are documented
+- README logo and other `assets/` references still render
 - release notes-worthy changes are clear from commits/PR titles
 
 ### 5. Create and push the release tag
@@ -390,9 +407,11 @@ The release workflow has three jobs:
 
 Runs a release gate on `ubuntu-latest`:
 
+- installs Rust with `dtolnay/rust-toolchain@stable`
+- pins the compiler with `toolchain: 1.86.0`
+
 - `cargo fmt --all -- --check`
 - `cargo clippy --workspace --features injectable/axum -- -D warnings`
-- `cargo test --workspace --features injectable/axum`
 - strict rustdoc build
 - `cargo publish --dry-run --locked` for every published crate
 - tag/workspace version consistency check

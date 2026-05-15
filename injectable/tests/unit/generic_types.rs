@@ -7,7 +7,7 @@
 //! - `Option<Inject<T>>` — optional dependency, resolves to `None` when unregistered
 //! - Generic stdlib types as **field types** via `use_factory_sync/async`
 //! - `PhantomData<Tag>` where `Tag: 'static + Send + Sync` — struct stays `'static`
-//! - `#[inject_fn]` factory returning a concrete specialization of a generic type
+//! - `#[injectable(factory)]` factory returning a concrete specialization of a generic type
 //!
 //! # What does NOT work
 //!
@@ -95,7 +95,7 @@ fn make_event_log(_ctx: &ResolveContext) -> Arc<Vec<String>> {
 
 #[injectable]
 struct EventLog {
-    #[inject(use_factory_sync = self::make_event_log)]
+    #[injectable(inject(use_factory_sync = self::make_event_log))]
     events: Arc<Vec<String>>,
 }
 
@@ -141,7 +141,7 @@ fn make_config_map(_ctx: &ResolveContext) -> HashMap<String, String> {
 
 #[injectable]
 struct AppSettings {
-    #[inject(use_factory_sync = self::make_config_map)]
+    #[injectable(inject(use_factory_sync = self::make_config_map))]
     config: HashMap<String, String>,
 }
 
@@ -160,7 +160,7 @@ async fn hashmap_field_type_via_factory() {
 //
 // A struct that carries a phantom type marker is still `'static` as long as
 // the marker satisfies `'static`. Such structs can be returned from
-// `#[inject_fn]` factories.
+// `#[injectable(factory)]` factories.
 
 struct UserMarker;
 struct OrderMarker;
@@ -172,7 +172,7 @@ struct TypedCounter<Marker: 'static + Send + Sync> {
 }
 
 // Separate inject_fn factories for each concrete specialization.
-#[inject_fn]
+#[injectable(factory)]
 fn make_user_counter(_db: Inject<Database>) -> TypedCounter<UserMarker> {
     TypedCounter {
         count: 0,
@@ -180,7 +180,7 @@ fn make_user_counter(_db: Inject<Database>) -> TypedCounter<UserMarker> {
     }
 }
 
-#[inject_fn]
+#[injectable(factory)]
 fn make_order_counter(_db: Inject<Database>) -> TypedCounter<OrderMarker> {
     TypedCounter {
         count: 100,
@@ -190,13 +190,13 @@ fn make_order_counter(_db: Inject<Database>) -> TypedCounter<OrderMarker> {
 
 #[injectable]
 struct UserStats {
-    #[inject(use_factory_async = self::make_user_counter)]
+    #[injectable(inject(use_factory_async = self::make_user_counter))]
     counter: TypedCounter<UserMarker>,
 }
 
 #[injectable]
 struct OrderStats {
-    #[inject(use_factory_async = self::make_order_counter)]
+    #[injectable(inject(use_factory_async = self::make_order_counter))]
     counter: TypedCounter<OrderMarker>,
 }
 
@@ -282,9 +282,9 @@ async fn generic_struct_singleton_respected() {
 
 #[injectable]
 struct App {
-    #[inject]
+    #[injectable(inject)]
     wrapper_db: Arc<Wrapper<Database>>,
-    #[inject]
+    #[injectable(inject)]
     wrapper_cache: Arc<Wrapper<Cache>>,
 }
 
@@ -314,8 +314,8 @@ struct ProductEntity;
 
 #[injectable]
 impl<Entity: 'static + Send + Sync + Clone> Repo<Entity> {
-    #[injectable_ctor]
-    fn new(#[inject] db: Arc<Database>) -> Self {
+    #[injectable(ctor)]
+    fn new(#[injectable(inject)] db: Arc<Database>) -> Self {
         Self {
             db,
             _phantom: PhantomData,

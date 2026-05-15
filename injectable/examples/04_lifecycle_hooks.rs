@@ -1,7 +1,7 @@
 #![allow(warnings)]
 //! Lifecycle Hooks Example
 //!
-//! This example demonstrates the `#[post_construct]` and `#[pre_destruct]`
+//! This example demonstrates the `#[injectable(post_construct)]` and `#[injectable(pre_destruct)]`
 //! lifecycle hooks that run after a type is constructed and before it
 //! is destroyed, respectively.
 //!
@@ -11,7 +11,7 @@
 //!    You implement the `PostConstruct` / `PreDestruct` traits yourself.
 //!
 //! 2. With `#[injectable]`:
-//!    The macro auto-detects `#[post_construct]` and `#[pre_destruct]`
+//!    The macro auto-detects `#[injectable(post_construct)]` and `#[injectable(pre_destruct)]`
 //!    annotated methods and generates the trait implementations for you.
 //!
 //! Run with: cargo run --example 04_lifecycle_hooks
@@ -54,12 +54,12 @@ impl Default for Database {
 
 #[injectable]
 impl Database {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new() -> Self {
         Self::default()
     }
 
-    #[post_construct]
+    #[injectable(post_construct)]
     async fn on_start(&self) -> HookResult {
         DB_INIT_COUNT.fetch_add(1, Ordering::SeqCst);
         self.connection_count.store(10, Ordering::SeqCst);
@@ -67,7 +67,7 @@ impl Database {
         Ok(())
     }
 
-    #[pre_destruct]
+    #[injectable(pre_destruct)]
     async fn on_stop(&self) -> HookResult {
         DB_SHUTDOWN_COUNT.fetch_add(1, Ordering::SeqCst);
         let remaining = self.connection_count.swap(0, Ordering::SeqCst);
@@ -92,12 +92,12 @@ impl Default for OrderService {
 
 #[injectable]
 impl OrderService {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new() -> Self {
         Self::default()
     }
 
-    #[post_construct]
+    #[injectable(post_construct)]
     async fn on_start(&self) -> HookResult {
         SERVICE_READY_COUNT.fetch_add(1, Ordering::SeqCst);
         self.ready.store(1, Ordering::SeqCst);
@@ -105,7 +105,7 @@ impl OrderService {
         Ok(())
     }
 
-    #[pre_destruct]
+    #[injectable(pre_destruct)]
     async fn on_stop(&self) -> HookResult {
         SERVICE_CLEANUP_COUNT.fetch_add(1, Ordering::SeqCst);
         self.ready.store(0, Ordering::SeqCst);
@@ -116,7 +116,7 @@ impl OrderService {
 
 // ─── Approach 2: #[injectable] with auto-detected hooks ────────
 // This is the most ergonomic approach. The macro auto-detects
-// #[post_construct] and #[pre_destruct] methods and generates
+// #[injectable(post_construct)] and #[injectable(pre_destruct)] methods and generates
 // the trait implementations. You can have non-Injectable fields
 // because the constructor sets them directly.
 
@@ -129,7 +129,7 @@ pub struct CacheService {
 
 #[injectable]
 impl CacheService {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new() -> Self {
         println!("  [CacheService] constructor: creating cache");
         Self {
@@ -138,7 +138,7 @@ impl CacheService {
         }
     }
 
-    #[post_construct]
+    #[injectable(post_construct)]
     async fn warm_up(&self) {
         IMPL_INIT_COUNT.fetch_add(1, Ordering::SeqCst);
         // Simulate cache warmup
@@ -147,7 +147,7 @@ impl CacheService {
         println!("  [CacheService] post_construct (warm_up): loaded 100 entries");
     }
 
-    #[pre_destruct]
+    #[injectable(pre_destruct)]
     async fn flush(&self) {
         IMPL_CLEANUP_COUNT.fetch_add(1, Ordering::SeqCst);
         // Simulate flushing cache to disk

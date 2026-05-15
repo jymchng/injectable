@@ -10,8 +10,8 @@ description: Chooses between Arc<T> and Inject<T> for injectable fields and para
 | Situation | Use |
 |---|---|
 | Field in `#[injectable]` struct, auto-injected | `Inject<T>` (no annotation) |
-| Field in `#[injectable]` struct, explicit | `Arc<T>` with `#[inject]` |
-| Constructor parameter | `Inject<T>` (auto) or `Arc<T>` with `#[inject]` |
+| Field in `#[injectable]` struct, explicit | `Arc<T>` with `#[injectable(inject)]` |
+| Constructor parameter | `Inject<T>` (auto) or `Arc<T>` with `#[injectable(inject)]` |
 | Axum handler parameter | `Inject<T>` (implements FromRequestParts) |
 | Storing in a non-injectable struct | `Arc<T>` (plain Arc, no DI) |
 | Passing to third-party code | `Arc<T>` (convert from Inject<T>) |
@@ -34,12 +34,12 @@ user_service.db.query("SELECT 1").await?;
 let arc: Arc<Database> = user_service.db.arc();
 ```
 
-## Arc\<T\> with #[inject]
+## Arc\<T\> with #[injectable(inject)]
 
 ```rust
 #[injectable]
 struct RepoService {
-    #[inject]
+    #[injectable(inject)]
     db: Arc<Database>,
 }
 
@@ -65,10 +65,10 @@ let inject: Inject<Database> = arc.into();
 ```rust
 #[injectable]
 impl Service {
-    #[injectable_ctor]
+    #[injectable(ctor)]
     fn new(
         db:    Inject<Database>,       // auto-injected
-        #[inject] cache: Arc<Cache>,   // explicit #[inject] required for Arc
+        #[injectable(inject)] cache: Arc<Cache>,   // explicit #[injectable(inject)] required for Arc
     ) -> Self {
         Self { db, cache }
     }
@@ -78,5 +78,5 @@ impl Service {
 ## Summary
 
 - Prefer `Inject<T>` for DI fields — it's the "DI-aware" smart pointer
-- Use `Arc<T>` with `#[inject]` when you need a plain `Arc` (passing to non-DI code)
+- Use `Arc<T>` with `#[injectable(inject)]` when you need a plain `Arc` (passing to non-DI code)
 - Never mix up: `Inject<T>` won't auto-coerce to `Arc<T>` in function signatures

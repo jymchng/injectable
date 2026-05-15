@@ -39,7 +39,7 @@ impl FactoryCtx {
     /// Extract any type that implements [`Extract`].
     ///
     /// This is the scope-safe extraction path — identical to what the
-    /// `#[inject]` annotation generates for struct fields and constructor
+    /// `#[injectable(inject)]` annotation generates for struct fields and constructor
     /// parameters.  Singleton types return the cached `Arc`; transient types
     /// get a fresh instance.
     ///

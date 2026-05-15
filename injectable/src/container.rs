@@ -10,7 +10,7 @@ use injectable_runtime::{
 /// The dependency injection container.
 ///
 /// The container holds the typed singleton store, the provider registry,
-/// and registered destructors for `#[pre_destruct]` hooks. It is
+/// and registered destructors for `#[injectable(pre_destruct)]` hooks. It is
 /// constructed via [`Container::builder()`].
 ///
 /// # Resolution Strategy
@@ -23,7 +23,7 @@ use injectable_runtime::{
 /// # Lifecycle
 ///
 /// - Use [`Container::resolve`] to obtain instances
-/// - Use [`Container::shutdown`] to run `#[pre_destruct]` hooks
+/// - Use [`Container::shutdown`] to run `#[injectable(pre_destruct)]` hooks
 ///   in reverse construction order
 ///
 /// # Example
@@ -134,7 +134,7 @@ impl Container {
         }
     }
 
-    /// Shut down the container, running all `#[pre_destruct]` hooks.
+    /// Shut down the container, running all `#[injectable(pre_destruct)]` hooks.
     ///
     /// Hooks are called in reverse construction order — the most
     /// recently constructed instance is destroyed first. This ensures

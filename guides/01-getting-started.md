@@ -5,11 +5,13 @@ are wired at compile time through generated provider chains — there is no runt
 reflection, no `TypeId` in the public API, and no `HashMap<TypeId, Box<dyn Any>>`.
 The resolution model is inspired by Axum's typed extractor pattern.
 
+This guide targets `injectable` `0.2.x` on Rust `1.86+`.
+
 ## Add to Cargo.toml
 
 ```toml
 [dependencies]
-injectable = { version = "0.1", features = ["axum"] }  # omit axum if not needed
+injectable = { version = "0.2", features = ["axum"] }  # omit axum if not needed
 tokio = { version = "1", features = ["full"] }
 async-trait = "0.1"
 ```
@@ -23,10 +25,10 @@ async-trait = "0.1"
 ### Step 1 — Define Your Types
 
 **Field injection** — simplest form. All fields must be `Inject<T>` (auto-wired)
-or annotated with `#[inject]`:
+or annotated with `#[injectable(inject)]`:
 
 ```rust
-use injectable::*;
+use injectable::prelude::*;
 
 #[injectable]
 #[derive(Default, Debug)]
@@ -47,7 +49,7 @@ pub struct UserService {
 external (third-party) dependencies. Struct fields are natural types, not `Inject<T>`:
 
 ```rust
-use injectable::*;
+use injectable::prelude::*;
 
 pub struct ReportService {
     db:    Arc<Database>,   // plain Arc — not Inject<T>
@@ -56,8 +58,8 @@ pub struct ReportService {
 
 #[injectable]
 impl ReportService {
-    #[injectable_ctor]
-    pub fn new(#[inject] db: Arc<Database>) -> Self {
+    #[injectable(ctor)]
+    pub fn new(#[injectable(inject)] db: Arc<Database>) -> Self {
         Self { db, limit: 100 }
     }
 }
@@ -133,8 +135,8 @@ async fn main() {
 
 | Style | Annotation | Fields use | Best for |
 |---|---|---|---|
-| Field injection | `#[injectable]` on struct | `Inject<T>` (auto) or `#[inject]` | Simple services, all deps are injectable |
-| Constructor injection | `#[injectable_ctor]` in impl | Plain `Arc<T>`, `T`, etc. | Non-injectable fields, external types, custom init |
+| Field injection | `#[injectable]` on struct | `Inject<T>` (auto) or `#[injectable(inject)]` | Simple services, all deps are injectable |
+| Constructor injection | `#[injectable(ctor)]` in impl | Plain `Arc<T>`, `T`, etc. | Non-injectable fields, external types, custom init |
 
 The two styles complement each other. Field injection is the zero-boilerplate
 default; constructor injection gives you full control when you need it.
@@ -144,14 +146,14 @@ default; constructor injection gives you full control when you need it.
 | Concept | What it does |
 |---|---|
 | `#[injectable]` on struct | Field injection — generates a `Provider` from struct fields |
-| `#[injectable]` on impl + `#[injectable_ctor]` | Constructor injection — calls your method to build the type |
+| `#[injectable]` on impl + `#[injectable(ctor)]` | Constructor injection — calls your method to build the type |
 | `Inject<T>` | Shared `Arc<T>` wrapper; auto-injected in struct fields |
-| `#[inject]` | Opt a non-`Inject<T>` field or parameter into DI |
-| `#[inject(use_factory_async/sync = path)]` | Inject an external type via a factory function |
+| `#[injectable(inject)]` | Opt a non-`Inject<T>` field or parameter into DI |
+| `#[injectable(inject(use_factory_async/sync = path))]` | Inject an external type via a factory function |
 | `Container` | The root — holds singleton cache and provider registry |
 | `DynProvider` | Closure-based provider for types you don't own |
-| `#[post_construct]` | Runs after construction (migration, warm-up) |
-| `#[pre_destruct]` | Runs before shutdown (flush, drain, close) |
+| `#[injectable(post_construct)]` | Runs after construction (migration, warm-up) |
+| `#[injectable(pre_destruct)]` | Runs before shutdown (flush, drain, close) |
 
 ## Next Steps
 

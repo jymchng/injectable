@@ -1,6 +1,6 @@
 ---
 name: post-construct-migrations
-description: Runs database migrations automatically in a #[post_construct] hook when a service is first resolved. Use when a service owns its schema and should self-migrate on startup.
+description: Runs database migrations automatically in a #[injectable(post_construct)] hook when a service is first resolved. Use when a service owns its schema and should self-migrate on startup.
 ---
 
 # Database Migrations in post_construct
@@ -11,7 +11,7 @@ description: Runs database migrations automatically in a #[post_construct] hook 
 use injectable::prelude::*;
 use sqlx::{Pool, Sqlite};
 
-#[inject_fn]
+#[injectable(factory)]
 async fn make_pool(cfg: Inject<AppConfig>) -> Result<Pool<Sqlite>, sqlx::Error> {
     sqlx::sqlite::SqlitePoolOptions::new()
         .max_connections(1)
@@ -22,13 +22,13 @@ async fn make_pool(cfg: Inject<AppConfig>) -> Result<Pool<Sqlite>, sqlx::Error> 
 
 #[injectable]
 pub struct UserRepository {
-    #[inject(use_factory_async = self::make_pool)]
+    #[injectable(inject(use_factory_async = self::make_pool))]
     pool: Pool<Sqlite>,
 }
 
 #[injectable]
 impl UserRepository {
-    #[post_construct]
+    #[injectable(post_construct)]
     async fn migrate(&self) -> Result<(), sqlx::Error> {
         sqlx::query(
             "CREATE TABLE IF NOT EXISTS users (
@@ -44,7 +44,7 @@ impl UserRepository {
         Ok(())
     }
 
-    #[pre_destruct]
+    #[injectable(pre_destruct)]
     async fn shutdown(&self) {
         self.pool.close().await;
     }
@@ -56,7 +56,7 @@ impl UserRepository {
 ```rust
 #[injectable]
 impl OrderRepository {
-    #[post_construct]
+    #[injectable(post_construct)]
     async fn migrate(&self) -> Result<(), sqlx::Error> {
         sqlx::query("CREATE TABLE IF NOT EXISTS orders ( … )").execute(&self.pool).await?;
         Ok(())
@@ -83,7 +83,7 @@ println!("All schemas ready");
 ## Using sqlx migrate! macro (alternative)
 
 ```rust
-#[post_construct]
+#[injectable(post_construct)]
 async fn migrate(&self) -> Result<(), sqlx::migrate::MigrateError> {
     sqlx::migrate!("./migrations").run(&self.pool).await
 }
