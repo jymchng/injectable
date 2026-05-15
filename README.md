@@ -1,6 +1,9 @@
 # injectable
 
-![injectable logo](assets/injectable-logo-hori.png)
+<div align="center">
+<img src="assets/injectable-logo-vert.png" width=60%>
+</img>
+</div>
 
 A compile-time dependency injection framework for Rust, inspired by Axum's typed extractor model.
 
