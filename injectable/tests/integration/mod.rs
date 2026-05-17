@@ -6,3 +6,5 @@
 mod bind_macro;
 mod factory_ctx;
 mod generic_types;
+#[cfg(feature = "axum")]
+mod multi_service_web_app;

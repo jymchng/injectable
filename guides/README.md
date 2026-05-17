@@ -20,6 +20,7 @@ assume Rust `1.86+`.
 4. [11-config-from-env.md](11-config-from-env.md)
 5. [13-axum-realistic-app.md](13-axum-realistic-app.md)
 6. [15-large-app-organization.md](15-large-app-organization.md)
+7. [17-multi-service-web-app-patterns.md](17-multi-service-web-app-patterns.md)
 
 ## Validation, Testing, And Operations
 

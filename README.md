@@ -65,76 +65,116 @@ use injectable::prelude::*;
 
 ---
 
-## Core Concepts
+## Usage Map
 
-### Types You Own — `#[injectable]` on struct
+`injectable` has a small set of building blocks, but they combine in several
+important ways. The table below is the shortest way to choose the right one.
+
+| Situation | Recommended pattern | Typical syntax |
+|---|---|---|
+| Your type is owned by your crate and all fields are injectable | Field injection | `#[injectable] struct Svc { dep: Inject<Db> }` |
+| Your type needs custom construction logic | Constructor injection | `#[injectable] impl Svc { #[injectable(ctor)] fn new(...) -> Self }` |
+| You need a shared app dependency | Shared wrapper | `#[injectable] struct DbPool { ... }` |
+| You need a third-party type only inside one service | Field or ctor factory | `#[injectable(inject(use_factory_async = path))]` |
+| You need a third-party type registered centrally | Dynamic provider | `DynProvider::sync/new/with_ctx/from_value` |
+| A dependency is optional | Optional injection | `Option<Inject<T>>` |
+| You want trait-object injection | Trait binding | `bind!(dyn Trait => Concrete)` + `Inject<dyn Trait>` |
+| You want per-resolution instances | Scope marker | `#[injectable(scope = Transient)]` |
+| You want Axum handler injection | Extractor integration | `Inject<UserService>` in handler params |
+
+## Types You Own vs. Types You Don't
+
+### Types You Own
+
+Use `#[injectable]` on:
+
+- a `struct` for field injection
+- an `impl` block for constructor injection
 
 ```rust
 use injectable::prelude::*;
+
+#[injectable]
+#[derive(Default)]
+pub struct Database;
 
 #[injectable]
 #[derive(Default)]
 pub struct Cache;
 
 #[injectable]
-#[derive(Default)]
-pub struct Database;
-
-// Field injection: Inject<T> fields are auto-wired.
-// Arc<T> and plain T fields require an explicit #[injectable(inject)].
-#[injectable]
 pub struct UserRepository {
-    db:    Inject<Database>,    // auto-injected — no annotation needed
-    cache: Inject<Cache>,       // auto-injected
+    db: Inject<Database>,
+    cache: Inject<Cache>,
 }
 ```
 
-### Types You Don't Own — `DynProvider`
+### Types You Don't Own
 
-Register closure-based providers for third-party types at container build time:
+For `reqwest::Client`, `sqlx::SqlitePool`, and other third-party types, use one
+of these patterns:
+
+| Pattern | Best for | Example |
+|---|---|---|
+| `#[injectable(factory)]` | Reusable injectable-aware factory function | `#[injectable(factory)] async fn make_pool(cfg: Inject<AppConfig>) -> ...` |
+| `use_factory_async` | Async field or constructor parameter creation | `#[injectable(inject(use_factory_async = self::make_pool))]` |
+| `use_factory_sync` | Sync field or constructor parameter creation | `#[injectable(inject(use_factory_sync = self::make_client))]` |
+| `DynProvider::sync` | Central synchronous registration | `.register(DynProvider::sync(|| Ok(reqwest::Client::new())))` |
+| `DynProvider::new` | Central async registration without context | `.register(DynProvider::new(|| async { ... }))` |
+| `DynProvider::with_ctx` | Central async registration with injectable deps | `.register(DynProvider::with_ctx(|ctx| async move { ... }))` |
+| `DynProvider::from_value` | Tests, feature flags, fixed values | `.register(DynProvider::from_value(mock_client))` |
+
+Example:
 
 ```rust
 let container = Container::builder()
-    // Synchronous — no async, no dependencies
     .register(DynProvider::sync(|| Ok(reqwest::Client::new())))
-
-    // Async — connect, load, warm up
     .register(DynProvider::new(|| async {
         Ok(sqlx::SqlitePool::connect("sqlite:./app.db").await?)
     }))
-
-    // Context-aware — depends on other injectable types
     .register(DynProvider::with_ctx(|ctx| async move {
         let config: Inject<AppConfig> = ctx.extract().await?;
         Ok(sqlx::SqlitePool::connect(&config.database_url).await?)
     }))
-
     .build()
     .await?;
 ```
 
-Inside `DynProvider::with_ctx`, use `ctx.extract::<Inject<T>>()` (scope-safe) to resolve
-injectable types, and `ctx.resolve_external::<T>()` to resolve other `DynProvider`-registered types.
+Inside `DynProvider::with_ctx`, prefer `ctx.extract::<Inject<T>>()` for
+injectable types. Use `ctx.resolve_external::<T>()` for other
+`DynProvider`-registered types.
 
-### Constructor Injection — `#[injectable]` on impl block
+---
 
-Full control over construction while keeping the public signature clean:
+## Injection Styles
+
+### 1. Field Injection
+
+Field injection is the lowest-boilerplate path when your service can be
+constructed directly from its dependencies.
 
 ```rust
-use injectable::prelude::*;
-
-// AppConfig is your own type — Injectable, singleton by default.
 #[injectable]
-pub struct AppConfig { pub database_url: String }
-
-async fn make_pool(_ctx: &ResolveContext) -> Result<sqlx::SqlitePool, sqlx::Error> {
-    sqlx::SqlitePool::connect("sqlite:./app.db").await
+pub struct UserService {
+    db: Inject<Database>,
+    #[injectable(inject)]
+    cache: Arc<Cache>,
 }
+```
 
+### 2. Constructor Injection
+
+Constructor injection is the right choice when:
+
+- you need to set plain scalar fields manually
+- you need validation or transformation inside `new()`
+- you want the public constructor shape to tell the story
+
+```rust
 pub struct EmailService {
-    pool:   sqlx::SqlitePool,
+    pool: sqlx::SqlitePool,
     config: Arc<AppConfig>,
-    retry:  u32,
+    retry: u32,
 }
 
 #[injectable]
@@ -142,120 +182,346 @@ impl EmailService {
     #[injectable(ctor)]
     pub async fn new(
         #[injectable(inject(use_factory_async = self::make_pool))] pool: sqlx::SqlitePool,
-        #[injectable(inject)] config: Arc<AppConfig>,   // Injectable type — receives singleton Arc
+        #[injectable(inject)] config: Arc<AppConfig>,
     ) -> Self {
-        Self { pool, config, retry: 3 }     // retry set manually
+        Self { pool, config, retry: 3 }
     }
 }
 ```
 
-`#[injectable(inject)] param: Arc<T>` requires `T: Injectable` — it uses the singleton cache and returns the
-same `Arc` on every resolution. External types (sqlx, reqwest, etc.) are not `Injectable`;
-use `#[injectable(inject(use_factory_async/sync = path))]` for those instead.
+### 3. Mixed Graphs
 
-Parameter rewriting rules:
+Real applications usually mix both styles:
 
-| Declared type | Annotation | What you receive |
+- config and wrappers via constructor injection
+- service layers via field injection
+- external leaves via factories
+- handlers via Axum extractors
+
+See [17-multi-service-web-app-patterns.md](guides/17-multi-service-web-app-patterns.md).
+
+---
+
+## Field And Parameter Combinations
+
+The same small set of rules applies to both fields and constructor parameters.
+
+| Declared type | Annotation | Meaning |
 |---|---|---|
-| `Inject<T>` | none | `Inject<T>` — `Arc<T>` wrapper; `T` must be `Injectable` |
-| `Arc<T>` | `#[injectable(inject)]` | Singleton `Arc<T>`; `T` must be `Injectable` |
-| `T` (Clone) | `#[injectable(inject)]` | Owned clone of singleton `T`; `T` must be `Injectable` |
-| External type | `#[injectable(inject(use_factory_async/sync = path))]` | `T` from factory |
+| `Inject<T>` | none | Shared injectable dependency |
+| `Arc<T>` | `#[injectable(inject)]` | Singleton `Arc<T>` for `T: Injectable` |
+| `T` | `#[injectable(inject)]` | Owned clone of singleton `T` when `T: Clone + Injectable` |
+| `Option<Inject<T>>` | `#[injectable(inject)]` on fields when needed | Optional injectable dependency |
+| `Inject<dyn Trait>` | none | Trait-object dependency after `bind!()` |
+| `Option<Inject<dyn Trait>>` | `#[injectable(inject)]` on fields when needed | Optional trait binding |
+| External `T` | `#[injectable(inject(use_factory_async = path))]` | Async factory-backed external dependency |
+| External `T` | `#[injectable(inject(use_factory_sync = path))]` | Sync factory-backed external dependency |
 
-### Lifecycle Hooks
+Practical rule:
+
+- use `Inject<T>` by default
+- use `Arc<T>` when you want to store a plain `Arc`
+- use `T` only when cloning the singleton value is actually what you want
+- use a wrapper type when several services must share one external resource
+
+---
+
+## Factories: All Supported Forms
+
+### `#[injectable(factory)]`
+
+Use this when you want a reusable factory function whose parameters are
+injectable extractors:
+
+```rust
+#[injectable(factory)]
+async fn make_db_pool(cfg: Inject<AppConfig>) -> Result<sqlx::Pool<sqlx::Sqlite>, sqlx::Error> {
+    sqlx::SqlitePool::connect(&cfg.database_url).await
+}
+```
+
+### Context-Style Field/Parameter Factories
+
+Use these when the consuming field or constructor parameter should directly own
+the produced value:
+
+```rust
+async fn make_pool(ctx: &ResolveContext) -> Result<sqlx::SqlitePool, sqlx::Error> {
+    let cfg: Inject<AppConfig> = ctx.extract().await?;
+    sqlx::SqlitePool::connect(&cfg.database_url).await
+}
+
+fn make_client(_ctx: &ResolveContext) -> reqwest::Client {
+    reqwest::Client::new()
+}
+```
+
+### Which Factory Form Should You Use?
+
+| Need | Prefer |
+|---|---|
+| Function args written as injectable types | `#[injectable(factory)]` |
+| Direct `ctx.extract()` access | plain `fn/async fn(&ResolveContext)` |
+| One external instance shared across many services | wrapper service + factory |
+| One external value local to a single service | direct `use_factory_async/sync` |
+
+Important: `use_factory_async` on multiple services is not, by itself, a
+cross-service singleton. If several services must share one pool, client, or
+socket, wrap it in your own injectable type and inject that wrapper.
+
+---
+
+## Shared Wrapper Pattern
+
+This is the recommended pattern for cross-service sharing of third-party types:
+
+```rust
+#[injectable(factory)]
+async fn make_db_pool(cfg: Inject<AppConfig>) -> Result<sqlx::Pool<sqlx::Sqlite>, sqlx::Error> {
+    sqlx::SqlitePool::connect(&cfg.database_url).await
+}
+
+pub struct DbPool {
+    pool: sqlx::Pool<sqlx::Sqlite>,
+}
+
+impl Clone for DbPool {
+    fn clone(&self) -> Self {
+        Self { pool: self.pool.clone() }
+    }
+}
+
+#[injectable]
+impl DbPool {
+    #[injectable(ctor)]
+    fn new(
+        #[injectable(inject(use_factory_async = make_db_pool))] pool: sqlx::Pool<sqlx::Sqlite>,
+    ) -> Self {
+        Self { pool }
+    }
+}
+
+#[injectable]
+pub struct UserService {
+    db: Inject<DbPool>,
+}
+
+#[injectable]
+pub struct AuditService {
+    #[injectable(inject)]
+    db: Arc<DbPool>,
+}
+```
+
+`Inject<DbPool>` and `#[injectable(inject)] Arc<DbPool>` share the same
+singleton wrapper instance.
+
+---
+
+## Trait Injection
+
+Trait-object injection is supported through `bind!()`:
+
+```rust
+#[injectable(trait)]
+trait EmailSender: Send + Sync {
+    fn send(&self, to: &str) -> String;
+}
+
+#[injectable]
+#[derive(Default, Clone)]
+struct SmtpSender;
+
+impl EmailSender for SmtpSender {
+    fn send(&self, to: &str) -> String {
+        format!("sent to {to}")
+    }
+}
+
+bind!(dyn EmailSender => SmtpSender);
+
+#[injectable]
+struct NotificationService {
+    sender: Inject<dyn EmailSender>,
+}
+```
+
+You can also use:
+
+- `#[injectable(inject)] sender: Option<Inject<dyn EmailSender>>`
+- constructor params of type `Inject<dyn Trait>`
+
+---
+
+## Optional Dependencies
+
+Optional dependencies are modeled with `Option<Inject<T>>`:
+
+```rust
+#[injectable]
+pub struct Notifier {
+    #[injectable(inject)]
+    sms: Option<Inject<SmsClient>>,
+}
+
+impl Notifier {
+    pub fn send(&self, msg: &str) {
+        if let Some(s) = &self.sms {
+            s.send(msg);
+        }
+    }
+}
+```
+
+This pattern works well for:
+
+- feature-gated registrations
+- local development without all infrastructure
+- tests that replace production dependencies selectively
+
+---
+
+## Scopes
+
+Scope markers are type-safe and live under the same `#[injectable(...)]`
+surface:
+
+| Scope | Syntax | Behavior |
+|---|---|---|
+| Singleton | default or `#[injectable(scope = Singleton)]` | One shared instance |
+| Transient | `#[injectable(scope = Transient)]` | New instance on every resolution |
+| Request-scoped | `#[injectable(scope = RequestScoped)]` | Scoped to a request context |
+
+Use singleton for long-lived services, transient for per-use workers, and
+request scope when a dependency should be isolated to one request lifecycle.
+
+---
+
+## Lifecycle Hooks
+
+Hooks are supported on `#[injectable] impl` blocks:
 
 ```rust
 use injectable::prelude::*;
 
 pub struct ConnectionPool { /* ... */ }
 
+impl Clone for ConnectionPool {
+    fn clone(&self) -> Self { /* ... */ }
+}
+
 #[injectable]
 impl ConnectionPool {
     #[injectable(ctor)]
     pub fn new() -> Self { /* ... */ }
 
-    #[injectable(post_construct)]       // runs after construction
+    #[injectable(post_construct)]
     pub async fn warm_up(&self) -> HookResult {
-        println!("opening connections");
         Ok(())
     }
 
-    #[injectable(pre_destruct)]         // runs during container.shutdown()
+    #[injectable(pre_destruct)]
     pub async fn drain(&self) -> HookResult {
-        println!("closing connections");
         Ok(())
     }
 }
 ```
 
-### Axum Integration
+Rules:
+
+- `post_construct` runs after construction
+- `pre_destruct` runs during `container.shutdown().await`
+- `pre_destruct` examples should make the type `Clone`
+
+---
+
+## Resolution APIs
+
+There are several valid places to resolve dependencies:
+
+| API | Use when |
+|---|---|
+| `container.resolve::<T>().await` | Resolving an injectable type |
+| `container.resolve_external::<T>().await` | Resolving a `DynProvider`-registered external type |
+| `ctx.extract::<Inject<T>>().await` | Resolving inside factories or custom code with scope-safe semantics |
+| `Inject<T>` in Axum handlers | Resolving directly from request state |
+
+Example:
 
 ```rust
+let service: UserService = container.resolve().await?;
+let client: reqwest::Client = container.resolve_external().await?;
+let ctx = container.context();
+let db: Inject<Database> = ctx.extract().await?;
+```
+
+---
+
+## Axum Integration
+
+Enable the `axum` feature and inject services directly into handlers:
+
+```rust
+use axum::{Json, Router, extract::Path, routing::get};
 use injectable::axum::AxumState;
+use injectable::prelude::*;
 
 async fn get_user(
     Path(id): Path<u64>,
-    Inject(svc): Inject<UserService>,    // resolved per-request
+    Inject(svc): Inject<UserService>,
 ) -> Json<User> {
     Json(svc.get(id).await.unwrap())
 }
 
 let state = AxumState::new(container);
-let app   = Router::new()
+let app = Router::new()
     .route("/users/:id", get(get_user))
     .with_state(state);
 ```
+
+You can also provide your own state type by implementing
+`injectable::axum::InjectableState`.
 
 ---
 
 ## The `Inject<T>` Wrapper
 
-`Inject<T>` wraps `Arc<T>` and implements `Deref<Target = T>`. It is the primary field and parameter type for shared dependencies.
+`Inject<T>` wraps `Arc<T>`, implements `Deref<Target = T>`, and is the default
+way to express shared dependencies.
 
 ```rust
 let svc: Inject<UserService> = container.resolve().await?;
 
-svc.some_method();          // via Deref
-let arc = svc.arc();        // clone the Arc
-let arc = svc.into_inner(); // consume Inject<T>, take Arc<T>
-
-// Destructuring pattern
-let Inject(arc) = svc;      // arc: Arc<UserService>
+svc.some_method();
+let arc = svc.arc();
+let arc = svc.into_inner();
+let Inject(arc) = svc;
 ```
 
-### Optional Dependencies
+Use `Inject<T>` when:
 
-```rust
-#[injectable]
-pub struct Notifier {
-    sms: Option<Inject<SmsClient>>,    // None if not registered
-}
-
-impl Notifier {
-    pub fn send(&self, msg: &str) {
-        if let Some(s) = &self.sms { s.send(msg); }
-    }
-}
-```
+- the dependency is logically shared
+- you want the most ergonomic default
+- you want the same type to work in services, constructors, and Axum handlers
 
 ---
 
-## Validation at Build Time
+## Validation At Build Time
 
-```
+```text
 Container::builder().build().await
     │
-    ├── Collect all GraphNode entries via inventory
-    ├── Validate: duplicate nodes
-    ├── Validate: missing dependencies (simple names only; path-qualified names are external)
-    ├── Validate: circular dependencies (full chain reported)
-    ├── Validate: scope mismatches
+    ├── Collect GraphNode entries
+    ├── Validate duplicate nodes
+    ├── Validate missing dependencies
+    ├── Validate cycles
+    ├── Validate scope mismatches
     └── Build ResolveContext → Container
 ```
 
-Error messages are precise:
+Typical failures:
 
-```
+```text
 dependency graph validation failed:
   - circular dependency detected: OrderService -> UserService -> OrderService
   - `InvoiceService` depends on `PdfRenderer`, which is not registered
@@ -291,6 +557,7 @@ dependency graph validation failed:
 | 14 | [Optional Dependencies and Layered Registration](guides/14-optional-deps.md) |
 | 15 | [Organizing a Large Application](guides/15-large-app-organization.md) |
 | 16 | [Development and Release Workflow](guides/16-development-and-release.md) |
+| 17 | [Multi-Service Web App Patterns](guides/17-multi-service-web-app-patterns.md) |
 | — | [3 Ways to Inject External Types](guides/3-ways-to-inject-external-types.md) |
 
 See [guides/README.md](guides/README.md) for a categorized guide index and
