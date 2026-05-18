@@ -140,7 +140,7 @@ run ex:
       09|09_*|app)  cargo run -p injectable --example 09_weather_api --features injectable/axum ;;
       10|10_*|app)  cargo run -p injectable --example 10_weather_users_api --features injectable/axum ;;
       11|11_*|app)  cargo run -p injectable --example 11_url_shortener --features injectable/axum ;;
-      *) echo "Unknown example '{{ ex }}'. Use 01–08, axum, or app." && exit 1 ;;
+      *) echo "Unknown example '{{ ex }}'. Use 01–11, axum, or app." && exit 1 ;;
     esac
 
 # Run all examples in sequence (skip Axum ones that bind a port)
@@ -157,7 +157,17 @@ run-all:
     cargo run -p injectable --example 05_dependency_graph
     @echo "\n=== Example 06: Scopes ==="
     cargo run -p injectable --example 06_scopes
-    @echo "\nDone. (Axum examples 07/08 bind a port — run them with: just run axum / just run app)"
+    @echo "\n=== Example 07: Axum Integration ==="
+    cargo run -p injectable --example 07_axum_integration --features injectable/axum
+    @echo "\n=== Example 08: Realistic Web App ==="
+    cargo run -p injectable --example 08_realistic_web_app --features injectable/axum
+    @echo "\n=== Example 09: Weather API ==="
+    cargo run -p injectable --example 09_weather_api --features injectable/axum
+    @echo "\n=== Example 10: Weather Users API ==="
+    cargo run -p injectable --example 10_weather_users_api --features injectable/axum
+    @echo "\n=== Example 11: URL Shortener ==="
+    cargo run -p injectable --example 11_url_shortener --features injectable/axum
+    @echo "\nDone. (Axum examples bind a port — run them with: just run axum / just run app)"
 
 # ── Documentation ─────────────────────────────────────────────────────
 
