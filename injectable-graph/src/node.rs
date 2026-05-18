@@ -94,3 +94,60 @@ impl GraphNode {
         self.scope == "transient"
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn leaf_node() {
+        let n = GraphNode::leaf("Database");
+        assert_eq!(n.name, "Database");
+        assert!(n.is_leaf());
+        assert_eq!(n.dependency_count(), 0);
+        assert!(n.is_singleton());
+        assert!(!n.is_transient());
+    }
+
+    #[test]
+    fn new_node_with_deps() {
+        let n = GraphNode::new("UserService", &["Database", "Cache"]);
+        assert_eq!(n.name, "UserService");
+        assert!(!n.is_leaf());
+        assert_eq!(n.dependency_count(), 2);
+        assert!(n.is_singleton());
+    }
+
+    #[test]
+    fn with_scope_transient() {
+        let n = GraphNode::with_scope("Logger", &["Config"], "transient");
+        assert!(n.is_transient());
+        assert!(!n.is_singleton());
+        assert_eq!(n.dependency_count(), 1);
+    }
+
+    #[test]
+    fn leaf_with_scope_singleton() {
+        let n = GraphNode::leaf_with_scope("Config", "singleton");
+        assert!(n.is_leaf());
+        assert!(n.is_singleton());
+        assert!(!n.is_transient());
+    }
+
+    #[test]
+    fn leaf_with_scope_transient() {
+        let n = GraphNode::leaf_with_scope("Req", "transient");
+        assert!(n.is_transient());
+        assert!(!n.is_singleton());
+    }
+
+    #[test]
+    fn derive_traits() {
+        let a = GraphNode::leaf("A");
+        let b = GraphNode::leaf("A");
+        let c = GraphNode::leaf("B");
+        assert_eq!(a, b);
+        assert_ne!(a, c);
+        let _ = format!("{a:?}");
+    }
+}

@@ -279,3 +279,162 @@ impl std::fmt::Debug for ResolveContext {
             .finish()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{DynProvider, EmptySingletonStore, HookResult, PreDestruct, ProviderRegistry};
+    use std::sync::Arc;
+
+    fn make_ctx() -> ResolveContext {
+        ResolveContext::new(
+            Arc::new(EmptySingletonStore),
+            Arc::new(ProviderRegistry::new()),
+        )
+    }
+
+    #[test]
+    fn from_store_creates_context() {
+        let ctx = ResolveContext::from_store(Arc::new(EmptySingletonStore));
+        assert!(ctx.registry().is_empty());
+    }
+
+    #[test]
+    fn store_and_registry_accessors() {
+        let ctx = make_ctx();
+        assert_eq!(ctx.store().len(), 0);
+        assert!(ctx.registry().is_empty());
+    }
+
+    #[test]
+    fn clone_shares_destructors() {
+        let ctx = make_ctx();
+        let ctx2 = ctx.clone();
+        // Both share the same destructor list (Arc)
+        assert!(Arc::ptr_eq(&ctx.destructors, &ctx2.destructors));
+    }
+
+    #[test]
+    fn debug_impl() {
+        let ctx = make_ctx();
+        let s = format!("{ctx:?}");
+        assert!(s.contains("ResolveContext"));
+    }
+
+    #[tokio::test]
+    async fn destructor_count_starts_zero() {
+        let ctx = make_ctx();
+        assert_eq!(ctx.destructor_count().await, 0);
+    }
+
+    #[tokio::test]
+    async fn run_destructors_empty_ok() {
+        let ctx = make_ctx();
+        assert!(ctx.run_destructors().await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn register_destructor_increments_count() {
+        struct NoopDestructor;
+        #[async_trait::async_trait]
+        impl PreDestruct for NoopDestructor {
+            async fn pre_destruct(&self) -> HookResult {
+                Ok(())
+            }
+        }
+
+        let ctx = make_ctx();
+        ctx.register_destructor(Arc::new(NoopDestructor));
+        assert_eq!(ctx.destructor_count().await, 1);
+    }
+
+    #[tokio::test]
+    async fn register_destructor_with_name_increments_count() {
+        struct NoopDestructor;
+        #[async_trait::async_trait]
+        impl PreDestruct for NoopDestructor {
+            async fn pre_destruct(&self) -> HookResult {
+                Ok(())
+            }
+        }
+
+        let ctx = make_ctx();
+        ctx.register_destructor_with_name("TestType", Arc::new(NoopDestructor));
+        assert_eq!(ctx.destructor_count().await, 1);
+    }
+
+    #[tokio::test]
+    async fn run_destructors_calls_hooks() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+
+        static CALLED: AtomicBool = AtomicBool::new(false);
+
+        struct FlagDestructor;
+        #[async_trait::async_trait]
+        impl PreDestruct for FlagDestructor {
+            async fn pre_destruct(&self) -> HookResult {
+                CALLED.store(true, Ordering::SeqCst);
+                Ok(())
+            }
+        }
+
+        CALLED.store(false, Ordering::SeqCst);
+        let ctx = make_ctx();
+        ctx.register_destructor(Arc::new(FlagDestructor));
+        ctx.run_destructors().await.unwrap();
+        assert!(CALLED.load(Ordering::SeqCst));
+        assert_eq!(ctx.destructor_count().await, 0);
+    }
+
+    #[tokio::test]
+    async fn run_destructors_collects_errors() {
+        struct FailingDestructor;
+        #[async_trait::async_trait]
+        impl PreDestruct for FailingDestructor {
+            async fn pre_destruct(&self) -> HookResult {
+                Err(Box::new(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "fail",
+                )))
+            }
+        }
+
+        let ctx = make_ctx();
+        ctx.register_destructor(Arc::new(FailingDestructor));
+        let result = ctx.run_destructors().await;
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn resolve_external_missing_returns_error() {
+        let ctx = make_ctx();
+        let result = ctx.resolve_external::<String>().await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn resolve_external_registered_returns_value() {
+        let mut registry = ProviderRegistry::new();
+        registry.register(DynProvider::from_value(42u32));
+        let ctx = ResolveContext::new(Arc::new(EmptySingletonStore), Arc::new(registry));
+        let v: u32 = ctx.resolve_external().await.unwrap();
+        assert_eq!(v, 42);
+    }
+
+    #[tokio::test]
+    async fn try_resolve_external_missing_returns_none() {
+        let ctx = make_ctx();
+        let result = ctx.try_resolve_external::<String>().await;
+        assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn try_resolve_external_registered_returns_some() {
+        let mut registry = ProviderRegistry::new();
+        registry.register(DynProvider::from_value(99u32));
+        let ctx = ResolveContext::new(Arc::new(EmptySingletonStore), Arc::new(registry));
+        let result = ctx.try_resolve_external::<u32>().await.unwrap();
+        assert_eq!(result.unwrap(), 99u32);
+    }
+}

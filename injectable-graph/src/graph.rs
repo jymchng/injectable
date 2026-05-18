@@ -297,4 +297,141 @@ mod tests {
         assert!(!is_wider_scope("request", "transient"));
         assert!(!is_wider_scope("singleton", "request"));
     }
+
+    #[test]
+    fn empty_graph_is_valid() {
+        let g = DependencyGraph::empty();
+        assert!(g.is_empty());
+        assert_eq!(g.len(), 0);
+        assert!(g.validate().is_ok());
+    }
+
+    #[test]
+    fn valid_linear_graph() {
+        let g = DependencyGraph::new(vec![
+            GraphNode::leaf("Database"),
+            GraphNode::new("UserService", &["Database"]),
+        ]);
+        assert!(g.validate().is_ok());
+    }
+
+    #[test]
+    fn circular_dependency_detected() {
+        let g = DependencyGraph::new(vec![
+            GraphNode::new("A", &["B"]),
+            GraphNode::new("B", &["A"]),
+        ]);
+        let errs = g.validate().unwrap_err();
+        assert!(
+            errs.iter()
+                .any(|e| matches!(e, ValidationError::CircularDependency { .. }))
+        );
+    }
+
+    #[test]
+    fn three_node_cycle_detected() {
+        let g = DependencyGraph::new(vec![
+            GraphNode::new("A", &["B"]),
+            GraphNode::new("B", &["C"]),
+            GraphNode::new("C", &["A"]),
+        ]);
+        let errs = g.validate().unwrap_err();
+        assert!(
+            errs.iter()
+                .any(|e| matches!(e, ValidationError::CircularDependency { .. }))
+        );
+    }
+
+    #[test]
+    fn missing_dependency_detected() {
+        let g = DependencyGraph::new(vec![GraphNode::new("UserService", &["MissingDep"])]);
+        let errs = g.validate().unwrap_err();
+        assert!(
+            errs.iter()
+                .any(|e| matches!(e, ValidationError::MissingDependency { .. }))
+        );
+    }
+
+    #[test]
+    fn duplicate_node_detected() {
+        let g = DependencyGraph::new(vec![
+            GraphNode::leaf("Database"),
+            GraphNode::leaf("Database"),
+        ]);
+        let errs = g.validate().unwrap_err();
+        assert!(
+            errs.iter()
+                .any(|e| matches!(e, ValidationError::DuplicateNode { .. }))
+        );
+    }
+
+    #[test]
+    fn scope_mismatch_detected() {
+        let g = DependencyGraph::new(vec![
+            GraphNode::leaf("Transient").then_with_scope("transient"),
+            GraphNode::with_scope("Singleton", &["Transient"], "singleton"),
+        ]);
+        let errs = g.validate().unwrap_err();
+        assert!(
+            errs.iter()
+                .any(|e| matches!(e, ValidationError::ScopeMismatch { .. }))
+        );
+    }
+
+    #[test]
+    fn topological_order_valid_graph() {
+        let g = DependencyGraph::new(vec![
+            GraphNode::leaf("Database"),
+            GraphNode::new("UserService", &["Database"]),
+        ]);
+        let order = g.topological_order().unwrap();
+        let db_pos = order.iter().position(|n| *n == "Database").unwrap();
+        let svc_pos = order.iter().position(|n| *n == "UserService").unwrap();
+        assert!(db_pos < svc_pos);
+    }
+
+    #[test]
+    fn destruction_order_is_reverse_topo() {
+        let g = DependencyGraph::new(vec![
+            GraphNode::leaf("Database"),
+            GraphNode::new("UserService", &["Database"]),
+        ]);
+        let topo = g.topological_order().unwrap();
+        let destruct = g.destruction_order().unwrap();
+        assert_eq!(topo, destruct.iter().rev().cloned().collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn find_node_existing() {
+        let g = DependencyGraph::new(vec![GraphNode::leaf("Database")]);
+        assert!(g.find_node("Database").is_some());
+        assert!(g.find_node("Missing").is_none());
+    }
+
+    #[test]
+    fn add_node_increases_len() {
+        let mut g = DependencyGraph::empty();
+        g.add_node(GraphNode::leaf("Foo"));
+        assert_eq!(g.len(), 1);
+        assert!(!g.is_empty());
+    }
+
+    #[test]
+    fn path_qualified_dep_not_missing() {
+        // Dependencies with '::' are external types, not graph nodes
+        let g = DependencyGraph::new(vec![GraphNode::new("MyService", &["sqlx::SqlitePool"])]);
+        assert!(g.validate().is_ok());
+    }
+}
+
+// Helper for tests: create a node with a scope override via builder pattern
+#[allow(dead_code)]
+trait NodeScopeExt {
+    fn then_with_scope(self, scope: &'static str) -> GraphNode;
+}
+
+impl NodeScopeExt for GraphNode {
+    fn then_with_scope(self, scope: &'static str) -> GraphNode {
+        GraphNode::with_scope(self.name, self.dependencies, scope)
+    }
 }

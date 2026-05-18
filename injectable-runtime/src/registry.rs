@@ -322,3 +322,54 @@ impl InjectableHooksEntry {
 }
 
 inventory::collect!(InjectableHooksEntry);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::DynProvider;
+
+    #[test]
+    fn new_registry_is_empty() {
+        let r = ProviderRegistry::new();
+        assert!(r.is_empty());
+        assert_eq!(r.len(), 0);
+    }
+
+    #[test]
+    fn has_returns_false_for_unregistered() {
+        let r = ProviderRegistry::new();
+        assert!(!r.has::<u32>());
+    }
+
+    #[test]
+    fn has_returns_true_after_register() {
+        let mut r = ProviderRegistry::new();
+        r.register(DynProvider::from_value(42u32));
+        assert!(r.has::<u32>());
+        assert_eq!(r.len(), 1);
+        assert!(!r.is_empty());
+    }
+
+    #[test]
+    fn register_replaces_existing() {
+        let mut r = ProviderRegistry::new();
+        r.register(DynProvider::from_value(1u32));
+        r.register(DynProvider::from_value(2u32));
+        assert_eq!(r.len(), 1); // replaced, not added
+    }
+
+    #[test]
+    fn debug_shows_count() {
+        let mut r = ProviderRegistry::new();
+        r.register(DynProvider::from_value(0u8));
+        let s = format!("{r:?}");
+        assert!(s.contains("ProviderRegistry"));
+        assert!(s.contains('1'));
+    }
+
+    #[test]
+    fn default_creates_empty() {
+        let r = ProviderRegistry::default();
+        assert!(r.is_empty());
+    }
+}

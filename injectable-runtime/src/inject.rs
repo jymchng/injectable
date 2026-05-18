@@ -186,3 +186,90 @@ impl<T: crate::Injectable> Extract for Arc<T> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+
+    fn make_inject(v: u32) -> Inject<u32> {
+        Inject::new(Arc::new(v))
+    }
+
+    #[test]
+    fn from_inject_into_arc() {
+        let inj = make_inject(42);
+        let arc: Arc<u32> = inj.into();
+        assert_eq!(*arc, 42);
+    }
+
+    #[test]
+    fn from_arc_into_inject() {
+        let arc = Arc::new(99u32);
+        let inj: Inject<u32> = arc.into();
+        assert_eq!(*inj, 99);
+    }
+
+    #[test]
+    fn partial_eq_same_value() {
+        let a = make_inject(1);
+        let b = make_inject(1);
+        assert_eq!(a, b);
+    }
+
+    #[test]
+    fn partial_eq_different_value() {
+        let a = make_inject(1);
+        let b = make_inject(2);
+        assert_ne!(a, b);
+    }
+
+    #[test]
+    fn hash_equals_inner_hash() {
+        let inj = make_inject(77);
+        let mut h1 = DefaultHasher::new();
+        inj.hash(&mut h1);
+        let mut h2 = DefaultHasher::new();
+        77u32.hash(&mut h2);
+        assert_eq!(h1.finish(), h2.finish());
+    }
+
+    #[test]
+    fn as_ref() {
+        let inj = make_inject(5);
+        let r: &u32 = inj.as_ref();
+        assert_eq!(*r, 5);
+    }
+
+    #[test]
+    fn borrow() {
+        use std::borrow::Borrow;
+        let inj = make_inject(10);
+        let b: &u32 = inj.borrow();
+        assert_eq!(*b, 10);
+    }
+
+    #[test]
+    fn debug_contains_inject() {
+        let inj = make_inject(7);
+        let s = format!("{inj:?}");
+        assert!(s.contains("Inject"));
+        assert!(s.contains('7'));
+    }
+
+    #[test]
+    fn clone_shares_arc() {
+        let inj = make_inject(3);
+        let cloned = inj.clone();
+        assert!(Arc::ptr_eq(&inj.0, &cloned.0));
+    }
+
+    #[test]
+    fn dyn_trait_inject_new() {
+        let arc: Arc<dyn std::fmt::Debug> = Arc::new(42u32);
+        let inj: Inject<dyn std::fmt::Debug> = Inject::new(arc);
+        let s = format!("{:?}", &*inj);
+        assert!(s.contains("42"));
+    }
+}

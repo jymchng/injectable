@@ -118,3 +118,113 @@ impl std::error::Error for InjectableError {}
 
 /// A specialized `Result` type for injectable operations.
 pub type InjectableResult<T> = Result<T, InjectableError>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn display_circular_dependency() {
+        let e = InjectableError::CircularDependency {
+            type_name: "Foo",
+            chain: vec!["Foo", "Bar"],
+        };
+        let s = e.to_string();
+        assert!(s.contains("circular dependency"));
+        assert!(s.contains("Foo"));
+        assert!(s.contains("Bar"));
+        assert!(s.contains(" -> "));
+    }
+
+    #[test]
+    fn display_missing_dependency() {
+        let e = InjectableError::MissingDependency {
+            type_name: "Database",
+        };
+        let s = e.to_string();
+        assert!(s.contains("missing dependency"));
+        assert!(s.contains("Database"));
+    }
+
+    #[test]
+    fn display_construction_failed() {
+        let e = InjectableError::ConstructionFailed {
+            type_name: "Pool",
+            reason: "connection refused".to_string(),
+        };
+        let s = e.to_string();
+        assert!(s.contains("Pool"));
+        assert!(s.contains("connection refused"));
+    }
+
+    #[test]
+    fn display_lifecycle_hook_failed() {
+        let e = InjectableError::LifecycleHookFailed {
+            type_name: "Db",
+            hook: "post_construct",
+            reason: "migration error".to_string(),
+        };
+        let s = e.to_string();
+        assert!(s.contains("post_construct"));
+        assert!(s.contains("Db"));
+        assert!(s.contains("migration error"));
+    }
+
+    #[test]
+    fn display_shutdown_failed_single() {
+        let inner = InjectableError::LifecycleHookFailed {
+            type_name: "X",
+            hook: "pre_destruct",
+            reason: "oops".to_string(),
+        };
+        let e = InjectableError::ShutdownFailed {
+            errors: vec![inner],
+        };
+        let s = e.to_string();
+        assert!(s.contains("shutdown failed"));
+        assert!(s.contains("1 error"));
+        assert!(s.contains("oops"));
+    }
+
+    #[test]
+    fn display_shutdown_failed_multiple() {
+        let errs = vec![
+            InjectableError::MissingDependency { type_name: "A" },
+            InjectableError::MissingDependency { type_name: "B" },
+        ];
+        let e = InjectableError::ShutdownFailed { errors: errs };
+        let s = e.to_string();
+        assert!(s.contains("2 error"));
+    }
+
+    #[test]
+    fn display_container_not_built() {
+        let e = InjectableError::ContainerNotBuilt;
+        let s = e.to_string();
+        assert!(s.contains("not been built"));
+    }
+
+    #[test]
+    fn display_graph_validation_failed() {
+        let e = InjectableError::GraphValidationFailed {
+            errors: vec!["err1".to_string(), "err2".to_string()],
+        };
+        let s = e.to_string();
+        assert!(s.contains("graph validation failed"));
+        assert!(s.contains("err1"));
+        assert!(s.contains("err2"));
+    }
+
+    #[test]
+    fn error_trait_impl() {
+        let e = InjectableError::ContainerNotBuilt;
+        let _: &dyn std::error::Error = &e;
+    }
+
+    #[test]
+    fn clone_and_debug() {
+        let e = InjectableError::MissingDependency { type_name: "X" };
+        let e2 = e.clone();
+        let _ = format!("{e2:?}");
+    }
+}

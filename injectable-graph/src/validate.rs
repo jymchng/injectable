@@ -120,3 +120,104 @@ impl std::fmt::Display for ValidationError {
 }
 
 impl std::error::Error for ValidationError {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn circular_dependency_display() {
+        let e = ValidationError::CircularDependency {
+            chain: vec!["A".to_string(), "B".to_string(), "A".to_string()],
+        };
+        let s = e.to_string();
+        assert!(s.contains("circular dependency"));
+        assert!(s.contains("A -> B -> A"));
+    }
+
+    #[test]
+    fn missing_dependency_display() {
+        let e = ValidationError::MissingDependency {
+            source: "UserService".to_string(),
+            missing: "Database".to_string(),
+        };
+        let s = e.to_string();
+        assert!(s.contains("UserService"));
+        assert!(s.contains("Database"));
+        assert!(s.contains("not registered"));
+    }
+
+    #[test]
+    fn duplicate_node_display() {
+        let e = ValidationError::DuplicateNode {
+            name: "Cache".to_string(),
+        };
+        let s = e.to_string();
+        assert!(s.contains("duplicate"));
+        assert!(s.contains("Cache"));
+    }
+
+    #[test]
+    fn multiple_constructors_display() {
+        let e = ValidationError::MultipleConstructors {
+            type_name: "Foo".to_string(),
+            count: 3,
+        };
+        let s = e.to_string();
+        assert!(s.contains("Foo"));
+        assert!(s.contains("3"));
+    }
+
+    #[test]
+    fn duplicate_lifecycle_hook_display() {
+        let e = ValidationError::DuplicateLifecycleHook {
+            type_name: "Bar".to_string(),
+            hook: "post_construct".to_string(),
+        };
+        let s = e.to_string();
+        assert!(s.contains("Bar"));
+        assert!(s.contains("post_construct"));
+    }
+
+    #[test]
+    fn invalid_constructor_return_display() {
+        let e = ValidationError::InvalidConstructorReturn {
+            type_name: "Baz".to_string(),
+            expected: "Self".to_string(),
+        };
+        let s = e.to_string();
+        assert!(s.contains("Baz"));
+        assert!(s.contains("Self"));
+    }
+
+    #[test]
+    fn scope_mismatch_display() {
+        let e = ValidationError::ScopeMismatch {
+            source: "Singleton".to_string(),
+            source_scope: "singleton".to_string(),
+            dependency: "Transient".to_string(),
+            dependency_scope: "transient".to_string(),
+        };
+        let s = e.to_string();
+        assert!(s.contains("scope mismatch"));
+        assert!(s.contains("singleton"));
+        assert!(s.contains("transient"));
+    }
+
+    #[test]
+    fn error_trait_impl() {
+        let e = ValidationError::DuplicateNode {
+            name: "X".to_string(),
+        };
+        let _: &dyn std::error::Error = &e;
+    }
+
+    #[test]
+    fn clone_and_eq() {
+        let a = ValidationError::DuplicateNode {
+            name: "A".to_string(),
+        };
+        let b = a.clone();
+        assert_eq!(a, b);
+    }
+}

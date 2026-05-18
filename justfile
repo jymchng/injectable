@@ -471,3 +471,12 @@ ref:
     @echo "  Shutdown:"
     @echo "    container.shutdown().await?   // runs pre_destruct in reverse order"
     @echo ""
+
+coverage:
+    cargo tarpaulin \
+    --workspace \
+    --all-features \
+    --engine llvm \
+    --timeout 300 \
+    --fail-under 80 \
+    --skip-clean

@@ -76,3 +76,28 @@ impl SingletonStore for EmptySingletonStore {
         0
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn empty_store_len_zero() {
+        let s = EmptySingletonStore;
+        assert_eq!(s.len(), 0);
+        assert!(s.is_empty());
+    }
+
+    #[test]
+    fn empty_store_validate_ok() {
+        let s = EmptySingletonStore;
+        assert!(s.validate().is_ok());
+    }
+
+    #[test]
+    fn scope_markers_are_zero_sized() {
+        assert_eq!(std::mem::size_of::<Singleton>(), 0);
+        assert_eq!(std::mem::size_of::<Transient>(), 0);
+        assert_eq!(std::mem::size_of::<RequestScoped>(), 0);
+    }
+}
