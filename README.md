@@ -1,11 +1,11 @@
-# injectable
-
 <div align="center">
 <img src="https://raw.githubusercontent.com/jymchng/injectable/refs/heads/main/assets/injectable-logo-vert.png" width=60%>
 </img>
 </div>
 
 <div align="center">
+
+<h1><i>injectable</i></h1>
 
 [![crates.io](https://img.shields.io/crates/v/injectable.svg)](https://crates.io/crates/injectable)
 [![docs.rs](https://docs.rs/injectable/badge.svg)](https://docs.rs/injectable)
