@@ -17,9 +17,9 @@ rust-version = "1.86"
 
 [workspace.dependencies]
 # Internal crates
-injectable-macros = { path = "injectable-macros" }
-injectable-runtime = { path = "injectable-runtime" }
-injectable-graph = { path = "injectable-graph" }
+injectable-macros = {version = "0.1.0", path = "injectable-macros"}
+injectable-runtime = {version = "0.1.0", path = "injectable-runtime"}
+injectable-graph = {version = "0.1.0", path = "injectable-graph"}
 
 # Shared dependencies
 async-trait = "^0.1.67"

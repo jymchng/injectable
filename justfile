@@ -57,11 +57,13 @@ prepare-release:
     RUSTDOCFLAGS='-D rustdoc::broken_intra_doc_links -D warnings' \
       cargo doc --workspace --features injectable/axum --no-deps
     echo
-    echo "==> Running publish dry-runs"
-    cargo publish -p injectable-graph --dry-run --locked
-    cargo publish -p injectable-runtime --dry-run --locked
-    cargo publish -p injectable-macros --dry-run --locked
-    cargo publish -p injectable --dry-run --locked
+    echo "==> Verifying packaging for publishable leaf crates"
+    # injectable-graph, -runtime, -macros have no internal workspace deps → package cleanly.
+    # injectable itself depends on the above (unpublished), so it can only be packaged
+    # after they're on crates.io — publish them in order to enable that step.
+    cargo package -p injectable-graph --allow-dirty
+    cargo package -p injectable-runtime --allow-dirty
+    cargo package -p injectable-macros --allow-dirty
     echo
     echo "Release preparation completed successfully."
     echo
@@ -236,27 +238,67 @@ version-set version:
     lines = cargo_toml.read_text().splitlines()
 
     in_workspace_package = False
-    replaced = False
+    in_workspace_dependencies = False
+    replaced_workspace_version = False
+
+    internal_crates = {
+        "injectable-macros",
+        "injectable-runtime",
+        "injectable-graph",
+    }
+
     updated = []
+
+    dep_pattern = re.compile(
+        r'^(\s*)(injectable-(?:macros|runtime|graph))\s*=\s*\{(.*)\}$'
+    )
 
     for line in lines:
         stripped = line.strip()
 
         if stripped.startswith("[") and stripped.endswith("]"):
             in_workspace_package = stripped == "[workspace.package]"
+            in_workspace_dependencies = stripped == "[workspace.dependencies]"
 
-        if in_workspace_package and re.match(r'^version\s*=\s*".*"$', stripped):
+        # Update workspace.package version
+        if (
+            in_workspace_package
+            and re.match(r'^version\s*=\s*".*"$', stripped)
+        ):
             updated.append(f'version = "{new_version}"')
-            replaced = True
+            replaced_workspace_version = True
             continue
+
+        # Update internal workspace dependency versions
+        if in_workspace_dependencies:
+            match = dep_pattern.match(line)
+            if match:
+                indent, crate, body = match.groups()
+
+                if crate in internal_crates:
+                    if "version" in body:
+                        body = re.sub(
+                            r'version\s*=\s*"[^"]*"',
+                            f'version = "{new_version}"',
+                            body,
+                        )
+                    else:
+                        body = f'version = "{new_version}", {body.strip()}'
+
+                    updated.append(indent + crate + " = {" + body + "}")
+                    continue
 
         updated.append(line)
 
-    if not replaced:
-        raise SystemExit("Could not find workspace.package.version in Cargo.toml")
+    if not replaced_workspace_version:
+        raise SystemExit(
+            "Could not find workspace.package.version in Cargo.toml"
+        )
 
     cargo_toml.write_text("\n".join(updated) + "\n")
+
     print(f"Updated workspace version to {new_version}")
+    print("Updated internal workspace dependency versions")
     PY
 
 # Increase the workspace version: major | minor | patch

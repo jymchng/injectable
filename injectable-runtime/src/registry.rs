@@ -37,16 +37,11 @@ trait ErasedProvider: Send + Sync + 'static {
     ///
     /// The caller is responsible for downcasting back to the concrete type.
     /// This is safe because the `TypeId` key guarantees type correspondence.
-    fn provide_as_any(&self, ctx: Arc<ResolveContext>) -> ErasedProviderPinnedFuture;
+    fn provide_as_any(&self, ctx: Arc<ResolveContext>) -> ErasedProviderPinnedFuture<'_>;
 }
 
 impl<T: Send + Sync + 'static> ErasedProvider for DynProvider<T> {
-    fn provide_as_any<'a>(
-        &'a self,
-        ctx: Arc<ResolveContext>,
-    ) -> std::pin::Pin<
-        Box<dyn std::future::Future<Output = InjectableResult<Box<dyn Any + Send>>> + Send + 'a>,
-    > {
+    fn provide_as_any(&self, ctx: Arc<ResolveContext>) -> ErasedProviderPinnedFuture<'_> {
         Box::pin(async move {
             let value = self.provide(ctx).await?;
             Ok(Box::new(value) as Box<dyn Any + Send>)
