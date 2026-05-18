@@ -147,8 +147,10 @@ jobs:
             --timeout 300
 
       - name: Upload to Codecov
-        if: ${{ secrets.CODECOV_TOKEN != '' }}
+        if: env.CODECOV_TOKEN != ''
         uses: codecov/codecov-action@v4
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: cobertura.xml
