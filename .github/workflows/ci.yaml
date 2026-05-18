@@ -121,6 +121,41 @@ jobs:
           RUSTDOCFLAGS: "-D rustdoc::broken_intra_doc_links -D warnings"
         run: cargo doc --workspace --features injectable/axum --no-deps
 
+  # ── Coverage ──────────────────────────────────────────────────────────────
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@1.86.0
+
+      - name: Cache cargo registry
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install cargo-tarpaulin
+        run: cargo install cargo-tarpaulin --locked
+
+      - name: Generate coverage report
+        run: |
+          cargo tarpaulin \
+            --workspace \
+            --features injectable/axum \
+            --out Xml \
+            --timeout 300
+
+      - name: Upload to Codecov
+        if: ${{ secrets.CODECOV_TOKEN != '' }}
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: cobertura.xml
+          fail_ci_if_error: true
+          verbose: true
+
+
   # ── Minimal dependency versions ───────────────────────────────────────────
   # minimal-versions:
   #   name: Minimal dependency versions (${{ matrix.os }})

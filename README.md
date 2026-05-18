@@ -5,9 +5,22 @@
 </img>
 </div>
 
+<div align="center">
+
+[![crates.io](https://img.shields.io/crates/v/injectable.svg)](https://crates.io/crates/injectable)
+[![docs.rs](https://docs.rs/injectable/badge.svg)](https://docs.rs/injectable)
+[![license](https://img.shields.io/crates/l/injectable.svg)](LICENSE)
+[![downloads](https://img.shields.io/crates/d/injectable.svg)](https://crates.io/crates/injectable)
+[![build](https://github.com/jymchng/injectable/actions/workflows/ci.yaml/badge.svg)](https://github.com/jymchng/injectable/actions/workflows/ci.yml)
+[![coverage](https://img.shields.io/codecov/c/github/jymchng/injectable)](https://codecov.io/gh/jymchng/injectable)
+[![MSRV](https://img.shields.io/badge/rust-1.86%2B-orange.svg)](https://www.rust-lang.org/)
+[![dependency status](https://deps.rs/repo/github/jymchng/injectable/status.svg)](https://deps.rs/repo/github/jymchng/injectable)
+
+</div>
+
 A compile-time dependency injection framework for Rust, inspired by Axum's typed extractor model.
 
-Current docs target `injectable` `0.2.x` on Rust `1.86+`.
+Current docs target `injectable` on Rust `1.86+`.
 
 - Repository: <https://github.com/jymchng/injectable>
 - Guide index: [guides/README.md](guides/README.md)
