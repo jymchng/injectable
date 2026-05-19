@@ -94,7 +94,7 @@ impl ProviderRegistry {
     /// Register a dynamic provider for type `T`.
     ///
     /// If the same type `T` is registered more than once, the duplicate is
-    /// recorded and surfaced as an error when [`ContainerBuilder::build`] is
+    /// recorded and surfaced as an error when `ContainerBuilder::build` is
     /// called. Use [`register_or_replace`](Self::register_or_replace) if you
     /// intentionally want to override a previously registered provider (e.g.
     /// in tests).
@@ -123,7 +123,7 @@ impl ProviderRegistry {
         self.providers.insert(TypeId::of::<T>(), Box::new(provider));
     }
 
-    /// Return duplicate type names recorded since the last [`clear_duplicates`](Self::clear_duplicates).
+    /// Return duplicate type names recorded so far.
     pub fn duplicates(&self) -> &[String] {
         &self.duplicates
     }
