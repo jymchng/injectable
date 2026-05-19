@@ -36,17 +36,45 @@ fn compile_fail_graph_validation() {
 }
 
 #[test]
-fn compile_fail_proc_macro_errors() {
+fn compile_fail_missing_constructor() {
     let t = trybuild::TestCases::new();
-    let ui_dir = manifest_dir().join("tests/ui");
+    t.compile_fail("tests/ui/missing_constructor.rs");
+}
 
-    t.compile_fail(ui_dir.join("missing_constructor.rs"));
-    t.compile_fail(ui_dir.join("multiple_constructors.rs"));
-    t.compile_fail(ui_dir.join("unknown_attribute.rs"));
-    t.compile_fail(ui_dir.join("unknown_impl_attribute.rs"));
-    t.compile_fail(ui_dir.join("field_arc_no_inject.rs"));
-    t.compile_fail(ui_dir.join("resolve_ctx_direct_call.rs"));
-    t.compile_fail(ui_dir.join("lifetime_not_injectable.rs"));
+#[test]
+fn compile_fail_multiple_constructors() {
+    let t = trybuild::TestCases::new();
+    t.compile_fail("tests/ui/multiple_constructors.rs");
+}
+
+#[test]
+fn compile_fail_unknown_attribute() {
+    let t = trybuild::TestCases::new();
+    t.compile_fail("tests/ui/unknown_attribute.rs");
+}
+
+#[test]
+fn compile_fail_unknown_impl_attribute() {
+    let t = trybuild::TestCases::new();
+    t.compile_fail("tests/ui/unknown_impl_attribute.rs");
+}
+
+#[test]
+fn compile_fail_field_arc_no_inject() {
+    let t = trybuild::TestCases::new();
+    t.compile_fail("tests/ui/field_arc_no_inject.rs");
+}
+
+#[test]
+fn compile_fail_resolve_ctx_direct_call() {
+    let t = trybuild::TestCases::new();
+    t.compile_fail("tests/ui/resolve_ctx_direct_call.rs");
+}
+
+#[test]
+fn compile_fail_lifetime_not_injectable() {
+    let t = trybuild::TestCases::new();
+    t.compile_fail("tests/ui/lifetime_not_injectable.rs");
 }
 
 #[test]
