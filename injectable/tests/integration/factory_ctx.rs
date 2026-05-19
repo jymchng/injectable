@@ -178,6 +178,76 @@ async fn inject_fn_factory_still_works_alongside_factory_ctx() {
     assert_eq!(svc.label, "label-42");
 }
 
+// ─── inject(external): Arc<ExternalType> resolved via DynProvider ───────────
+
+// ExternalStore is NOT #[injectable] — simulates a type from a foreign crate
+// registered via DynProvider::<Arc<ExternalStore>>::sync(...).
+#[derive(Debug)]
+struct ExternalStore {
+    value: u32,
+}
+
+#[injectable]
+struct ServiceUsingExternal {
+    #[injectable(inject(external))]
+    store: std::sync::Arc<ExternalStore>,
+}
+
+#[tokio::test]
+async fn inject_external_resolves_via_dyn_provider() {
+    let container = Container::builder()
+        .register(DynProvider::<std::sync::Arc<ExternalStore>>::sync(|| {
+            Ok(std::sync::Arc::new(ExternalStore { value: 99 }))
+        }))
+        .build()
+        .await
+        .unwrap();
+
+    let svc = container.resolve::<ServiceUsingExternal>().await.unwrap();
+    assert_eq!(svc.store.value, 99);
+}
+
+// ─── Duplicate DynProvider detection ────────────────────────────────────────
+
+#[derive(Debug)]
+struct SingletonExternal;
+
+#[tokio::test]
+async fn duplicate_dyn_provider_is_build_error() {
+    let result = Container::builder()
+        .register(DynProvider::<std::sync::Arc<SingletonExternal>>::sync(
+            || Ok(std::sync::Arc::new(SingletonExternal)),
+        ))
+        .register(DynProvider::<std::sync::Arc<SingletonExternal>>::sync(
+            || Ok(std::sync::Arc::new(SingletonExternal)),
+        ))
+        .build()
+        .await;
+    assert!(result.is_err(), "duplicate DynProvider must fail build()");
+    let msg = result.unwrap_err().to_string();
+    assert!(
+        msg.contains("SingletonExternal"),
+        "error must name the duplicate type, got: {msg}"
+    );
+}
+
+#[tokio::test]
+async fn register_or_replace_does_not_fail_build() {
+    let container = Container::builder()
+        .register(DynProvider::<std::sync::Arc<SingletonExternal>>::sync(
+            || Ok(std::sync::Arc::new(SingletonExternal)),
+        ))
+        .register_or_replace(DynProvider::<std::sync::Arc<SingletonExternal>>::sync(
+            || Ok(std::sync::Arc::new(SingletonExternal)),
+        ))
+        .build()
+        .await;
+    assert!(
+        container.is_ok(),
+        "register_or_replace must not fail build()"
+    );
+}
+
 // ─── Compile-fail: ctx.resolve is no longer accessible ───────────────────────
 //
 // The UI test in tests/ui/resolve_ctx_private.rs verifies that

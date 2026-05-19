@@ -283,6 +283,22 @@ impl ContainerBuilder {
         self
     }
 
+    /// Register a dynamic provider, silently replacing any existing provider
+    /// for the same type.
+    ///
+    /// Use this in tests or layered-config scenarios where you intentionally
+    /// want to override a previously registered provider. Prefer
+    /// [`register`](Self::register) in production code — it will surface
+    /// accidental duplicate registrations as errors at [`build`](Self::build)
+    /// time.
+    pub fn register_or_replace<T: Send + Sync + 'static>(
+        mut self,
+        provider: DynProvider<T>,
+    ) -> Self {
+        self.registry.register_or_replace(provider);
+        self
+    }
+
     /// Build the container.
     ///
     /// This performs startup validation of the dependency graph (collected
@@ -327,6 +343,16 @@ impl ContainerBuilder {
                     errors: errors.iter().map(|e| e.to_string()).collect(),
                 });
             }
+        }
+
+        // Surface duplicate DynProvider registrations alongside graph errors.
+        let dups = self.registry.duplicates();
+        if !dups.is_empty() {
+            let errors: Vec<String> = dups
+                .iter()
+                .map(|t| format!("DynProvider registered more than once for type `{t}`"))
+                .collect();
+            return Err(InjectableError::GraphValidationFailed { errors });
         }
 
         let ctx = ResolveContext::new(store, Arc::new(self.registry));

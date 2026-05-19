@@ -1,5 +1,5 @@
 error: #[injectable] without #[injectable(ctor)] requires at least one #[injectable(post_construct)] or #[injectable(pre_destruct)] method. For field injection without lifecycle hooks, use #[injectable] alone.
- --> tests/ui/missing_constructor.rs
-  |
-  | impl MyService {
-  |      ^^^^^^^^^
+  --> tests/ui/missing_constructor.rs:13:6
+   |
+13 | impl MyService {
+   |      ^^^^^^^^^

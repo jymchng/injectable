@@ -136,6 +136,10 @@ fn parse_inject_sub_arg(input: syn::parse::ParseStream) -> syn::Result<FieldInje
     let content;
     syn::parenthesized!(content in input);
     let factory_ident: syn::Ident = content.parse()?;
+    if factory_ident == "external" {
+        // #[injectable(inject(external))] — resolve via ctx.resolve_external
+        return Ok(FieldInjectKind::External);
+    }
     let is_async = if factory_ident == "use_factory_async" || factory_ident == "use_factory" {
         true
     } else if factory_ident == "use_factory_sync" {
@@ -145,7 +149,7 @@ fn parse_inject_sub_arg(input: syn::parse::ParseStream) -> syn::Result<FieldInje
             factory_ident.span(),
             format!(
                 "unknown inject argument: `{factory_ident}`; \
-                 expected `use_factory_async = path` or `use_factory_sync = path`"
+                 expected `external`, `use_factory_async = path`, or `use_factory_sync = path`"
             ),
         ));
     };

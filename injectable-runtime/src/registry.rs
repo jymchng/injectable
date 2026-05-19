@@ -78,6 +78,8 @@ impl<T: Send + Sync + 'static> ErasedProvider for DynProvider<T> {
 /// ```
 pub struct ProviderRegistry {
     providers: HashMap<TypeId, Box<dyn ErasedProvider>>,
+    /// Type names registered more than once, collected for `build()`-time reporting.
+    duplicates: Vec<String>,
 }
 
 impl ProviderRegistry {
@@ -85,12 +87,17 @@ impl ProviderRegistry {
     pub fn new() -> Self {
         Self {
             providers: HashMap::new(),
+            duplicates: Vec::new(),
         }
     }
 
     /// Register a dynamic provider for type `T`.
     ///
-    /// If a provider for `T` was already registered, it is replaced.
+    /// If the same type `T` is registered more than once, the duplicate is
+    /// recorded and surfaced as an error when [`ContainerBuilder::build`] is
+    /// called. Use [`register_or_replace`](Self::register_or_replace) if you
+    /// intentionally want to override a previously registered provider (e.g.
+    /// in tests).
     ///
     /// # Example
     ///
@@ -100,7 +107,25 @@ impl ProviderRegistry {
     /// }));
     /// ```
     pub fn register<T: Send + Sync + 'static>(&mut self, provider: DynProvider<T>) {
+        let id = TypeId::of::<T>();
+        if self.providers.contains_key(&id) {
+            self.duplicates.push(std::any::type_name::<T>().to_string());
+        }
+        self.providers.insert(id, Box::new(provider));
+    }
+
+    /// Register a dynamic provider for type `T`, silently replacing any
+    /// previously registered provider for the same type.
+    ///
+    /// Use this in tests or layered-config scenarios where intentional
+    /// override is expected.
+    pub fn register_or_replace<T: Send + Sync + 'static>(&mut self, provider: DynProvider<T>) {
         self.providers.insert(TypeId::of::<T>(), Box::new(provider));
+    }
+
+    /// Return duplicate type names recorded since the last [`clear_duplicates`](Self::clear_duplicates).
+    pub fn duplicates(&self) -> &[String] {
+        &self.duplicates
     }
 
     /// Check if the registry has a provider for type `T`.

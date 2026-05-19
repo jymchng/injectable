@@ -1,5 +1,5 @@
 error: unknown injectable_impl attribute: `bad`
- --> tests/ui/unknown_impl_attribute.rs
-  |
-  | #[injectable(bad = "value")]
-  |              ^^^
+  --> tests/ui/unknown_impl_attribute.rs:13:14
+   |
+13 | #[injectable(bad = "value")]
+   |              ^^^

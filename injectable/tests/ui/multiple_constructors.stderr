@@ -1,5 +1,5 @@
 error: #[injectable] requires exactly one #[injectable(ctor)] method, but found multiple
- --> tests/ui/multiple_constructors.rs
-  |
-  |     pub fn from_name(name: String) -> Self {
-  |            ^^^^^^^^^
+  --> tests/ui/multiple_constructors.rs:22:12
+   |
+22 |     pub fn from_name(name: String) -> Self {
+   |            ^^^^^^^^^

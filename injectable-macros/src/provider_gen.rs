@@ -26,6 +26,10 @@ pub enum FieldInjectKind {
     /// Extract the field via `Extract::extract(ctx)`.
     /// Applied automatically to `Inject<T>` fields, or explicitly via `#[injectable(inject)]`.
     Inject,
+    /// Resolve the field via `ctx.resolve_external::<FieldType>()`.
+    /// Use for external types (e.g. `Arc<ExternalStore>`) registered via `DynProvider` but
+    /// not annotated with `#[injectable]`. Annotation: `#[injectable(inject(external))]`.
+    External,
     /// Call the given **async** factory `async fn(ctx: &ResolveContext) -> Result<T, E>`.
     Factory(syn::Path),
     /// Call the given **sync** factory `fn(ctx: &ResolveContext) -> FieldType` (no `.await`).
@@ -102,6 +106,22 @@ pub fn generate_field_injection_provider(
                         quote! {
                             <#field_ty as injectable_runtime::Extract>::extract(ctx).await?
                         }
+                    };
+                    if let Some(name) = &field.name {
+                        quote! { let #name = #var_expr; }
+                    } else {
+                        let temp_name = syn::Ident::new(
+                            &format!("__field_{}", i),
+                            proc_macro2::Span::call_site(),
+                        );
+                        quote! { let #temp_name = #var_expr; }
+                    }
+                }
+                FieldInjectKind::External => {
+                    // Resolve via ctx.resolve_external — for types registered via DynProvider
+                    // but not annotated with #[injectable].
+                    let var_expr = quote! {
+                        ctx.resolve_external::<#field_ty>().await?
                     };
                     if let Some(name) = &field.name {
                         quote! { let #name = #var_expr; }

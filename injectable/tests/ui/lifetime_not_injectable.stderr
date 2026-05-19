@@ -1,5 +1,5 @@
 error: non-`Inject<T>` fields require an explicit `#[injectable(inject)]` annotation; if this field has no DI dependency, use a `#[injectable_ctor]` constructor instead
- --> tests/ui/lifetime_not_injectable.rs
-  |
-  |     data: &'a str,
-  |           ^
+  --> tests/ui/lifetime_not_injectable.rs:14:11
+   |
+14 |     data: &'a str,
+   |           ^

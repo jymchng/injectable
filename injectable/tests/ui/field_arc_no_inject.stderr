@@ -1,5 +1,5 @@
 error: non-`Inject<T>` fields require an explicit `#[injectable(inject)]` annotation; if this field has no DI dependency, use a `#[injectable_ctor]` constructor instead
- --> tests/ui/field_arc_no_inject.rs
-  |
-  |     db: Arc<Database>,
-  |         ^^^
+  --> tests/ui/field_arc_no_inject.rs:18:9
+   |
+18 |     db: Arc<Database>,
+   |         ^^^
