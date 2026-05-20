@@ -253,13 +253,15 @@ fn normalize_scope_attr(attr: proc_macro2::TokenStream) -> proc_macro2::TokenStr
     let mut out = TokenStream::new();
     let mut i = 0;
     while i < tokens.len() {
-        if let TokenTree::Ident(ref kw) = tokens[i] {
+        // Panic Safety: i < tokens.len() guaranteed by while condition.
+        let tok = &tokens[i];
+        if let TokenTree::Ident(kw) = tok {
             if kw == "scope"
                 && i + 2 < tokens.len()
-                && matches!(tokens[i + 1], TokenTree::Punct(_))
-                && matches!(tokens[i + 2], TokenTree::Ident(_))
+                && matches!(tokens.get(i + 1), Some(TokenTree::Punct(_)))
+                && matches!(tokens.get(i + 2), Some(TokenTree::Ident(_)))
             {
-                if let TokenTree::Ident(ref scope_ident) = tokens[i + 2] {
+                if let Some(TokenTree::Ident(scope_ident)) = tokens.get(i + 2) {
                     let name = scope_ident.to_string();
                     let scope_str = match name.as_str() {
                         "Singleton" => "singleton",
@@ -274,7 +276,7 @@ fn normalize_scope_attr(attr: proc_macro2::TokenStream) -> proc_macro2::TokenStr
                 }
             }
         }
-        out.extend(std::iter::once(tokens[i].clone()));
+        out.extend(std::iter::once(tok.clone()));
         i += 1;
     }
     out

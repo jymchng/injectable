@@ -131,6 +131,8 @@ impl ResolveContext {
     /// allow grabbing a singleton Arc for a transient type, breaking scope
     /// semantics.  User code should use `Inject::<T>::extract(ctx)` or
     /// `Arc::<T>::extract(ctx)` instead.
+    // Panic Safety: the downcast inside is keyed by TypeId — type always matches.
+    #[allow(clippy::expect_used)]
     pub(crate) async fn resolve_singleton_arc<T: Injectable>(&self) -> InjectableResult<Arc<T>> {
         let type_id = TypeId::of::<T>();
 

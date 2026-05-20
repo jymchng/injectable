@@ -155,7 +155,11 @@ impl DependencyGraph {
                 } else if in_stack.contains(dep) {
                     // Found a cycle — record the cycle path
                     let cycle_start = path.iter().position(|n| *n == *dep).unwrap_or(0);
-                    let cycle: Vec<String> = path[cycle_start..]
+                    // Panic Safety: cycle_start comes from position() which returns an index < path.len(),
+                    // or 0 as fallback; either way cycle_start <= path.len().
+                    let cycle: Vec<String> = path
+                        .get(cycle_start..)
+                        .unwrap_or(&[])
                         .iter()
                         .map(|s| s.to_string())
                         .chain(std::iter::once(dep.to_string()))

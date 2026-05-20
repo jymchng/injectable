@@ -184,11 +184,14 @@ pub fn generate_field_injection_provider(
     let construction = if fields.is_empty() {
         // Unit struct
         quote! { #type_name }
-    } else if fields[0].name.is_some() {
+    } else if fields.first().is_some_and(|f| f.name.is_some()) {
         // Named fields: TypeName { field1, field2, ... }
+        // Panic Safety: filter_map skips unnamed fields; unreachable for named structs
+        // because all fields in a named struct carry Some(ident).
         let field_names: Vec<_> = fields
             .iter()
-            .map(|f| f.name.as_ref().unwrap().clone())
+            .filter_map(|f| f.name.as_ref())
+            .cloned()
             .collect();
         quote! { #type_name { #(#field_names),* } }
     } else {

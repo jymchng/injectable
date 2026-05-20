@@ -244,6 +244,8 @@ fn parse_inject_attr(attrs: &[syn::Attribute]) -> syn::Result<(bool, Option<Para
 /// - `-> ()` or no return → `((), false)`
 /// - `-> T` → `(T, false)`
 /// - `-> Result<T, E>` → `(T, true)`
+// Panic Safety: syn::parse_str("()") parses a fixed valid token — cannot fail.
+#[allow(clippy::unwrap_used)]
 fn parse_return_inner(output: &syn::ReturnType) -> syn::Result<(syn::Type, bool)> {
     match output {
         syn::ReturnType::Default => Ok((syn::parse_str("()").unwrap(), false)),

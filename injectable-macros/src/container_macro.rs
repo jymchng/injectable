@@ -350,7 +350,11 @@ fn dfs_cycle<'a>(
                     .iter()
                     .position(|n| *n == dep_name.as_str())
                     .unwrap_or(0);
-                let chain: Vec<String> = path[cycle_start..]
+                // Panic Safety: cycle_start comes from position() which returns an index < path.len(),
+                // or 0 as fallback; either way cycle_start <= path.len().
+                let chain: Vec<String> = path
+                    .get(cycle_start..)
+                    .unwrap_or(&[])
                     .iter()
                     .map(|s| s.to_string())
                     .chain(std::iter::once(dep_name.clone()))

@@ -29,10 +29,10 @@ fn is_known_arc_path(path: &syn::Path) -> bool {
         .iter()
         .map(|seg| seg.ident.to_string())
         .collect();
-    match s.len() {
-        1 => s[0] == "Arc",
-        2 => s[0] == "sync" && s[1] == "Arc",
-        3 => (s[0] == "std" || s[0] == "alloc") && s[1] == "sync" && s[2] == "Arc",
+    match s.as_slice() {
+        [a] => a == "Arc",
+        [a, b] => a == "sync" && b == "Arc",
+        [a, b, c] => (a == "std" || a == "alloc") && b == "sync" && c == "Arc",
         _ => false,
     }
 }
@@ -50,9 +50,9 @@ fn is_known_inject_path(path: &syn::Path) -> bool {
         .iter()
         .map(|seg| seg.ident.to_string())
         .collect();
-    match s.len() {
-        1 => s[0] == "Inject",
-        2 => (s[0] == "injectable" || s[0] == "injectable_runtime") && s[1] == "Inject",
+    match s.as_slice() {
+        [a] => a == "Inject",
+        [a, b] => (a == "injectable" || a == "injectable_runtime") && b == "Inject",
         _ => false,
     }
 }
