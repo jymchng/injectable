@@ -163,10 +163,12 @@ impl ResolveContext {
         Ok(Arc::clone(inner))
     }
 
-    /// Resolve an external type from the provider registry.
+    /// Resolve an external type from the provider registry using the **default token**.
     ///
-    /// Use this for types that don't implement `Injectable` but have
-    /// been registered via `ContainerBuilder::register()`.
+    /// Use this for types that don't implement `Injectable` but have been registered
+    /// via `ContainerBuilder::register("", DynProvider::…)`.
+    ///
+    /// For named tokens use [`resolve_external_with_token`](Self::resolve_external_with_token).
     ///
     /// # Example
     ///
@@ -174,7 +176,30 @@ impl ResolveContext {
     /// let client = ctx.resolve_external::<reqwest::Client>().await?;
     /// ```
     pub async fn resolve_external<T: Send + Sync + 'static>(&self) -> InjectableResult<T> {
-        match self.registry.resolve::<T>(Arc::new(self.clone())).await {
+        self.resolve_external_with_token::<T>(crate::registry::DEFAULT_TOKEN)
+            .await
+    }
+
+    /// Resolve an external type from the provider registry using an explicit `token`.
+    ///
+    /// Use this when multiple providers of the same type are registered under
+    /// different tokens (e.g., `"primary"` vs `"replica"` database pools).
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// let primary: Pool = ctx.resolve_external_with_token("primary").await?;
+    /// let replica:  Pool = ctx.resolve_external_with_token("replica").await?;
+    /// ```
+    pub async fn resolve_external_with_token<T: Send + Sync + 'static>(
+        &self,
+        token: &str,
+    ) -> InjectableResult<T> {
+        match self
+            .registry
+            .resolve_with_token::<T>(token, Arc::new(self.clone()))
+            .await
+        {
             Some(result) => result,
             None => Err(InjectableError::MissingDependency {
                 type_name: std::any::type_name::<T>(),
@@ -182,13 +207,27 @@ impl ResolveContext {
         }
     }
 
-    /// Try to resolve a type from the registry.
+    /// Try to resolve a type from the registry using the **default token**.
     ///
     /// Returns `None` if no provider is registered, rather than an error.
     pub async fn try_resolve_external<T: Send + Sync + 'static>(
         &self,
     ) -> Option<InjectableResult<T>> {
-        self.registry.resolve::<T>(Arc::new(self.clone())).await
+        self.registry
+            .resolve_with_token::<T>(crate::registry::DEFAULT_TOKEN, Arc::new(self.clone()))
+            .await
+    }
+
+    /// Try to resolve a type from the registry using an explicit `token`.
+    ///
+    /// Returns `None` if no provider is registered for `(T, token)`.
+    pub async fn try_resolve_external_with_token<T: Send + Sync + 'static>(
+        &self,
+        token: &str,
+    ) -> Option<InjectableResult<T>> {
+        self.registry
+            .resolve_with_token::<T>(token, Arc::new(self.clone()))
+            .await
     }
 
     /// Register a destructor for an instance that implements `PreDestruct`.
@@ -418,7 +457,7 @@ mod tests {
     #[tokio::test]
     async fn resolve_external_registered_returns_value() {
         let mut registry = ProviderRegistry::new();
-        registry.register(DynProvider::from_value(42u32));
+        registry.register("", DynProvider::from_value(42u32));
         let ctx = ResolveContext::new(Arc::new(EmptySingletonStore), Arc::new(registry));
         let v: u32 = ctx.resolve_external().await.unwrap();
         assert_eq!(v, 42);
@@ -434,9 +473,43 @@ mod tests {
     #[tokio::test]
     async fn try_resolve_external_registered_returns_some() {
         let mut registry = ProviderRegistry::new();
-        registry.register(DynProvider::from_value(99u32));
+        registry.register("", DynProvider::from_value(99u32));
         let ctx = ResolveContext::new(Arc::new(EmptySingletonStore), Arc::new(registry));
         let result = ctx.try_resolve_external::<u32>().await.unwrap();
         assert_eq!(result.unwrap(), 99u32);
+    }
+
+    #[tokio::test]
+    async fn resolve_external_with_token_resolves_named_provider() {
+        let mut registry = ProviderRegistry::new();
+        registry.register("primary", DynProvider::from_value(1u32));
+        registry.register("replica", DynProvider::from_value(2u32));
+        let ctx = ResolveContext::new(Arc::new(EmptySingletonStore), Arc::new(registry));
+        let primary: u32 = ctx.resolve_external_with_token("primary").await.unwrap();
+        let replica: u32 = ctx.resolve_external_with_token("replica").await.unwrap();
+        assert_eq!(primary, 1);
+        assert_eq!(replica, 2);
+    }
+
+    #[tokio::test]
+    async fn resolve_external_with_default_token_doesnt_find_named() {
+        let mut registry = ProviderRegistry::new();
+        registry.register("primary", DynProvider::from_value(1u32));
+        let ctx = ResolveContext::new(Arc::new(EmptySingletonStore), Arc::new(registry));
+        // default (empty) token should not find "primary"
+        let result = ctx.resolve_external::<u32>().await;
+        assert!(
+            result.is_err(),
+            "default token should not resolve named provider"
+        );
+    }
+
+    #[tokio::test]
+    async fn try_resolve_external_with_token_returns_none_for_wrong_token() {
+        let mut registry = ProviderRegistry::new();
+        registry.register("primary", DynProvider::from_value(1u32));
+        let ctx = ResolveContext::new(Arc::new(EmptySingletonStore), Arc::new(registry));
+        let result = ctx.try_resolve_external_with_token::<u32>("replica").await;
+        assert!(result.is_none());
     }
 }

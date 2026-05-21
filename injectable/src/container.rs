@@ -87,6 +87,36 @@ impl Container {
         self.ctx.resolve_external::<T>().await
     }
 
+    /// Resolve a named external type by token.
+    ///
+    /// Use this when multiple providers of the same type were registered with
+    /// different tokens via `ContainerBuilder::register("token", DynProvider::…)`.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// let primary: Pool = container.resolve_external_with_token("primary").await?;
+    /// let replica:  Pool = container.resolve_external_with_token("replica").await?;
+    /// ```
+    pub async fn resolve_external_with_token<T: Send + Sync + 'static>(
+        &self,
+        token: &str,
+    ) -> InjectableResult<T> {
+        self.ctx.resolve_external_with_token::<T>(token).await
+    }
+
+    /// Resolve a named external type by token, returning `None` if not registered.
+    pub async fn try_resolve_external_with_token<T: Send + Sync + 'static>(
+        &self,
+        token: &str,
+    ) -> InjectableResult<Option<T>> {
+        match self.resolve_external_with_token::<T>(token).await {
+            Ok(v) => Ok(Some(v)),
+            Err(InjectableError::MissingDependency { .. }) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
     /// Get a reference to the internal resolve context.
     ///
     /// Useful for manual extraction in advanced scenarios.
@@ -240,62 +270,60 @@ impl ContainerBuilder {
         self
     }
 
-    /// Register a dynamic provider for an external type.
+    /// Register a dynamic provider for an external type under the given `token`.
     ///
-    /// This is the primary way to inject types you don't own
-    /// (third-party crate types like `reqwest::Client`,
-    /// `sqlx::SqlitePool`, etc.).
+    /// Every registration is keyed by `(TypeId<T>, token)`, so multiple providers
+    /// of the same type can coexist as long as they carry different tokens.  Use
+    /// [`DEFAULT_TOKEN`](injectable_runtime::DEFAULT_TOKEN) (`""`) for the
+    /// canonical, unnamed registration.
     ///
-    /// # Simple Registration (No Dependencies)
-    ///
-    /// Use [`DynProvider::new`] for types that can be constructed
-    /// without resolving other dependencies:
+    /// # Simple Registration (default token)
     ///
     /// ```rust,ignore
-    /// builder.register(DynProvider::new(|| {
-    ///     Ok(reqwest::Client::new())
-    /// }));
+    /// builder.register("", DynProvider::sync(|| Ok(reqwest::Client::new())));
+    /// // later:
+    /// let client = container.resolve_external::<reqwest::Client>().await?;
     /// ```
     ///
-    /// # Context-Aware Registration (With Dependencies)
-    ///
-    /// Use [`DynProvider::with_ctx`] for types that need to resolve
-    /// other dependencies during construction:
+    /// # Multiple Providers of the Same Type
     ///
     /// ```rust,ignore
-    /// builder.register(DynProvider::with_ctx(|ctx| async move {
-    ///     let config = ctx.resolve::<AppConfig>().await?;
+    /// builder
+    ///     .register("primary",  DynProvider::new(|| async { Ok(primary_pool()) }))
+    ///     .register("replica",  DynProvider::new(|| async { Ok(replica_pool()) }));
+    /// // later:
+    /// let primary: Pool = container.resolve_external_with_token("primary").await?;
+    /// let replica:  Pool = container.resolve_external_with_token("replica").await?;
+    /// ```
+    ///
+    /// # Context-Aware Registration
+    ///
+    /// ```rust,ignore
+    /// builder.register("", DynProvider::with_ctx(|ctx| async move {
+    ///     let config = ctx.extract::<Inject<AppConfig>>().await?;
     ///     Ok(Database::connect(&config.db_url).await?)
     /// }));
     /// ```
-    ///
-    /// # Resolving Registered Types
-    ///
-    /// After building the container, use
-    /// [`Container::resolve_external::<T>()`](Container::resolve_external)
-    /// to obtain instances:
-    ///
-    /// ```rust,ignore
-    /// let client = container.resolve_external::<reqwest::Client>().await?;
-    /// ```
-    pub fn register<T: Send + Sync + 'static>(mut self, provider: DynProvider<T>) -> Self {
-        self.registry.register(provider);
+    pub fn register<T: Send + Sync + 'static>(
+        mut self,
+        token: impl Into<String>,
+        provider: DynProvider<T>,
+    ) -> Self {
+        self.registry.register(token, provider);
         self
     }
 
     /// Register a dynamic provider, silently replacing any existing provider
-    /// for the same type.
+    /// for the same `(type, token)` pair.
     ///
     /// Use this in tests or layered-config scenarios where you intentionally
-    /// want to override a previously registered provider. Prefer
-    /// [`register`](Self::register) in production code — it will surface
-    /// accidental duplicate registrations as errors at [`build`](Self::build)
-    /// time.
+    /// want to override an existing registration.
     pub fn register_or_replace<T: Send + Sync + 'static>(
         mut self,
+        token: impl Into<String>,
         provider: DynProvider<T>,
     ) -> Self {
-        self.registry.register_or_replace(provider);
+        self.registry.register_or_replace(token, provider);
         self
     }
 

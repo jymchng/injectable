@@ -52,11 +52,14 @@ impl IntService {
 async fn dyn_provider_with_factory_ctx_basic() {
     // `with_ctx` closure receives FactoryCtx; extracting Config respects scope.
     let container = Container::builder()
-        .register(DynProvider::with_ctx(|ctx| async move {
-            // FactoryCtx::extract goes through the scope-safe Extract path.
-            let cfg: Inject<IntConfig> = ctx.extract().await?;
-            Ok(format!("config={}", cfg.value))
-        }))
+        .register(
+            "",
+            DynProvider::with_ctx(|ctx| async move {
+                // FactoryCtx::extract goes through the scope-safe Extract path.
+                let cfg: Inject<IntConfig> = ctx.extract().await?;
+                Ok(format!("config={}", cfg.value))
+            }),
+        )
         .build()
         .await
         .unwrap();
@@ -70,18 +73,21 @@ async fn dyn_provider_with_factory_ctx_basic() {
 #[tokio::test]
 async fn factory_ctx_singleton_is_cached() {
     let container = Container::builder()
-        .register(DynProvider::with_ctx(|ctx| async move {
-            // Resolve IntConfig twice — both extractions must return the same Arc.
-            // Pointer equality proves the singleton is cached; no need to count
-            // constructor calls (which would be flaky in a concurrent test suite).
-            let a: Inject<IntConfig> = ctx.extract().await?;
-            let b: Inject<IntConfig> = ctx.extract().await?;
-            assert!(
-                Arc::ptr_eq(&a.0, &b.0),
-                "two extractions of a singleton must return the same Arc"
-            );
-            Ok(a.value)
-        }))
+        .register(
+            "",
+            DynProvider::with_ctx(|ctx| async move {
+                // Resolve IntConfig twice — both extractions must return the same Arc.
+                // Pointer equality proves the singleton is cached; no need to count
+                // constructor calls (which would be flaky in a concurrent test suite).
+                let a: Inject<IntConfig> = ctx.extract().await?;
+                let b: Inject<IntConfig> = ctx.extract().await?;
+                assert!(
+                    Arc::ptr_eq(&a.0, &b.0),
+                    "two extractions of a singleton must return the same Arc"
+                );
+                Ok(a.value)
+            }),
+        )
         .build()
         .await
         .unwrap();
@@ -114,13 +120,16 @@ async fn factory_ctx_transient_gets_fresh_instance() {
     let before = TRANSIENT_CTOR.load(Ordering::SeqCst);
 
     let container = Container::builder()
-        .register(DynProvider::with_ctx(|ctx| async move {
-            let a: Inject<TransientSvc> = ctx.extract().await?;
-            let b: Inject<TransientSvc> = ctx.extract().await?;
-            // Transient: each extraction creates a fresh Arc (different pointers).
-            let same = Arc::ptr_eq(&a.0, &b.0);
-            Ok(same) // false expected
-        }))
+        .register(
+            "",
+            DynProvider::with_ctx(|ctx| async move {
+                let a: Inject<TransientSvc> = ctx.extract().await?;
+                let b: Inject<TransientSvc> = ctx.extract().await?;
+                // Transient: each extraction creates a fresh Arc (different pointers).
+                let same = Arc::ptr_eq(&a.0, &b.0);
+                Ok(same) // false expected
+            }),
+        )
         .build()
         .await
         .unwrap();
@@ -196,9 +205,12 @@ struct ServiceUsingExternal {
 #[tokio::test]
 async fn inject_external_resolves_via_dyn_provider() {
     let container = Container::builder()
-        .register(DynProvider::<std::sync::Arc<ExternalStore>>::sync(|| {
-            Ok(std::sync::Arc::new(ExternalStore { value: 99 }))
-        }))
+        .register(
+            "",
+            DynProvider::<std::sync::Arc<ExternalStore>>::sync(|| {
+                Ok(std::sync::Arc::new(ExternalStore { value: 99 }))
+            }),
+        )
         .build()
         .await
         .unwrap();
@@ -215,12 +227,18 @@ struct SingletonExternal;
 #[tokio::test]
 async fn duplicate_dyn_provider_is_build_error() {
     let result = Container::builder()
-        .register(DynProvider::<std::sync::Arc<SingletonExternal>>::sync(
-            || Ok(std::sync::Arc::new(SingletonExternal)),
-        ))
-        .register(DynProvider::<std::sync::Arc<SingletonExternal>>::sync(
-            || Ok(std::sync::Arc::new(SingletonExternal)),
-        ))
+        .register(
+            "",
+            DynProvider::<std::sync::Arc<SingletonExternal>>::sync(|| {
+                Ok(std::sync::Arc::new(SingletonExternal))
+            }),
+        )
+        .register(
+            "",
+            DynProvider::<std::sync::Arc<SingletonExternal>>::sync(|| {
+                Ok(std::sync::Arc::new(SingletonExternal))
+            }),
+        )
         .build()
         .await;
     assert!(result.is_err(), "duplicate DynProvider must fail build()");
@@ -234,12 +252,18 @@ async fn duplicate_dyn_provider_is_build_error() {
 #[tokio::test]
 async fn register_or_replace_does_not_fail_build() {
     let container = Container::builder()
-        .register(DynProvider::<std::sync::Arc<SingletonExternal>>::sync(
-            || Ok(std::sync::Arc::new(SingletonExternal)),
-        ))
-        .register_or_replace(DynProvider::<std::sync::Arc<SingletonExternal>>::sync(
-            || Ok(std::sync::Arc::new(SingletonExternal)),
-        ))
+        .register(
+            "",
+            DynProvider::<std::sync::Arc<SingletonExternal>>::sync(|| {
+                Ok(std::sync::Arc::new(SingletonExternal))
+            }),
+        )
+        .register_or_replace(
+            "",
+            DynProvider::<std::sync::Arc<SingletonExternal>>::sync(|| {
+                Ok(std::sync::Arc::new(SingletonExternal))
+            }),
+        )
         .build()
         .await;
     assert!(

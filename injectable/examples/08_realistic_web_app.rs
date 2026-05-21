@@ -386,7 +386,7 @@ async fn with_state_and_inject(
 //
 // This is the entire setup:
 //   1. Container::builder()     — create the builder
-//   2. .register(DynProvider...) — register REAL sqlx::SqlitePool
+//   2. .register("", DynProvider...) — register REAL sqlx::SqlitePool
 //   3. .build()                 — validate graph + build container
 //
 // All Injectable types (AppConfig, Database, UserRepository, EmailService,
@@ -407,20 +407,23 @@ async fn main() {
         // Register the REAL sqlx::SqlitePool as an external type.
         // DynProvider::with_ctx can resolve AppConfig from the container
         // to get the connection string.
-        .register(DynProvider::with_ctx(move |_ctx| {
-            let url = db_url.clone();
-            async move {
-                println!("   Connecting to SQLite at {}...", url);
-                let pool = sqlx::SqlitePool::connect(&url).await.map_err(|e| {
-                    injectable_runtime::InjectableError::ConstructionFailed {
-                        type_name: "SqlitePool",
-                        reason: format!("Failed to connect to SQLite: {e}"),
-                    }
-                })?;
-                println!("   SqlitePool connected! Size: {}", pool.size());
-                Ok(pool)
-            }
-        }))
+        .register(
+            "",
+            DynProvider::with_ctx(move |_ctx| {
+                let url = db_url.clone();
+                async move {
+                    println!("   Connecting to SQLite at {}...", url);
+                    let pool = sqlx::SqlitePool::connect(&url).await.map_err(|e| {
+                        injectable_runtime::InjectableError::ConstructionFailed {
+                            type_name: "SqlitePool",
+                            reason: format!("Failed to connect to SQLite: {e}"),
+                        }
+                    })?;
+                    println!("   SqlitePool connected! Size: {}", pool.size());
+                    Ok(pool)
+                }
+            }),
+        )
         .build()
         .await
         .expect("container should build — check for circular deps or scope mismatches");
@@ -515,18 +518,21 @@ async fn main() {
     let db_url2 = std::env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite:./app.db".to_string());
 
     let container2 = Container::builder()
-        .register(DynProvider::with_ctx(move |_ctx| {
-            let url = db_url2.clone();
-            async move {
-                let pool = sqlx::SqlitePool::connect(&url).await.map_err(|e| {
-                    injectable_runtime::InjectableError::ConstructionFailed {
-                        type_name: "SqlitePool",
-                        reason: format!("Failed to connect: {e}"),
-                    }
-                })?;
-                Ok(pool)
-            }
-        }))
+        .register(
+            "",
+            DynProvider::with_ctx(move |_ctx| {
+                let url = db_url2.clone();
+                async move {
+                    let pool = sqlx::SqlitePool::connect(&url).await.map_err(|e| {
+                        injectable_runtime::InjectableError::ConstructionFailed {
+                            type_name: "SqlitePool",
+                            reason: format!("Failed to connect: {e}"),
+                        }
+                    })?;
+                    Ok(pool)
+                }
+            }),
+        )
         .build()
         .await
         .expect("container should build");

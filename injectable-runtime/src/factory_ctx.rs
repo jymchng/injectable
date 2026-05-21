@@ -78,6 +78,27 @@ impl FactoryCtx {
     {
         self.0.resolve_external::<T>().await
     }
+
+    /// Resolve a type registered via a named [`DynProvider`](crate::DynProvider) token.
+    ///
+    /// Use this when multiple providers of the same type are registered under
+    /// different tokens.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// DynProvider::with_ctx(|ctx| async move {
+    ///     let primary: Pool = ctx.resolve_external_with_token("primary").await?;
+    ///     let replica:  Pool = ctx.resolve_external_with_token("replica").await?;
+    ///     Ok(Router::new(primary, replica))
+    /// })
+    /// ```
+    pub async fn resolve_external_with_token<T>(&self, token: &str) -> InjectableResult<T>
+    where
+        T: Send + Sync + 'static,
+    {
+        self.0.resolve_external_with_token::<T>(token).await
+    }
 }
 
 // ─── Unit tests ──────────────────────────────────────────────────────────────
@@ -159,7 +180,7 @@ mod tests {
     #[tokio::test]
     async fn resolve_external_returns_registered_value() {
         let mut registry = ProviderRegistry::new();
-        registry.register(DynProvider::from_value(42u32));
+        registry.register("", DynProvider::from_value(42u32));
 
         let ctx = Arc::new(ResolveContext::new(
             Arc::new(EmptySingletonStore),

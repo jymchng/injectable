@@ -242,7 +242,7 @@ async fn test_resolve_multiple_types() {
 async fn test_register_external_sync() {
     // Register a simple external type with synchronous construction
     let container = Container::builder()
-        .register(DynProvider::sync(|| Ok(reqwest::Client::new())))
+        .register("", DynProvider::sync(|| Ok(reqwest::Client::new())))
         .build()
         .await
         .expect("container should build");
@@ -259,7 +259,7 @@ async fn test_register_external_async() {
     // Register an external type with async construction (real sqlx::SqlitePool)
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let container = Container::builder()
-        .register(DynProvider::new(move || {
+        .register("", DynProvider::new(move || {
             let url = database_url.clone();
             async move {
                 sqlx::SqlitePool::connect(&url).await.map_err(|e| {
@@ -284,7 +284,7 @@ async fn test_register_external_with_ctx_dependencies() {
     // Register an external type that depends on an Injectable type (real sqlx::SqlitePool)
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let container = Container::builder()
-        .register(DynProvider::with_ctx(move |ctx| {
+        .register("", DynProvider::with_ctx(move |ctx| {
             let url = database_url.clone();
             async move {
                 // Resolve a singleton type via the scope-safe extract method.
@@ -311,8 +311,8 @@ async fn test_register_external_with_ctx_dependencies() {
 #[tokio::test]
 async fn test_register_multiple_external_types() {
     let container = Container::builder()
-        .register(DynProvider::sync(|| Ok(reqwest::Client::new())))
-        .register(DynProvider::sync(|| {
+        .register("", DynProvider::sync(|| Ok(reqwest::Client::new())))
+        .register("", DynProvider::sync(|| {
             Ok("redis://localhost:6379".to_string())
         }))
         .build()
@@ -335,8 +335,8 @@ async fn test_register_multiple_external_types() {
 async fn test_register_external_chain_dependencies() {
     // External type that depends on another external type
     let container = Container::builder()
-        .register(DynProvider::sync(|| Ok(reqwest::Client::new())))
-        .register(DynProvider::with_ctx(|ctx| async move {
+        .register("", DynProvider::sync(|| Ok(reqwest::Client::new())))
+        .register("", DynProvider::with_ctx(|ctx| async move {
             // Resolve another external type from the context
             let _http = ctx.resolve_external::<reqwest::Client>().await?;
             Ok("cache://connected".to_string())
@@ -377,10 +377,10 @@ async fn test_resolve_external_missing() {
 
 #[tokio::test]
 async fn test_register_overwrites_previous() {
-    // Registering the same type twice should use the latest registration
+    // Registering the same (type, token) pair twice → second wins
     let container = Container::builder()
-        .register(DynProvider::sync(|| Ok("first".to_string())))
-        .register(DynProvider::sync(|| Ok("second".to_string())))
+        .register("", DynProvider::sync(|| Ok("first".to_string())))
+        .register("", DynProvider::sync(|| Ok("second".to_string())))
         .build()
         .await
         .expect("container should build");
@@ -393,10 +393,84 @@ async fn test_register_overwrites_previous() {
 }
 
 #[tokio::test]
+async fn test_multiple_tokens_same_type() {
+    // Different tokens for the same type coexist independently.
+    let container = Container::builder()
+        .register("primary",   DynProvider::sync(|| Ok(1_u32)))
+        .register("replica",   DynProvider::sync(|| Ok(2_u32)))
+        .register("analytics", DynProvider::sync(|| Ok(3_u32)))
+        .build()
+        .await
+        .expect("container should build");
+
+    let primary:   u32 = container.resolve_external_with_token("primary").await.unwrap();
+    let replica:   u32 = container.resolve_external_with_token("replica").await.unwrap();
+    let analytics: u32 = container.resolve_external_with_token("analytics").await.unwrap();
+
+    assert_eq!(primary,   1);
+    assert_eq!(replica,   2);
+    assert_eq!(analytics, 3);
+}
+
+#[tokio::test]
+async fn test_default_token_does_not_resolve_named() {
+    let container = Container::builder()
+        .register("primary", DynProvider::sync(|| Ok(42_u32)))
+        .build()
+        .await
+        .expect("container should build");
+
+    // default (unnamed) token should NOT find the "primary" registration
+    let result = container.resolve_external::<u32>().await;
+    assert!(result.is_err(), "default token should not resolve named provider");
+}
+
+#[tokio::test]
+async fn test_named_and_default_tokens_independent() {
+    let container = Container::builder()
+        .register("",        DynProvider::sync(|| Ok(0_u32)))  // default
+        .register("primary", DynProvider::sync(|| Ok(1_u32)))  // named
+        .build()
+        .await
+        .expect("container should build");
+
+    let default_val: u32 = container.resolve_external().await.unwrap();
+    let named_val:   u32 = container.resolve_external_with_token("primary").await.unwrap();
+
+    assert_eq!(default_val, 0);
+    assert_eq!(named_val,   1);
+}
+
+#[tokio::test]
+async fn test_try_resolve_external_with_token_returns_none_for_missing() {
+    let container = Container::builder()
+        .register("primary", DynProvider::sync(|| Ok(1_u32)))
+        .build()
+        .await
+        .unwrap();
+
+    let result = container.try_resolve_external_with_token::<u32>("missing").await.unwrap();
+    assert!(result.is_none());
+}
+
+#[tokio::test]
+async fn test_different_tokens_not_duplicate() {
+    // Registering the same type with different tokens is not a duplicate —
+    // build() should succeed without error.
+    Container::builder()
+        .register("a", DynProvider::sync(|| Ok(1_u8)))
+        .register("b", DynProvider::sync(|| Ok(2_u8)))
+        .register("c", DynProvider::sync(|| Ok(3_u8)))
+        .build()
+        .await
+        .expect("different tokens for same type should not be a duplicate");
+}
+
+#[tokio::test]
 async fn test_mixed_owned_and_external_resolution() {
     // Mix of derive(Injectable) types and registered external types
     let container = Container::builder()
-        .register(DynProvider::sync(|| Ok(reqwest::Client::new())))
+        .register("", DynProvider::sync(|| Ok(reqwest::Client::new())))
         .build()
         .await
         .expect("container should build");
@@ -462,7 +536,7 @@ fn test_registry_empty() {
 #[test]
 fn test_registry_has() {
     let mut registry = ProviderRegistry::new();
-    registry.register(DynProvider::sync(|| Ok(reqwest::Client::new())));
+    registry.register("", DynProvider::sync(|| Ok(reqwest::Client::new())));
     assert!(registry.has::<reqwest::Client>());
     assert!(!registry.has::<sqlx::SqlitePool>());
     assert_eq!(registry.len(), 1);
@@ -804,7 +878,7 @@ async fn test_concurrent_external_resolutions() {
 
     let container = Arc::new(
         Container::builder()
-            .register(DynProvider::sync(|| {
+            .register("", DynProvider::sync(|| {
                 CONSTRUCT_COUNT.fetch_add(1, Ordering::SeqCst);
                 Ok(reqwest::Client::new())
             }))

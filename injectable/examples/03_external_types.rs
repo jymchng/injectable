@@ -33,10 +33,13 @@ async fn main() {
     println!("1. Sync DynProvider (no dependencies):");
 
     let container = Container::builder()
-        .register(DynProvider::sync(|| {
-            println!("  Creating reqwest::Client via DynProvider::sync");
-            Ok(reqwest::Client::new())
-        }))
+        .register(
+            "",
+            DynProvider::sync(|| {
+                println!("  Creating reqwest::Client via DynProvider::sync");
+                Ok(reqwest::Client::new())
+            }),
+        )
         .build()
         .await
         .expect("container should build");
@@ -54,20 +57,23 @@ async fn main() {
     let db_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite:./test.db".to_string());
 
     let container = Container::builder()
-        .register(DynProvider::new(move || {
-            let url = db_url.clone();
-            async move {
-                println!("  Connecting to SqlitePool at {}...", url);
-                let pool = sqlx::SqlitePool::connect(&url).await.map_err(|e| {
-                    injectable_runtime::InjectableError::ConstructionFailed {
-                        type_name: "SqlitePool",
-                        reason: format!("Failed to connect to SQLite: {e}"),
-                    }
-                })?;
-                println!("  SqlitePool connected successfully!");
-                Ok(pool)
-            }
-        }))
+        .register(
+            "",
+            DynProvider::new(move || {
+                let url = db_url.clone();
+                async move {
+                    println!("  Connecting to SqlitePool at {}...", url);
+                    let pool = sqlx::SqlitePool::connect(&url).await.map_err(|e| {
+                        injectable_runtime::InjectableError::ConstructionFailed {
+                            type_name: "SqlitePool",
+                            reason: format!("Failed to connect to SQLite: {e}"),
+                        }
+                    })?;
+                    println!("  SqlitePool connected successfully!");
+                    Ok(pool)
+                }
+            }),
+        )
         .build()
         .await
         .expect("container should build");
@@ -90,21 +96,24 @@ async fn main() {
     let db_url2 = std::env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite:./test.db".to_string());
 
     let container = Container::builder()
-        .register(DynProvider::with_ctx(move |ctx| {
-            let url = db_url2.clone();
-            async move {
-                // Resolve an owned type from the DI context
-                let _config = ctx.extract::<Inject<AppConfig>>().await?;
-                println!("  Creating SqlitePool using AppConfig from context");
-                let pool = sqlx::SqlitePool::connect(&url).await.map_err(|e| {
-                    injectable_runtime::InjectableError::ConstructionFailed {
-                        type_name: "SqlitePool",
-                        reason: format!("Failed to connect: {e}"),
-                    }
-                })?;
-                Ok(pool)
-            }
-        }))
+        .register(
+            "",
+            DynProvider::with_ctx(move |ctx| {
+                let url = db_url2.clone();
+                async move {
+                    // Resolve an owned type from the DI context
+                    let _config = ctx.extract::<Inject<AppConfig>>().await?;
+                    println!("  Creating SqlitePool using AppConfig from context");
+                    let pool = sqlx::SqlitePool::connect(&url).await.map_err(|e| {
+                        injectable_runtime::InjectableError::ConstructionFailed {
+                            type_name: "SqlitePool",
+                            reason: format!("Failed to connect: {e}"),
+                        }
+                    })?;
+                    Ok(pool)
+                }
+            }),
+        )
         .build()
         .await
         .expect("container should build");
@@ -126,21 +135,27 @@ async fn main() {
     println!("4. External type depending on another external type:");
 
     let container = Container::builder()
-        .register(DynProvider::sync(|| {
-            println!("  Creating reqwest::Client");
-            Ok(reqwest::Client::builder()
-                .timeout(std::time::Duration::from_secs(30))
-                .build()
-                .expect("failed to build reqwest client"))
-        }))
-        .register(DynProvider::with_ctx(|ctx| async move {
-            // Resolve another external type from the registry
-            let _client = ctx.resolve_external::<reqwest::Client>().await?;
-            println!("  Creating a service that uses the HTTP client");
-            // In a real app, you might use the client to configure
-            // another service (e.g., an API gateway, a cache proxy)
-            Ok("service-created".to_string())
-        }))
+        .register(
+            "",
+            DynProvider::sync(|| {
+                println!("  Creating reqwest::Client");
+                Ok(reqwest::Client::builder()
+                    .timeout(std::time::Duration::from_secs(30))
+                    .build()
+                    .expect("failed to build reqwest client"))
+            }),
+        )
+        .register(
+            "",
+            DynProvider::with_ctx(|ctx| async move {
+                // Resolve another external type from the registry
+                let _client = ctx.resolve_external::<reqwest::Client>().await?;
+                println!("  Creating a service that uses the HTTP client");
+                // In a real app, you might use the client to configure
+                // another service (e.g., an API gateway, a cache proxy)
+                Ok("service-created".to_string())
+            }),
+        )
         .build()
         .await
         .expect("container should build");
@@ -155,7 +170,7 @@ async fn main() {
     println!("5. Mixing Injectable types and external types:");
 
     let container = Container::builder()
-        .register(DynProvider::sync(|| Ok(reqwest::Client::new())))
+        .register("", DynProvider::sync(|| Ok(reqwest::Client::new())))
         .build()
         .await
         .expect("container should build");

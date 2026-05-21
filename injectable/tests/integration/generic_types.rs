@@ -219,10 +219,10 @@ async fn service_depending_on_generic_repos() {
 #[tokio::test]
 async fn vec_field_via_dyn_provider() {
     let container = Container::builder()
-        .register(DynProvider::from_value(vec![
-            "alpha".to_string(),
-            "beta".to_string(),
-        ]))
+        .register(
+            "",
+            DynProvider::from_value(vec!["alpha".to_string(), "beta".to_string()]),
+        )
         .build()
         .await
         .unwrap();

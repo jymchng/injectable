@@ -57,7 +57,7 @@ async fn try_resolve_external_returns_none_for_unregistered() {
 #[tokio::test]
 async fn try_resolve_external_returns_some_when_registered() {
     let container = Container::builder()
-        .register(DynProvider::from_value(42u32))
+        .register("", DynProvider::from_value(42u32))
         .build()
         .await
         .unwrap();

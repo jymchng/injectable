@@ -2,4 +2,4 @@ error[E0599]: no method named `resolve` found for reference `&injectable::Resolv
   --> tests/ui/resolve_ctx_direct_call.rs:13:19
    |
 13 |     let _db = ctx.resolve::<Database>().await?;
-   |                   ^^^^^^^ method not found in `&ResolveContext`
+   |                   ^^^^^^^ method not found in `&injectable::ResolveContext`

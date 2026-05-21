@@ -35,8 +35,8 @@ pub use injectable::Injectable;
 pub use lifecycle::{HookResult, PostConstruct, PreDestruct};
 pub use provider::{DynProvider, Provider};
 pub use registry::{
-    InjectableArcFactory, InjectableHooksEntry, InjectableProvideFnPtr, MakePreDestructFnPtr,
-    PostConstructFnPtr, ProviderRegistry,
+    DEFAULT_TOKEN, InjectableArcFactory, InjectableHooksEntry, InjectableProvideFnPtr,
+    MakePreDestructFnPtr, PostConstructFnPtr, ProviderRegistry,
 };
 pub use resolve::ResolveContext;
 pub use singleton::{EmptySingletonStore, RequestScoped, Singleton, SingletonStore, Transient};

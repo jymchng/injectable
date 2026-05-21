@@ -112,17 +112,17 @@ use injectable::*;
 let container = Container::builder()
 
     // Sync, no deps
-    .register(DynProvider::sync(|| {
+    .register("", DynProvider::sync(|| {
         Ok(reqwest::Client::new())
     }))
 
     // Async, no deps
-    .register(DynProvider::new(|| async {
+    .register("", DynProvider::new(|| async {
         Ok(sqlx::SqlitePool::connect("sqlite:./app.db").await?)
     }))
 
     // Async, with access to other resolved types
-    .register(DynProvider::with_ctx(|ctx| async move {
+    .register("", DynProvider::with_ctx(|ctx| async move {
         let config: Inject<AppConfig> = ctx.extract().await?;
         let pool = sqlx::SqlitePool::connect(&config.db_url)
             .await
@@ -135,6 +135,50 @@ let container = Container::builder()
 
     .build()
     .await?;
+```
+
+### Multiple Providers of the Same Type (Tokens)
+
+When you need several providers for the same external type — for example,
+multiple database pools for different databases — distinguish them with a
+**token** string.  Every registration is keyed by `(TypeId<T>, token)`.
+
+```rust
+use injectable::*;
+
+let container = Container::builder()
+    // Three pools of the same type, three different tokens
+    .register("primary",   DynProvider::new(|| async { Ok(primary_pool().await?) }))
+    .register("replica",   DynProvider::new(|| async { Ok(replica_pool().await?) }))
+    .register("analytics", DynProvider::new(|| async { Ok(analytics_pool().await?) }))
+    .build()
+    .await?;
+
+// Resolve each by token
+let primary:   Pool = container.resolve_external_with_token("primary").await?;
+let replica:   Pool = container.resolve_external_with_token("replica").await?;
+let analytics: Pool = container.resolve_external_with_token("analytics").await?;
+```
+
+Use `DEFAULT_TOKEN` (`""`) for the unnamed, default provider — this is what
+`container.resolve_external::<T>()` queries.
+
+```rust
+// The default (unnamed) provider
+.register("",  DynProvider::sync(|| Ok(reqwest::Client::new())))
+// equivalent:
+.register(DEFAULT_TOKEN, DynProvider::sync(|| Ok(reqwest::Client::new())))
+```
+
+Inside a `DynProvider::with_ctx` closure, use
+`ctx.resolve_external_with_token("token")` or `FactoryCtx::resolve_external_with_token`:
+
+```rust
+.register("router", DynProvider::with_ctx(|ctx| async move {
+    let primary: Pool = ctx.resolve_external_with_token("primary").await?;
+    let replica:  Pool = ctx.resolve_external_with_token("replica").await?;
+    Ok(Router::new(primary, replica))
+}))
 ```
 
 ### Consuming a `DynProvider`-registered type
@@ -203,9 +247,12 @@ singleton cache. The difference is ergonomic:
 
 | Method | When to use |
 |---|---|
-| `container.resolve_external::<T>()` | Top-level resolution from the container |
-| `ctx.resolve_external::<T>()` | Inside a `DynProvider::with_ctx` closure |
-| `ctx.try_resolve_external::<T>()` | Optional — returns `Option<Result<T>>` |
+| `container.resolve_external::<T>()` | Default token — top-level resolution |
+| `container.resolve_external_with_token::<T>("token")` | Named token — top-level resolution |
+| `ctx.resolve_external::<T>()` | Default token — inside `DynProvider::with_ctx` |
+| `ctx.resolve_external_with_token::<T>("token")` | Named token — inside `DynProvider::with_ctx` |
+| `ctx.try_resolve_external::<T>()` | Optional default — returns `Option<Result<T>>` |
+| `ctx.try_resolve_external_with_token::<T>("t")` | Optional named — returns `Option<Result<T>>` |
 
 ## Error Handling in DynProvider
 
@@ -247,12 +294,12 @@ let db_url = std::env::var("DATABASE_URL")
 ## Chaining External Providers
 
 ```rust
-.register(DynProvider::sync(|| {
+.register("", DynProvider::sync(|| {
     Ok(reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(30))
         .build()?)
 }))
-.register(DynProvider::with_ctx(|ctx| async move {
+.register("", DynProvider::with_ctx(|ctx| async move {
     let http = ctx.resolve_external::<reqwest::Client>().await?;
     Ok(MyApiClient::new(http, "https://api.example.com"))
 }))

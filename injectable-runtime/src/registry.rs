@@ -1,22 +1,36 @@
 //! Provider registry for dynamically-registered external types.
 //!
 //! This module provides the [`ProviderRegistry`] — a type-safe store for
-//! [`DynProvider`] instances. It uses `TypeId` internally for lookup,
-//! but this is an implementation detail never exposed to users.
+//! [`DynProvider`] instances. It uses `TypeId` + a **token string** internally
+//! for lookup, allowing multiple providers of the same type to coexist as long
+//! as they carry different tokens.
 //!
-//! # Why This Exists
+//! # Token-based Registration
 //!
-//! For types you own, `#[derive(Injectable)]` generates a static provider.
-//! But for **external types** (e.g., `reqwest::Client`, `sqlx::SqlitePool`),
-//! you can't add derives. The registry bridges this gap by allowing
-//! programmatic registration of closure-based providers.
+//! Every registration is keyed by `(TypeId<T>, token)`. The token is an
+//! arbitrary `&str` that disambiguates providers of the same type:
+//!
+//! ```rust,ignore
+//! let mut registry = ProviderRegistry::new();
+//!
+//! // Two pools of the same type, differentiated by token
+//! registry.register("primary",  DynProvider::new(|| async { Ok(PrimaryPool::connect()) }));
+//! registry.register("replica",  DynProvider::new(|| async { Ok(ReplicaPool::connect()) }));
+//! registry.register("analytics", DynProvider::new(|| async { Ok(AnalyticsPool::connect()) }));
+//! ```
+//!
+//! Use [`DEFAULT_TOKEN`] (`""`) when only one provider of a type is needed —
+//! this is the canonical, unnamed registration that [`ResolveContext::resolve_external`]
+//! queries without an explicit token.
 //!
 //! # Lookup Strategy
 //!
-//! When `ResolveContext::resolve_external::<T>()` is called:
-//! 1. Check if `T` is in the registry
+//! When `ResolveContext::resolve_external_with_token::<T>(token)` is called:
+//! 1. Check if `(TypeId<T>, token)` is in the registry
 //! 2. If found, invoke its `DynProvider` closure
-//! 3. Otherwise, return `MissingDependency` error
+//! 3. If the token is the default and no DynProvider is found, fall back to
+//!    `InjectableArcFactory` inventory entries (for Injectable types)
+//! 4. Otherwise, return `MissingDependency` error
 
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
@@ -24,19 +38,26 @@ use std::sync::Arc;
 
 use crate::{DynProvider, InjectableError, InjectableResult, ResolveContext};
 
+/// The default (unnamed) provider token.
+///
+/// Use this when registering or resolving a provider that does not need to be
+/// differentiated from other providers of the same type.  Passing `""` is
+/// identical.
+///
+/// ```rust,ignore
+/// builder.register(DEFAULT_TOKEN, DynProvider::sync(|| Ok(Client::new())));
+/// let client: Client = container.resolve_external_with_token(DEFAULT_TOKEN).await?;
+/// // equivalent:
+/// let client: Client = container.resolve_external::<Client>().await?;
+/// ```
+pub const DEFAULT_TOKEN: &str = "";
+
 pub type ErasedProviderPinnedFuture<'a> = std::pin::Pin<
     Box<dyn std::future::Future<Output = InjectableResult<Box<dyn Any + Send>>> + Send + 'a>,
 >;
 
 /// A type-erased dynamic provider stored in the registry.
-///
-/// This wraps a `DynProvider<T>` behind a common trait object so that
-/// providers for different types can coexist in the same `HashMap`.
 trait ErasedProvider: Send + Sync + 'static {
-    /// Provide a value as a `Box<dyn Any>`.
-    ///
-    /// The caller is responsible for downcasting back to the concrete type.
-    /// This is safe because the `TypeId` key guarantees type correspondence.
     fn provide_as_any(&self, ctx: Arc<ResolveContext>) -> ErasedProviderPinnedFuture<'_>;
 }
 
@@ -49,36 +70,35 @@ impl<T: Send + Sync + 'static> ErasedProvider for DynProvider<T> {
     }
 }
 
+/// Registry key: `(TypeId, token)`.
+///
+/// Two registrations are considered the same if and only if both the type
+/// **and** the token match.  This enables multiple providers of the same type
+/// (e.g., several `sqlx::Pool` instances for different databases) to coexist.
+type RegistryKey = (TypeId, String);
+
 /// A registry of dynamically-registered providers for external types.
 ///
-/// This enables injection of types you don't own (third-party crate types)
-/// by registering closure-based providers at container build time.
-///
-/// # Type Safety
-///
-/// Although the registry uses `TypeId` internally, this is an implementation
-/// detail. Users never interact with `TypeId` directly. The public API
-/// (`register`, `resolve`) is fully typed.
+/// Every registration is keyed by `(TypeId<T>, token)`.  Use [`DEFAULT_TOKEN`]
+/// (`""`) when you only need one provider for a type; use distinct token strings
+/// when you need multiple providers of the same type.
 ///
 /// # Example
 ///
 /// ```rust,ignore
 /// let mut registry = ProviderRegistry::new();
 ///
-/// // Register a simple provider for an external type
-/// registry.register(DynProvider::sync(|| {
-///     Ok(reqwest::Client::new())
-/// }));
+/// // Unnamed (default) provider
+/// registry.register("", DynProvider::sync(|| Ok(reqwest::Client::new())));
 ///
-/// // Register a provider that depends on other injectables
-/// registry.register(DynProvider::with_ctx(|ctx| async move {
-///     let config = ctx.resolve::<AppConfig>().await?;
-///     Ok(Database::connect(&config.db_url).await?)
-/// }));
+/// // Named providers — two pools of the same type
+/// registry.register("primary", DynProvider::new(|| async { Ok(primary_pool()) }));
+/// registry.register("replica", DynProvider::new(|| async { Ok(replica_pool()) }));
 /// ```
 pub struct ProviderRegistry {
-    providers: HashMap<TypeId, Box<dyn ErasedProvider>>,
-    /// Type names registered more than once, collected for `build()`-time reporting.
+    providers: HashMap<RegistryKey, Box<dyn ErasedProvider>>,
+    /// `"TypeName[token]"` strings recorded when the same `(type, token)` pair is
+    /// registered more than once, surfaced as errors at `ContainerBuilder::build` time.
     duplicates: Vec<String>,
 }
 
@@ -91,69 +111,103 @@ impl ProviderRegistry {
         }
     }
 
-    /// Register a dynamic provider for type `T`.
+    fn make_key<T: 'static>(token: &str) -> RegistryKey {
+        (TypeId::of::<T>(), token.to_string())
+    }
+
+    fn duplicate_label<T: 'static>(token: &str) -> String {
+        if token.is_empty() {
+            std::any::type_name::<T>().to_string()
+        } else {
+            format!("{}[{}]", std::any::type_name::<T>(), token)
+        }
+    }
+
+    /// Register a dynamic provider for type `T` under the given `token`.
     ///
-    /// If the same type `T` is registered more than once, the duplicate is
-    /// recorded and surfaced as an error when `ContainerBuilder::build` is
-    /// called. Use [`register_or_replace`](Self::register_or_replace) if you
-    /// intentionally want to override a previously registered provider (e.g.
-    /// in tests).
+    /// If the same `(type, token)` pair is registered more than once, the
+    /// duplicate is recorded and surfaced as an error when
+    /// `ContainerBuilder::build` is called.  Use
+    /// [`register_or_replace`](Self::register_or_replace) if you intentionally
+    /// want to override an existing registration.
+    ///
+    /// # Token conventions
+    ///
+    /// - Use [`DEFAULT_TOKEN`] (`""`) for the canonical, unnamed provider.
+    /// - Use a descriptive string (`"primary"`, `"analytics"`) for named variants.
     ///
     /// # Example
     ///
     /// ```rust,ignore
-    /// registry.register(DynProvider::sync(|| {
-    ///     Ok(reqwest::Client::new())
-    /// }));
-    /// ```
-    pub fn register<T: Send + Sync + 'static>(&mut self, provider: DynProvider<T>) {
-        let id = TypeId::of::<T>();
-        if self.providers.contains_key(&id) {
-            self.duplicates.push(std::any::type_name::<T>().to_string());
-        }
-        self.providers.insert(id, Box::new(provider));
-    }
-
-    /// Register a dynamic provider for type `T`, silently replacing any
-    /// previously registered provider for the same type.
+    /// // Default registration
+    /// registry.register("", DynProvider::sync(|| Ok(reqwest::Client::new())));
     ///
-    /// Use this in tests or layered-config scenarios where intentional
-    /// override is expected.
-    pub fn register_or_replace<T: Send + Sync + 'static>(&mut self, provider: DynProvider<T>) {
-        self.providers.insert(TypeId::of::<T>(), Box::new(provider));
+    /// // Named registrations of the same type
+    /// registry.register("primary",  DynProvider::new(|| async { Ok(primary_pool()) }));
+    /// registry.register("replica",  DynProvider::new(|| async { Ok(replica_pool()) }));
+    /// ```
+    pub fn register<T: Send + Sync + 'static>(
+        &mut self,
+        token: impl Into<String>,
+        provider: DynProvider<T>,
+    ) {
+        let token = token.into();
+        let key = Self::make_key::<T>(&token);
+        if self.providers.contains_key(&key) {
+            self.duplicates.push(Self::duplicate_label::<T>(&token));
+        }
+        self.providers.insert(key, Box::new(provider));
     }
 
-    /// Return duplicate type names recorded so far.
+    /// Register a dynamic provider for type `T` under the given `token`,
+    /// silently replacing any previously registered provider for the same
+    /// `(type, token)` pair.
+    ///
+    /// Use this in tests or layered-config scenarios where intentional override
+    /// is expected.
+    pub fn register_or_replace<T: Send + Sync + 'static>(
+        &mut self,
+        token: impl Into<String>,
+        provider: DynProvider<T>,
+    ) {
+        let key = (TypeId::of::<T>(), token.into());
+        self.providers.insert(key, Box::new(provider));
+    }
+
+    /// Return duplicate `"TypeName[token]"` labels recorded so far.
     pub fn duplicates(&self) -> &[String] {
         &self.duplicates
     }
 
-    /// Check if the registry has a provider for type `T`.
+    /// Check if the registry has a provider for type `T` with the default token.
+    ///
+    /// Equivalent to `has_with_token::<T>(DEFAULT_TOKEN)`.
     pub fn has<T: 'static>(&self) -> bool {
-        self.providers.contains_key(&TypeId::of::<T>())
+        self.has_with_token::<T>(DEFAULT_TOKEN)
     }
 
-    /// Resolve a value of type `T` from the registry.
+    /// Check if the registry has a provider for type `T` with the given `token`.
+    pub fn has_with_token<T: 'static>(&self, token: &str) -> bool {
+        self.providers.contains_key(&Self::make_key::<T>(token))
+    }
+
+    /// Resolve a value of type `T` for the given `token`.
     ///
-    /// Returns `None` if no provider is registered for `T`.
+    /// Returns `None` if no provider is registered for `(T, token)`.
     /// Returns `Some(Err(..))` if the provider fails.
     ///
-    /// Checks two sources in order:
-    /// 1. Explicitly registered `DynProvider<T>` (for external types)
-    /// 2. `InjectableArcFactory` inventory entries keyed by `TypeId::of::<Arc<T>>()`
-    ///    — used when resolving `Arc<T>` for Injectable types via the widened
-    ///    `Inject<T>: Extract` path.
-    ///
-    /// # Type Safety
-    ///
-    /// The downcast is guaranteed safe because the `TypeId` key
-    /// ensures the stored provider produces values of type `T`.
-    pub(crate) async fn resolve<T: Send + Sync + 'static>(
+    /// For the default token (`""`), also falls back to `InjectableArcFactory`
+    /// inventory entries so that `#[injectable]` types are resolvable via the
+    /// external path even without an explicit `DynProvider` registration.
+    pub(crate) async fn resolve_with_token<T: Send + Sync + 'static>(
         &self,
+        token: &str,
         ctx: Arc<ResolveContext>,
     ) -> Option<InjectableResult<T>> {
-        // 1. Check explicitly registered DynProvider<T>
-        if let Some(provider) = self.providers.get(&TypeId::of::<T>()) {
+        let key = Self::make_key::<T>(token);
+
+        // 1. Check explicitly registered DynProvider<T> for this token
+        if let Some(provider) = self.providers.get(&key) {
             let result = provider.provide_as_any(Arc::clone(&ctx)).await;
             return Some(
                 result.and_then(|boxed| match boxed.downcast::<T>() {
@@ -167,26 +221,28 @@ impl ProviderRegistry {
             );
         }
 
-        // 2. Check InjectableArcFactory entries (Injectable types keyed by Arc<T>).
-        // These are submitted at compile time for every #[derive(Injectable)] type.
-        let target_id = TypeId::of::<T>();
-        for factory in inventory::iter::<InjectableArcFactory>() {
-            if factory.type_id() == target_id {
-                let result = factory.provide(ctx).await;
-                return Some(result.and_then(|boxed| match boxed.downcast::<T>() {
-                    Ok(t) => Ok(*t),
-                    Err(_) => Err(InjectableError::ConstructionFailed {
-                        type_name: std::any::type_name::<T>(),
-                        reason: "InjectableArcFactory downcast failed".to_string(),
-                    }),
-                }));
+        // 2. For the default token only: fall back to InjectableArcFactory entries.
+        //    These are submitted at compile time for every #[injectable] type.
+        if token == DEFAULT_TOKEN {
+            let target_id = TypeId::of::<T>();
+            for factory in inventory::iter::<InjectableArcFactory>() {
+                if factory.type_id() == target_id {
+                    let result = factory.provide(ctx).await;
+                    return Some(result.and_then(|boxed| match boxed.downcast::<T>() {
+                        Ok(t) => Ok(*t),
+                        Err(_) => Err(InjectableError::ConstructionFailed {
+                            type_name: std::any::type_name::<T>(),
+                            reason: "InjectableArcFactory downcast failed".to_string(),
+                        }),
+                    }));
+                }
             }
         }
 
         None
     }
 
-    /// Returns the number of registered providers.
+    /// Returns the total number of registered providers (across all tokens).
     pub fn len(&self) -> usize {
         self.providers.len()
     }
@@ -213,10 +269,6 @@ impl std::fmt::Debug for ProviderRegistry {
 
 /// Type alias for the type-erased provide function pointer stored in
 /// inventory-submitted [`InjectableArcFactory`] entries.
-///
-/// Using a plain `fn` pointer (rather than `dyn Fn`) enables the entry to
-/// be created in a `const` / static initializer as required by the
-/// `inventory::submit!` macro.
 pub type InjectableProvideFnPtr = fn(
     std::sync::Arc<ResolveContext>,
 ) -> std::pin::Pin<
@@ -230,29 +282,15 @@ pub type InjectableProvideFnPtr = fn(
 /// An entry submitted to the inventory by `#[injectable_impl]` and
 /// `#[derive(Injectable)]` macros, allowing Injectable types to be resolved
 /// via the same `try_resolve_external` path as DynProvider-registered types.
-///
-/// This bridges the gap between statically-known Injectable types and the
-/// dynamic provider registry, enabling constructor parameters of the form
-/// `Arc<ExternalType>` to work alongside `Arc<InjectableType>`.
-///
-/// Uses `const`-compatible `fn` pointers so the entry can live in a static
-/// initializer generated by `inventory::submit!`.
 pub struct InjectableArcFactory {
     /// The type name as a `&'static str`, used for introspection and diagnostics.
     pub type_name: &'static str,
-    /// Thunk that returns the `TypeId` of the Injectable type.
-    /// Stored as `fn() -> TypeId` so the whole struct can be `const`-initialized.
     type_id_fn: fn() -> std::any::TypeId,
-    /// Type-erased provider function.
     provide_fn: InjectableProvideFnPtr,
 }
 
 impl InjectableArcFactory {
     /// Create a new factory entry.
-    ///
-    /// All arguments are plain `fn` pointers / `&'static str`, making this a
-    /// `const fn` so that `inventory::submit!` can place the result in a static
-    /// initializer.
     pub const fn new_const(
         type_name: &'static str,
         type_id_fn: fn() -> std::any::TypeId,
@@ -279,11 +317,6 @@ impl InjectableArcFactory {
 inventory::collect!(InjectableArcFactory);
 
 // ─── InjectableHooksEntry ────────────────────────────────────────────────────
-//
-// Submitted via `inventory::submit!` by `#[injectable_impl]` (no constructor)
-// and by `#[derive(Injectable)]` when `has_post_construct`/`has_pre_destruct`
-// is set.  The field-injection provider iterates these at runtime to apply
-// lifecycle hooks without requiring any extra struct annotation.
 
 /// Function pointer that receives a type-erased `Arc<T>` and calls the
 /// `#[injectable(post_construct)]` hook(s) on the instance.
@@ -301,14 +334,6 @@ pub type MakePreDestructFnPtr = fn(
 
 /// An inventory entry that carries lifecycle hook function pointers for one
 /// Injectable type.
-///
-/// Submitted by:
-/// - `#[injectable_impl]` (no `#[injectable(ctor)]`) — direct method call wrappers
-/// - `#[derive(Injectable)]` with `has_post_construct`/`has_pre_destruct` —
-///   delegates to the `PostConstruct`/`PreDestruct` trait impls
-///
-/// The field-injection provider scans these at runtime so that lifecycle hooks
-/// work even when the derive and the impl block are on different items.
 pub struct InjectableHooksEntry {
     type_id_fn: fn() -> std::any::TypeId,
     post_construct_fn: Option<PostConstructFnPtr>,
@@ -316,8 +341,7 @@ pub struct InjectableHooksEntry {
 }
 
 impl InjectableHooksEntry {
-    /// Create a new hooks entry. All arguments are plain `fn` pointers so the
-    /// struct is `const`-constructible for `inventory::submit!`.
+    /// Create a new hooks entry.
     pub const fn new_const(
         type_id_fn: fn() -> std::any::TypeId,
         post_construct_fn: Option<PostConstructFnPtr>,
@@ -364,29 +388,74 @@ mod tests {
     fn has_returns_false_for_unregistered() {
         let r = ProviderRegistry::new();
         assert!(!r.has::<u32>());
+        assert!(!r.has_with_token::<u32>("primary"));
     }
 
     #[test]
-    fn has_returns_true_after_register() {
+    fn has_returns_true_after_register_default() {
         let mut r = ProviderRegistry::new();
-        r.register(DynProvider::from_value(42u32));
+        r.register("", DynProvider::from_value(42u32));
         assert!(r.has::<u32>());
+        assert!(r.has_with_token::<u32>(""));
+        assert!(!r.has_with_token::<u32>("other"));
         assert_eq!(r.len(), 1);
         assert!(!r.is_empty());
     }
 
     #[test]
-    fn register_replaces_existing() {
+    fn has_returns_true_after_register_named() {
         let mut r = ProviderRegistry::new();
-        r.register(DynProvider::from_value(1u32));
-        r.register(DynProvider::from_value(2u32));
+        r.register("primary", DynProvider::from_value(42u32));
+        assert!(!r.has::<u32>(), "default token should be absent");
+        assert!(r.has_with_token::<u32>("primary"));
+        assert!(!r.has_with_token::<u32>("replica"));
+    }
+
+    #[test]
+    fn multiple_tokens_same_type_coexist() {
+        let mut r = ProviderRegistry::new();
+        r.register("primary", DynProvider::from_value(1u32));
+        r.register("replica", DynProvider::from_value(2u32));
+        r.register("", DynProvider::from_value(0u32));
+        assert_eq!(r.len(), 3);
+        assert!(r.has::<u32>());
+        assert!(r.has_with_token::<u32>("primary"));
+        assert!(r.has_with_token::<u32>("replica"));
+    }
+
+    #[test]
+    fn duplicate_same_token_is_recorded() {
+        let mut r = ProviderRegistry::new();
+        r.register("", DynProvider::from_value(1u32));
+        r.register("", DynProvider::from_value(2u32));
         assert_eq!(r.len(), 1); // replaced, not added
+        assert_eq!(r.duplicates().len(), 1);
+    }
+
+    #[test]
+    fn duplicate_different_tokens_not_recorded() {
+        let mut r = ProviderRegistry::new();
+        r.register("primary", DynProvider::from_value(1u32));
+        r.register("replica", DynProvider::from_value(2u32));
+        assert_eq!(
+            r.duplicates().len(),
+            0,
+            "different tokens are not duplicates"
+        );
+    }
+
+    #[test]
+    fn register_or_replace_does_not_record_duplicate() {
+        let mut r = ProviderRegistry::new();
+        r.register("", DynProvider::from_value(1u32));
+        r.register_or_replace("", DynProvider::from_value(2u32));
+        assert_eq!(r.duplicates().len(), 0);
     }
 
     #[test]
     fn debug_shows_count() {
         let mut r = ProviderRegistry::new();
-        r.register(DynProvider::from_value(0u8));
+        r.register("", DynProvider::from_value(0u8));
         let s = format!("{r:?}");
         assert!(s.contains("ProviderRegistry"));
         assert!(s.contains('1'));
@@ -396,5 +465,18 @@ mod tests {
     fn default_creates_empty() {
         let r = ProviderRegistry::default();
         assert!(r.is_empty());
+    }
+
+    #[test]
+    fn duplicate_label_includes_token_for_named() {
+        let label = ProviderRegistry::duplicate_label::<u32>("primary");
+        assert!(label.contains("primary"));
+        assert!(label.contains("u32"));
+    }
+
+    #[test]
+    fn duplicate_label_no_token_suffix_for_default() {
+        let label = ProviderRegistry::duplicate_label::<u32>("");
+        assert!(!label.contains('['), "default token adds no bracket suffix");
     }
 }

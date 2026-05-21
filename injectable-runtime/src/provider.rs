@@ -91,7 +91,7 @@ type DynProviderFn<T> = Box<
 ///
 /// ```rust,ignore
 /// let container = Container::builder()
-///     .register(DynProvider::new(async {
+///     .register("", DynProvider::new(async {
 ///         Ok(reqwest::Client::new())
 ///     }))
 ///     .build()
@@ -102,7 +102,7 @@ type DynProviderFn<T> = Box<
 ///
 /// ```rust,ignore
 /// let container = Container::builder()
-///     .register(DynProvider::with_ctx(|ctx| async move {
+///     .register("", DynProvider::with_ctx(|ctx| async move {
 ///         let config = ctx.resolve::<Config>().await?;
 ///         Ok(Database::connect(&config.connection_string).await?)
 ///     }))
@@ -199,7 +199,7 @@ impl<T: Send + Sync + 'static> DynProvider<T> {
     ///
     /// Useful in tests to inject a pre-configured mock without writing a closure:
     /// ```rust,ignore
-    /// container.register(DynProvider::from_value(MockDb::default()));
+    /// container.register("", DynProvider::from_value(MockDb::default()));
     /// ```
     pub fn from_value(value: T) -> Self
     where
@@ -213,7 +213,7 @@ impl<T: Send + Sync + 'static> DynProvider<T> {
     /// Use this when you already hold an `Arc<T>` and want to avoid double-wrapping:
     /// ```rust,ignore
     /// let shared = Arc::new(MockDb::default());
-    /// container.register(DynProvider::from_arc(Arc::clone(&shared)));
+    /// container.register("", DynProvider::from_arc(Arc::clone(&shared)));
     /// ```
     pub fn from_arc(arc: Arc<T>) -> Self
     where

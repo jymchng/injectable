@@ -461,7 +461,10 @@ async fn test_external_type_resolution_with_axum_state() {
     // Instead, users resolve them through the container.
 
     let container = Container::builder()
-        .register(DynProvider::sync(|| Ok(HttpClient { timeout_ms: 5000 })))
+        .register(
+            "",
+            DynProvider::sync(|| Ok(HttpClient { timeout_ms: 5000 })),
+        )
         .build()
         .await
         .unwrap();

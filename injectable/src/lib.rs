@@ -39,10 +39,10 @@
 //! use injectable::{Container, DynProvider};
 //!
 //! let container = Container::builder()
-//!     .register(DynProvider::new(|| {
+//!     .register("", DynProvider::new(|| {
 //!         Ok(reqwest::Client::new())
 //!     }))
-//!     .register(DynProvider::with_ctx(|ctx| async move {
+//!     .register("", DynProvider::with_ctx(|ctx| async move {
 //!         let config = ctx.resolve::<AppConfig>().await?;
 //!         Ok(sqlx::SqlitePool::connect(&config.db_url).await?)
 //!     }))
@@ -64,9 +64,9 @@
 
 // Re-export runtime types
 pub use injectable_runtime::{
-    DynProvider, EmptySingletonStore, Extract, FactoryCtx, HookResult, Inject, Injectable,
-    InjectableError, InjectableResult, PostConstruct, PreDestruct, Provider, ProviderRegistry,
-    ResolveContext, SingletonStore,
+    DEFAULT_TOKEN, DynProvider, EmptySingletonStore, Extract, FactoryCtx, HookResult, Inject,
+    Injectable, InjectableError, InjectableResult, PostConstruct, PreDestruct, Provider,
+    ProviderRegistry, ResolveContext, SingletonStore,
 };
 
 // Re-export graph types

@@ -68,7 +68,7 @@ async fn optional_inject_none_when_unregistered() {
 async fn optional_inject_some_when_registered() {
     // Register a String via DynProvider — now Option<Inject<String>> is Some.
     let container = Container::builder()
-        .register(DynProvider::from_value("hello".to_string()))
+        .register("", DynProvider::from_value("hello".to_string()))
         .build()
         .await
         .unwrap();

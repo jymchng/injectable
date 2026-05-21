@@ -1,60 +1,81 @@
 ---
 name: dyn-provider
-description: Registers external types with DynProvider (sync, async, with-context, from-value). Use when injecting third-party types, pre-built instances, or types that need other resolved services to construct.
+description: Registers external types with DynProvider (sync, async, with-context, from-value). Every registration requires a token string. Use "" for unnamed/default providers. Use distinct tokens for multiple providers of the same type (e.g., "primary"/"replica" pools).
 ---
 
 # DynProvider
 
-## Four constructors
+## Four constructors + token
+
+Every `.register(token, DynProvider::…)` call requires a token.
+Use `""` (or `DEFAULT_TOKEN`) for the single, unnamed provider of a type.
 
 ```rust
 use injectable::prelude::*;
 
 Container::builder()
 
-    // 1. Sync, no deps
-    .register(DynProvider::sync(|| {
+    // 1. Sync, no deps — default token
+    .register("", DynProvider::sync(|| {
         Ok(reqwest::Client::new())
     }))
 
-    // 2. Async, no deps
-    .register(DynProvider::new(|| async {
+    // 2. Async, no deps — default token
+    .register("", DynProvider::new(|| async {
         Ok(sqlx::SqlitePool::connect("sqlite:./app.db").await?)
     }))
 
-    // 3. Async, reads other resolved types via FactoryCtx
-    .register(DynProvider::with_ctx(|ctx| async move {
+    // 3. Async, reads other resolved types via FactoryCtx — default token
+    .register("", DynProvider::with_ctx(|ctx| async move {
         let cfg: Inject<AppConfig> = ctx.extract().await?;
         Ok(sqlx::SqlitePool::connect(&cfg.db_url).await?)
     }))
 
-    // 4. Pre-built value (useful in tests)
-    .register(DynProvider::from_value(MockDatabase::default()))
+    // 4. Pre-built value (useful in tests) — default token
+    .register("", DynProvider::from_value(MockDatabase::default()))
 
     .build().await?;
 ```
 
-## FactoryCtx (scope-safe context in with_ctx)
+## Multiple providers of the same type
 
-`FactoryCtx` exposes only safe operations — cannot bypass the singleton cache.
+```rust
+Container::builder()
+    .register("primary",   DynProvider::new(|| async { Ok(primary_pool().await?) }))
+    .register("replica",   DynProvider::new(|| async { Ok(replica_pool().await?) }))
+    .register("analytics", DynProvider::new(|| async { Ok(analytics_pool().await?) }))
+    .build().await?;
+
+// Resolve by token
+let primary:   Pool = container.resolve_external_with_token("primary").await?;
+let replica:   Pool = container.resolve_external_with_token("replica").await?;
+let analytics: Pool = container.resolve_external_with_token("analytics").await?;
+```
+
+## FactoryCtx (scope-safe context in with_ctx)
 
 ```rust
 DynProvider::with_ctx(|ctx| async move {
-    // Safe: goes through Extract machinery
-    let cfg: Inject<AppConfig>    = ctx.extract().await?;
-    let db:  Arc<Database>        = ctx.extract().await?;
+    let cfg: Inject<AppConfig> = ctx.extract().await?;
+    let db:  Arc<Database>     = ctx.extract().await?;
 
-    // Safe: resolves DynProvider-registered types
-    let pool: sqlx::SqlitePool    = ctx.resolve_external().await?;
+    // Resolve named pool registered elsewhere
+    let primary: Pool = ctx.resolve_external_with_token("primary").await?;
 
-    Ok(MyService::new(cfg, db, pool))
+    Ok(MyService::new(cfg, db, primary))
 })
 ```
 
-## Consuming via constructor
+## Resolving registered types
 
 ```rust
-// Prefer a wrapper or use_factory_async for external types:
+container.resolve_external::<T>().await?                     // default token ("")
+container.resolve_external_with_token::<T>("token").await?   // named token
+```
+
+## Consuming via constructor / field
+
+```rust
 #[injectable(factory)]
 async fn make_db_pool(cfg: Inject<AppConfig>) -> Result<sqlx::SqlitePool, sqlx::Error> {
     sqlx::SqlitePool::connect(&cfg.db_url).await
@@ -65,31 +86,9 @@ impl UserService {
     #[injectable(ctor)]
     async fn new(
         #[injectable(inject(use_factory_async = self::make_db_pool))] pool: sqlx::SqlitePool,
-    ) -> Self {
-        Self { pool }
-    }
+    ) -> Self { Self { pool } }
 }
 ```
 
-`DynProvider` is still useful for top-level `container.resolve_external()` calls
-or for factories that need to compose other externals, but external types are
-not themselves `Injectable`. That is why `use_factory_async` is the safer
-service-facing pattern for `sqlx::SqlitePool`.
-
-## Consuming via field
-
-```rust
-#[injectable]
-struct Repo {
-    #[injectable(inject(use_factory_async = self::make_pool))]
-    pool: sqlx::SqlitePool,
-}
-
-// OR via #[injectable(factory)]:
-#[injectable(factory)]
-async fn make_pool(cfg: Inject<AppConfig>) -> Result<sqlx::SqlitePool, sqlx::Error> {
-    sqlx::SqlitePool::connect(&cfg.db_url).await
-}
-```
-
-See [guides/04-external-types.md](../../guides/04-external-types.md) and [guides/3-ways-to-inject-external-types.md](../../guides/3-ways-to-inject-external-types.md).
+See [guides/04-external-types.md](../../guides/04-external-types.md) and
+[guides/11-token-based-providers.md](../../guides/11-token-based-providers.md).

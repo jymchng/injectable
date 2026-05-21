@@ -368,16 +368,19 @@ fn build_app(container: Container) -> Router {
 }
 
 async fn build_container(promo_banner: Option<&str>) -> Container {
-    let mut builder = Container::builder().register(DynProvider::with_ctx(|ctx| async move {
-        let cfg: Inject<AppConfig> = ctx.extract().await?;
-        Ok(FeatureFlags {
-            catalog_name: cfg.catalog_name.clone(),
-            payments_enabled: cfg.payments_enabled,
-        })
-    }));
+    let mut builder = Container::builder().register(
+        "",
+        DynProvider::with_ctx(|ctx| async move {
+            let cfg: Inject<AppConfig> = ctx.extract().await?;
+            Ok(FeatureFlags {
+                catalog_name: cfg.catalog_name.clone(),
+                payments_enabled: cfg.payments_enabled,
+            })
+        }),
+    );
 
     if let Some(banner) = promo_banner {
-        builder = builder.register(DynProvider::from_value(banner.to_string()));
+        builder = builder.register("", DynProvider::from_value(banner.to_string()));
     }
 
     builder.build().await.unwrap()

@@ -29,16 +29,19 @@ async fn factory_ctx_extract_inject_t_singleton() {
     let got_clone = Arc::clone(&got_same_instance);
 
     let container = Container::builder()
-        .register(DynProvider::with_ctx(move |ctx| {
-            let flag = Arc::clone(&got_clone);
-            async move {
-                // Extract twice — must get the same singleton.
-                let a: Inject<Singleton> = ctx.extract().await?;
-                let b: Inject<Singleton> = ctx.extract().await?;
-                *flag.lock().await = Arc::ptr_eq(&a.0, &b.0);
-                Ok(42u32) // sentinel value
-            }
-        }))
+        .register(
+            "",
+            DynProvider::with_ctx(move |ctx| {
+                let flag = Arc::clone(&got_clone);
+                async move {
+                    // Extract twice — must get the same singleton.
+                    let a: Inject<Singleton> = ctx.extract().await?;
+                    let b: Inject<Singleton> = ctx.extract().await?;
+                    *flag.lock().await = Arc::ptr_eq(&a.0, &b.0);
+                    Ok(42u32) // sentinel value
+                }
+            }),
+        )
         .build()
         .await
         .unwrap();
@@ -56,15 +59,18 @@ async fn factory_ctx_extract_arc_t_singleton() {
     let got_clone = Arc::clone(&got_same);
 
     let container = Container::builder()
-        .register(DynProvider::with_ctx(move |ctx| {
-            let flag = Arc::clone(&got_clone);
-            async move {
-                let a: Arc<Singleton> = ctx.extract().await?;
-                let b: Arc<Singleton> = ctx.extract().await?;
-                *flag.lock().await = Arc::ptr_eq(&a, &b);
-                Ok(1u8)
-            }
-        }))
+        .register(
+            "",
+            DynProvider::with_ctx(move |ctx| {
+                let flag = Arc::clone(&got_clone);
+                async move {
+                    let a: Arc<Singleton> = ctx.extract().await?;
+                    let b: Arc<Singleton> = ctx.extract().await?;
+                    *flag.lock().await = Arc::ptr_eq(&a, &b);
+                    Ok(1u8)
+                }
+            }),
+        )
         .build()
         .await
         .unwrap();
@@ -83,11 +89,14 @@ async fn factory_ctx_resolve_external_registered() {
     // Register a u32 via from_value, then a String via with_ctx that reads the u32.
     // Using different types avoids a self-referential loop.
     let container = Container::builder()
-        .register(DynProvider::from_value(42u32))
-        .register(DynProvider::with_ctx(|ctx| async move {
-            let n: u32 = ctx.resolve_external().await?;
-            Ok(format!("n={n}"))
-        }))
+        .register("", DynProvider::from_value(42u32))
+        .register(
+            "",
+            DynProvider::with_ctx(|ctx| async move {
+                let n: u32 = ctx.resolve_external().await?;
+                Ok(format!("n={n}"))
+            }),
+        )
         .build()
         .await
         .unwrap();
@@ -107,16 +116,19 @@ async fn factory_ctx_resolve_external_missing_is_error() {
     let got_clone = Arc::clone(&got_missing);
 
     let container = Container::builder()
-        .register(DynProvider::with_ctx(move |ctx| {
-            let flag = Arc::clone(&got_clone);
-            async move {
-                // u64 is not registered — should yield MissingDependency.
-                let result: InjectableResult<u64> = ctx.resolve_external().await;
-                *flag.lock().await =
-                    matches!(result, Err(InjectableError::MissingDependency { .. }));
-                Ok(99u32)
-            }
-        }))
+        .register(
+            "",
+            DynProvider::with_ctx(move |ctx| {
+                let flag = Arc::clone(&got_clone);
+                async move {
+                    // u64 is not registered — should yield MissingDependency.
+                    let result: InjectableResult<u64> = ctx.resolve_external().await;
+                    *flag.lock().await =
+                        matches!(result, Err(InjectableError::MissingDependency { .. }));
+                    Ok(99u32)
+                }
+            }),
+        )
         .build()
         .await
         .unwrap();
