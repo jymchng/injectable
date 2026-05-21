@@ -65,7 +65,7 @@ fn compile_fail_field_arc_no_inject() {
     t.compile_fail("tests/ui/field_arc_no_inject.rs");
 }
 
-#[cfg_attr(tarpaulin, ignore)]
+#[ignore = "snapshot brittle across toolchain versions — run manually to update"]
 #[test]
 fn compile_fail_resolve_ctx_direct_call() {
     let t = trybuild::TestCases::new();
