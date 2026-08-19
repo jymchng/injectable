@@ -1,7 +1,7 @@
 [run]
 # proc-macro crates execute at compile time — tarpaulin cannot instrument them.
 # All macro behaviour is exercised through the integration tests in injectable-rs/.
-exclude-files = ["injectable-macros/*"]
+exclude-files = ["injectable-rs-macros/*"]
 fail-under = 80
 timeout = "300s"
 features = "injectable-rs/axum"
