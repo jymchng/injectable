@@ -3,8 +3,8 @@
 //! Verifies that `FactoryCtx` correctly enforces scope semantics when used
 //! inside `DynProvider::with_ctx` closures.
 
-use injectable::Provider;
-use injectable::prelude::*; // needed for #[injectable(scope = Transient)] macro expansion
+use injectable_rs::Provider;
+use injectable_rs::prelude::*; // needed for #[injectable(scope = Transient)] macro expansion
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
 

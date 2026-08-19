@@ -61,7 +61,7 @@ error[E0277]: `T` cannot be shared between threads safely
    |        ^^^^^^^^^^ `T` cannot be shared between threads safely
    |
    = note: required for `Arc<T>` to implement `Sync`
-note: required because it appears within the type `injectable::Inject<T>`
+note: required because it appears within the type `injectable_rs::Inject<T>`
   --> $WORKSPACE/injectable-runtime/src/inject.rs
    |
    | pub struct Inject<T: ?Sized>(pub Arc<T>);
@@ -88,7 +88,7 @@ error[E0277]: `T` cannot be sent between threads safely
    |        ^^^^^^^^^^ `T` cannot be sent between threads safely
    |
    = note: required for `Arc<T>` to implement `Sync`
-note: required because it appears within the type `injectable::Inject<T>`
+note: required because it appears within the type `injectable_rs::Inject<T>`
   --> $WORKSPACE/injectable-runtime/src/inject.rs
    |
    | pub struct Inject<T: ?Sized>(pub Arc<T>);
@@ -126,7 +126,7 @@ note: required because it appears within the type `WrapperProvider<T>`
    | #[injectable]
    | ^^^^^^^^^^^^^
    = note: required for `<Wrapper<T> as Injectable>::Provider` to implement `Provider<Wrapper<T>>`
-note: required by a bound in `injectable::Injectable::Provider`
+note: required by a bound in `injectable_rs::Injectable::Provider`
   --> $WORKSPACE/injectable-runtime/src/injectable.rs
    |
    |     type Provider: Provider<Self>;
@@ -155,7 +155,7 @@ note: required because it appears within the type `WrapperProvider<T>`
    | #[injectable]
    | ^^^^^^^^^^^^^
    = note: required for `<Wrapper<T> as Injectable>::Provider` to implement `Provider<Wrapper<T>>`
-note: required by a bound in `injectable::Injectable::Provider`
+note: required by a bound in `injectable_rs::Injectable::Provider`
   --> $WORKSPACE/injectable-runtime/src/injectable.rs
    |
    |     type Provider: Provider<Self>;
@@ -172,7 +172,7 @@ error[E0277]: `T` cannot be sent between threads safely
    |     inner: Inject<T>,
    |            ^^^^^^^^^ `T` cannot be sent between threads safely
    |
-   = note: required for `injectable::Inject<T>` to implement `Extract`
+   = note: required for `injectable_rs::Inject<T>` to implement `Extract`
 help: consider restricting type parameter `T` with trait `Send`
    |
 26 | struct Wrapper<T: std::marker::Send> {
@@ -184,7 +184,7 @@ error[E0277]: `T` cannot be shared between threads safely
    |     inner: Inject<T>,
    |            ^^^^^^^^^ `T` cannot be shared between threads safely
    |
-   = note: required for `injectable::Inject<T>` to implement `Extract`
+   = note: required for `injectable_rs::Inject<T>` to implement `Extract`
 help: consider restricting type parameter `T` with trait `Sync`
    |
 26 | struct Wrapper<T: std::marker::Sync> {

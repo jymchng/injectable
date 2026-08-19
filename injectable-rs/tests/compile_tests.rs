@@ -95,7 +95,7 @@ version = "0.0.0"
 edition = "2024"
 
 [dependencies]
-injectable = {{ path = "{injectable_path}" }}
+injectable-rs = {{ path = "{injectable_path}" }}
 injectable-rs-runtime = {{ path = "{injectable_rs_runtime_path}" }}
 inventory = "{inventory_path}"
 async-trait = "{async_trait_path}"

@@ -36,4 +36,14 @@ sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite"] }
 thiserror = "2"
 inventory = "0.3.24"
 tower = { version = "^0.5.0", features = ["util"] }
-trybuild = "^1.0.100"
+trybuild = "=1.0.119"
+
+# Pinned transitive deps to keep MSRV at 1.86 (ICU 2.3.0 requires rustc 1.88)
+icu_collections = "=2.1.1"
+icu_locale_core = "=2.1.1"
+icu_normalizer = "=2.1.1"
+icu_normalizer_data = "=2.1.1"
+icu_properties = "=2.1.1"
+icu_properties_data = "=2.1.1"
+icu_provider = "=2.1.1"
+idna_adapter = "=1.2.1"

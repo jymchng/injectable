@@ -8,7 +8,7 @@
 //! - Dependency graph validation
 //! - External (third-party) type injection via DynProvider
 
-use injectable::*;
+use injectable_rs::*;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
@@ -2552,14 +2552,14 @@ async fn test_owned_field_via_factory_clones_singleton() {
 #[tokio::test]
 async fn test_extract_unit_tuple() {
     let ctx = Container::builder().build().await.unwrap();
-    let (): () = <() as injectable::Extract>::extract(ctx.context()).await.unwrap();
+    let (): () = <() as injectable_rs::Extract>::extract(ctx.context()).await.unwrap();
 }
 
 #[tokio::test]
 async fn test_extract_1_tuple() {
     let ctx = Container::builder().build().await.unwrap();
     let (arc,): (Arc<Database>,) =
-        <(Arc<Database>,) as injectable::Extract>::extract(ctx.context()).await.unwrap();
+        <(Arc<Database>,) as injectable_rs::Extract>::extract(ctx.context()).await.unwrap();
     let _: &Database = &*arc;
 }
 
@@ -2567,7 +2567,7 @@ async fn test_extract_1_tuple() {
 async fn test_extract_2_tuple() {
     let ctx = Container::builder().build().await.unwrap();
     let (db, cfg): (Arc<Database>, Arc<Config>) =
-        <(Arc<Database>, Arc<Config>) as injectable::Extract>::extract(ctx.context()).await.unwrap();
+        <(Arc<Database>, Arc<Config>) as injectable_rs::Extract>::extract(ctx.context()).await.unwrap();
     let _ = (db, cfg);
 }
 
@@ -2703,8 +2703,8 @@ async fn test_inject_fn_async_body() {
 
 #[tokio::test]
 async fn test_prelude_items_accessible() {
-    // Verify the prelude re-exports compile (use items from injectable::prelude::*)
-    use injectable::prelude::*;
+    // Verify the prelude re-exports compile (use items from injectable_rs::prelude::*)
+    use injectable_rs::prelude::*;
 
     #[injectable]
     pub struct PreludeService {

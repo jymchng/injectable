@@ -99,8 +99,8 @@ use ::axum::{
 use serde::{Deserialize, Serialize};
 use sqlx::{Pool, Sqlite};
 
-use injectable::axum::InjectableState;
-use injectable::prelude::*;
+use injectable_rs::axum::InjectableState;
+use injectable_rs::prelude::*;
 use injectable_rs_runtime::InjectableError;
 
 // ─────────────────────────────────────────────────────────────────────────────

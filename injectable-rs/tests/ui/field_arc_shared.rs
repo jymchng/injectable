@@ -5,7 +5,7 @@
 //! allocation as every other Arc<WeatherService> / Inject<WeatherService>
 //! resolved from the same container (singleton caching).
 
-use injectable::*;
+use injectable_rs::*;
 use std::sync::Arc;
 
 #[injectable]

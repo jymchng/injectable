@@ -3,7 +3,7 @@
 //! `use_factory_sync = path` calls `path(ctx: &ResolveContext) -> T` synchronously
 //! and assigns the return value to the owned field.
 
-use injectable::*;
+use injectable_rs::*;
 
 #[injectable]
 #[derive(Default, Debug)]

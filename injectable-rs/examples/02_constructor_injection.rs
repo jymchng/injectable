@@ -16,7 +16,7 @@
 //!
 //! Run with: cargo run --example 02_constructor_injection
 
-use injectable::*;
+use injectable_rs::*;
 use std::sync::Arc;
 
 // ─── Dependency Types ───────────────────────────────────────────────

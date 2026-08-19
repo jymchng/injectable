@@ -17,7 +17,7 @@
 //!
 //! Run with: cargo run --example 06_scopes
 
-use injectable::*;
+use injectable_rs::*;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 // ─── Singleton Scope (default) ──────────────────────────────────────

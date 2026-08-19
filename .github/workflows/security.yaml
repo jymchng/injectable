@@ -17,8 +17,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install cargo-audit
-        run: cargo install cargo-audit --locked
-
       - name: Audit dependencies
-        run: cargo audit
+        uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          # RUSTSEC-2023-0071 (rsa 0.9.10, Marvin Attack, medium): a transitive
+          # dependency with NO fixed upgrade available. Tracked here so the
+          # audit stays green; remove once upstream ships a patched rsa.
+          ignore: RUSTSEC-2023-0071

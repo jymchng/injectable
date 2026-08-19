@@ -2,7 +2,7 @@
 //!
 //! Users must migrate to `ctx.extract::<Inject<T>>()`.
 
-use injectable::*;
+use injectable_rs::*;
 
 #[injectable]
 #[derive(Default)]

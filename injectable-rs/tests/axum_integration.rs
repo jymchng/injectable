@@ -14,8 +14,8 @@ use ::axum::routing::{get, post};
 use http_body_util::BodyExt;
 use tower::ServiceExt;
 
-use injectable::axum::{AxumState, InjectableRejection, InjectableState};
-use injectable::*;
+use injectable_rs::axum::{AxumState, InjectableRejection, InjectableState};
+use injectable_rs::*;
 
 // ─── Injectable Types ──────────────────────────────────────────────
 

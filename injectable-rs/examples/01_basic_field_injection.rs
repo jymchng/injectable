@@ -20,7 +20,7 @@
 //!
 //! Run with: cargo run --example 01_basic_field_injection
 
-use injectable::*;
+use injectable_rs::*;
 use std::sync::Arc;
 
 // ─── Leaf Types ─────────────────────────────────────────────────────

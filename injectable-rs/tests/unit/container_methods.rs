@@ -1,7 +1,7 @@
 //! Unit tests for Container methods not exercised by other tests:
 //! registered_types, try_resolve, try_resolve_external, destructor_count, shutdown.
 
-use injectable::prelude::*;
+use injectable_rs::prelude::*;
 
 // ── Minimal injectable leaf type ──────────────────────────────────────────────
 

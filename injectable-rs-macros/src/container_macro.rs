@@ -47,7 +47,7 @@ pub fn expand_container(input: TokenStream) -> TokenStream {
     // If the input is empty, generate the simple zero-arg form
     if input.is_empty() {
         return quote! {
-            injectable::Container::builder().build()
+            injectable_rs::Container::builder().build()
         };
     }
 
@@ -199,7 +199,7 @@ fn generate_container_code(entries: &[TypeEntry]) -> TokenStream {
     quote! {
         {
             #(#type_assertions)*
-            injectable::Container::builder().build()
+            injectable_rs::Container::builder().build()
         }
     }
 }

@@ -3,7 +3,7 @@
 //! The same type name is registered twice in the container.
 //! This should be caught at compile time.
 
-use injectable::{container, injectable};
+use injectable_rs::{container, injectable};
 
 #[injectable]
 #[derive(Default)]

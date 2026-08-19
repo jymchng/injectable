@@ -5,7 +5,7 @@
 //! is a compile error.
 #![allow(unused_imports)]
 
-use injectable::*;
+use injectable_rs::*;
 use std::sync::Arc;
 
 #[injectable]

@@ -6,7 +6,7 @@
 //!
 //! The user must use Arc<T>, Inject<T>, or an explicit factory annotation.
 
-use injectable::*;
+use injectable_rs::*;
 
 #[injectable]
 #[derive(Default)]

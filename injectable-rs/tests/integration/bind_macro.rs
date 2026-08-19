@@ -32,7 +32,7 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
-use injectable::prelude::*;
+use injectable_rs::prelude::*;
 
 // ── Helper: resolve Arc<dyn T> and wrap in Inject ────────────────────────
 // `container.resolve::<Inject<dyn T>>()` requires `Inject<dyn T>: Injectable`

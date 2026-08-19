@@ -4,7 +4,7 @@
 //! because the singleton would capture the transient instance for its
 //! entire lifetime, violating the transient scope's semantics.
 
-use injectable::{container, injectable};
+use injectable_rs::{container, injectable};
 
 #[injectable]
 #[derive(Default)]

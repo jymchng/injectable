@@ -3,7 +3,7 @@
 //! The #[injectable] attribute on an impl block requires either a
 //! #[injectable(ctor)] method or at least one lifecycle hook.
 
-use injectable::injectable;
+use injectable_rs::injectable;
 
 pub struct MyService {
     name: String,

@@ -18,7 +18,7 @@
 //! For types in your own crate, use the derive macro:
 //!
 //! ```rust,ignore
-//! use injectable::{Injectable, Inject, Container};
+//! use injectable_rs::{Injectable, Inject, Container};
 //!
 //! #[injectable]
 //! #[derive(Default)]
@@ -36,7 +36,7 @@
 //! dynamic provider:
 //!
 //! ```rust,ignore
-//! use injectable::{Container, DynProvider};
+//! use injectable_rs::{Container, DynProvider};
 //!
 //! let container = Container::builder()
 //!     .register("", DynProvider::new(|| {
@@ -87,7 +87,7 @@ pub use container::{Container, ContainerBuilder};
 #[cfg(feature = "axum")]
 pub mod axum;
 
-/// Commonly used items — `use injectable::prelude::*` covers the full public API.
+/// Commonly used items — `use injectable_rs::prelude::*` covers the full public API.
 pub mod prelude {
     pub use crate::{
         Container,

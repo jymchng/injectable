@@ -3,7 +3,7 @@
 //! This graph has no cycles, no scope mismatches, no missing
 //! dependencies, and no duplicates. It should compile successfully.
 
-use injectable::{container, injectable, Inject};
+use injectable_rs::{container, injectable, Inject};
 
 #[injectable]
 #[derive(Default, Clone)]

@@ -16,7 +16,7 @@
 //!
 //! Run with: cargo run --example 04_lifecycle_hooks
 
-use injectable::*;
+use injectable_rs::*;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 

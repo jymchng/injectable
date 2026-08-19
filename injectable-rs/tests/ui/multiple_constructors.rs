@@ -5,7 +5,7 @@
 
 #![allow(unused_imports)]
 
-use injectable::injectable;
+use injectable_rs::injectable;
 
 pub struct MyService {
     name: String,

@@ -7,8 +7,8 @@
 //! # Quick Start
 //!
 //! ```rust,ignore
-//! use injectable::{Container, Injectable, Inject};
-//! use injectable::axum::AxumState;
+//! use injectable_rs::{Container, Injectable, Inject};
+//! use injectable_rs::axum::AxumState;
 //! use axum::{Router, routing::get};
 //!
 //! #[injectable]
@@ -32,7 +32,7 @@
 //! implement [`InjectableState`] for your custom state type:
 //!
 //! ```rust,ignore
-//! use injectable::{Container, InjectableState, Inject};
+//! use injectable_rs::{Container, InjectableState, Inject};
 //! use std::sync::Arc;
 //!
 //! struct MyAppState {
@@ -41,7 +41,7 @@
 //! }
 //!
 //! impl InjectableState for MyAppState {
-//!     fn resolve_context(&self) -> &injectable::ResolveContext {
+//!     fn resolve_context(&self) -> &injectable_rs::ResolveContext {
 //!         self.container.context()
 //!     }
 //! }
@@ -59,7 +59,7 @@
 //!
 //! ```rust,ignore
 //! use axum::Json;
-//! use injectable::Inject;
+//! use injectable_rs::Inject;
 //!
 //! async fn create_user(
 //!     db: Inject<Database>,
@@ -77,7 +77,7 @@ use injectable_rs_runtime::InjectableState as InjectableStateTrait;
 use crate::Container;
 
 // Re-export the runtime's InjectableState trait and rejection type
-// so users can access them from injectable::axum
+// so users can access them from injectable_rs::axum
 pub use injectable_rs_runtime::{InjectableRejection, InjectableState};
 
 /// Wrapper around `Arc<Container>` for use as Axum router state.
@@ -89,8 +89,8 @@ pub use injectable_rs_runtime::{InjectableRejection, InjectableState};
 /// # Usage
 ///
 /// ```rust,ignore
-/// use injectable::axum::AxumState;
-/// use injectable::{Container, Injectable, Inject};
+/// use injectable_rs::axum::AxumState;
+/// use injectable_rs::{Container, Injectable, Inject};
 /// use axum::{Router, routing::get};
 ///
 /// #[injectable]

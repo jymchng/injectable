@@ -3,7 +3,7 @@
 //! `ResolveContext::resolve` is `pub(crate)` — user code cannot call it.
 //! The scope-safe replacement is `ctx.extract::<Inject<T>>()`.
 
-use injectable::*;
+use injectable_rs::*;
 
 #[injectable]
 #[derive(Default)]

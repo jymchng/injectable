@@ -4,7 +4,7 @@
 //! non-'static lifetime can never satisfy this bound — it's a fundamental
 //! constraint, not a limitation of the macro.
 
-use injectable::*;
+use injectable_rs::*;
 
 // ERROR: View<'a> is not 'static and therefore cannot implement Injectable.
 // The macro will attempt to generate `impl Injectable for View<'a>` which

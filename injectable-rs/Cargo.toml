@@ -37,6 +37,14 @@ sqlx.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tower.workspace = true
 trybuild.workspace = true
+icu_collections.workspace = true
+icu_locale_core.workspace = true
+icu_normalizer.workspace = true
+icu_normalizer_data.workspace = true
+icu_properties.workspace = true
+icu_properties_data.workspace = true
+icu_provider.workspace = true
+idna_adapter.workspace = true
 
 [[test]]
 name = "axum_integration"

@@ -25,8 +25,8 @@ use ::axum::{
 };
 use serde::{Deserialize, Serialize};
 
-use injectable::axum::{AxumState, InjectableState};
-use injectable::*;
+use injectable_rs::axum::{AxumState, InjectableState};
+use injectable_rs::*;
 
 // ─── Injectable Types ───────────────────────────────────────────────
 // All fields in #[injectable] must implement Injectable.

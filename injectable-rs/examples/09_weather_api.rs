@@ -35,8 +35,8 @@ use ::axum::{
 };
 use serde::{Deserialize, Serialize};
 
-use injectable::axum::AxumState;
-use injectable::{ResolveContext, *};
+use injectable_rs::axum::AxumState;
+use injectable_rs::{ResolveContext, *};
 use injectable_rs_runtime::InjectableError;
 
 // ─── Configuration ──────────────────────────────────────────────────────────
@@ -285,7 +285,7 @@ impl IntoResponse for AppError {
 // while also carrying any other data your app needs.
 
 use ::std::sync::Arc;
-use injectable::axum::InjectableState;
+use injectable_rs::axum::InjectableState;
 
 /// Application state that bundles the DI container with extra metadata.
 /// `Inject<T>` extractors work automatically because we implement `InjectableState`.
@@ -296,7 +296,7 @@ pub struct MyAppState {
 }
 
 impl InjectableState for MyAppState {
-    fn resolve_context(&self) -> &injectable::ResolveContext {
+    fn resolve_context(&self) -> &injectable_rs::ResolveContext {
         self.container.context()
     }
 }

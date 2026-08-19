@@ -14,7 +14,7 @@
 //!
 //! Run with: cargo run --example 03_external_types
 
-use injectable::*;
+use injectable_rs::*;
 
 // ─── Owned Injectable Types ─────────────────────────────────────────
 // External types can depend on Injectable types through the context.

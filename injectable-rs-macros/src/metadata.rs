@@ -42,7 +42,7 @@ fn is_known_arc_path(path: &syn::Path) -> bool {
 /// | Written as | segments |
 /// |---|---|
 /// | `Inject<T>` | `["Inject"]` |
-/// | `injectable::Inject<T>` | `["injectable", "Inject"]` |
+/// | `injectable_rs::Inject<T>` | `["injectable", "Inject"]` |
 /// | `injectable_rs_runtime::Inject<T>` | `["injectable_rs_runtime", "Inject"]` |
 fn is_known_inject_path(path: &syn::Path) -> bool {
     let s: Vec<String> = path

@@ -14,8 +14,8 @@
 //! # Example
 //!
 //! ```rust,ignore
-//! use injectable::{Container, Injectable, Inject};
-//! use injectable::axum::AxumState;
+//! use injectable_rs::{Container, Injectable, Inject};
+//! use injectable_rs::axum::AxumState;
 //! use axum::{Router, routing::get};
 //!
 //! #[derive(Injectable, Default)]
@@ -49,7 +49,7 @@ use crate::{Extract, Inject, InjectableError, ResolveContext};
 ///
 /// - `Container` in the public `injectable` crate implements
 ///   `InjectableState` directly
-/// - `injectable::axum::AxumState` wraps `Arc<Container>` for efficient
+/// - `injectable_rs::axum::AxumState` wraps `Arc<Container>` for efficient
 ///   cloning in Axum's state management
 ///
 /// # Custom State
@@ -139,7 +139,7 @@ impl IntoResponse for InjectableRejection {
 /// # Example
 ///
 /// ```rust,ignore
-/// use injectable::{Injectable, Inject};
+/// use injectable_rs::{Injectable, Inject};
 ///
 /// #[derive(Injectable, Default)]
 /// pub struct Database;

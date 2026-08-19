@@ -14,7 +14,7 @@
 //! }
 //! ```
 
-use injectable::*;
+use injectable_rs::*;
 
 #[injectable]
 #[derive(Default)]

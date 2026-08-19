@@ -52,8 +52,8 @@ use ::axum::{
 use serde::{Deserialize, Serialize};
 use sqlx::{Pool, Sqlite};
 
-use injectable::axum::InjectableState;
-use injectable::{ResolveContext, *};
+use injectable_rs::axum::InjectableState;
+use injectable_rs::{ResolveContext, *};
 use injectable_rs_runtime::InjectableError;
 
 // ─── Configuration ───────────────────────────────────────────────────────────
@@ -385,7 +385,7 @@ pub struct AppState {
 }
 
 impl InjectableState for AppState {
-    fn resolve_context(&self) -> &injectable::ResolveContext {
+    fn resolve_context(&self) -> &injectable_rs::ResolveContext {
         self.container.context()
     }
 }

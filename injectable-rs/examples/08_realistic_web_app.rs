@@ -32,9 +32,9 @@ use ::axum::{
 };
 use serde::{Deserialize, Serialize};
 
-use injectable::ResolveContext;
-use injectable::axum::AxumState;
-use injectable::*;
+use injectable_rs::ResolveContext;
+use injectable_rs::axum::AxumState;
+use injectable_rs::*;
 
 // ─── 1. Configuration (from environment variables) ─────────────────────
 //

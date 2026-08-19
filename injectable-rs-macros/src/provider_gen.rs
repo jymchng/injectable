@@ -216,7 +216,7 @@ pub fn generate_field_injection_provider(
         .filter_map(|f| {
             let ty_str = &f.ty_string;
             // Use AST-based detection so all path forms are handled:
-            // Inject<T>, injectable::Inject<T>, Arc<T>, std::sync::Arc<T>, etc.
+            // Inject<T>, injectable_rs::Inject<T>, Arc<T>, std::sync::Arc<T>, etc.
             // Skip `dyn Trait` inner types — they are not registered graph nodes.
             if extract_inject_dyn_inner(&f.ty).is_some()
                 || extract_option_inject_dyn_inner(&f.ty).is_some()
