@@ -14,7 +14,7 @@ repos:
         name: cargo check
         description: Fast compilation check (no binaries)
         language: system
-        entry: cargo check --workspace --features injectable/axum
+        entry: cargo check --workspace --features injectable-rs/axum
         pass_filenames: false
         types: [rust]
 
@@ -22,7 +22,7 @@ repos:
         name: cargo clippy
         description: Lint with Clippy (deny warnings)
         language: system
-        entry: cargo clippy --workspace --features injectable/axum -- -D warnings
+        entry: cargo clippy --workspace --features injectable-rs/axum -- -D warnings
         pass_filenames: false
         types: [rust]
 
@@ -30,7 +30,7 @@ repos:
         name: cargo test
         description: Run the full test suite
         language: system
-        entry: cargo test --workspace --features injectable/axum
+        entry: cargo test --workspace --features injectable-rs/axum
         pass_filenames: false
         types: [rust]
         stages: [pre-push]   # only on push — too slow for every commit

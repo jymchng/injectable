@@ -41,7 +41,7 @@ use injectable::axum::{AxumState, InjectableState, InjectableRejection};
 ## Runtime types (advanced)
 
 ```rust
-use injectable_runtime::{Injectable, Provider, ProviderRegistry};
+use injectable_rs_runtime::{Injectable, Provider, ProviderRegistry};
 // Only needed when implementing Injectable manually (rare).
 ```
 

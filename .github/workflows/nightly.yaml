@@ -26,10 +26,10 @@ jobs:
           key: nightly
 
       - name: Build
-        run: cargo +nightly build --workspace --features injectable/axum
+        run: cargo +nightly build --workspace --features injectable-rs/axum
 
       - name: Test
-        run: cargo +nightly test --workspace --features injectable/axum
+        run: cargo +nightly test --workspace --features injectable-rs/axum
 
   # ── Unused dependency check ───────────────────────────────────────────────
   udeps:
@@ -46,4 +46,4 @@ jobs:
         run: cargo install cargo-udeps --locked
 
       - name: Check for unused deps
-        run: cargo +nightly udeps --workspace --features injectable/axum
+        run: cargo +nightly udeps --workspace --features injectable-rs/axum

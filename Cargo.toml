@@ -1,25 +1,27 @@
 [workspace]
 resolver = "2"
 members = [
-    "injectable",
-    "injectable-macros",
-    "injectable-runtime",
-    "injectable-graph",
+    "injectable-rs",
+    "injectable-rs-macros",
+    "injectable-rs-runtime",
+    "injectable-rs-graph",
 ]
 
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
+authors = ["Jim Chng <jimchng@outlook.com>"]
+readme = "README.md"
 homepage = "https://github.com/jymchng/injectable"
 repository = "https://github.com/jymchng/injectable"
 rust-version = "1.86"
 
 [workspace.dependencies]
 # Internal crates
-injectable-macros = {version = "0.1.0", path = "injectable-macros"}
-injectable-runtime = {version = "0.1.0", path = "injectable-runtime"}
-injectable-graph = {version = "0.1.0", path = "injectable-graph"}
+injectable-rs-macros = {version = "0.1.0", path = "injectable-rs-macros"}
+injectable-rs-runtime = {version = "0.1.0", path = "injectable-rs-runtime"}
+injectable-rs-graph = {version = "0.1.0", path = "injectable-rs-graph"}
 
 # Shared dependencies
 async-trait = "^0.1.67"

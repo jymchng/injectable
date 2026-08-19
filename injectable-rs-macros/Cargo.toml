@@ -1,0 +1,22 @@
+[package]
+name = "injectable-rs-macros"
+readme = "README.md"
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+description = "Proc macros for the injectable-rs DI framework"
+keywords = ["dependency-injection", "macros", "proc-macro", "di"]
+categories = ["development-tools::procedural-macro-helpers"]
+documentation = "https://docs.rs/injectable-rs-macros"
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = { version = "^2.0.87", features = ["full", "visit", "visit-mut", "parsing", "extra-traits"] }
+quote = "^1.0.35"
+proc-macro2 = "^1.0.83"

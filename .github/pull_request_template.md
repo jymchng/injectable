@@ -14,8 +14,8 @@
 ## Checklist
 
 - [ ] `cargo fmt --all` passes
-- [ ] `cargo clippy --workspace --features injectable/axum -- -D warnings` passes
-- [ ] `cargo test --workspace --features injectable/axum` passes
+- [ ] `cargo clippy --workspace --features injectable-rs/axum -- -D warnings` passes
+- [ ] `cargo test --workspace --features injectable-rs/axum` passes
 - [ ] Added or updated tests for the change
 - [ ] Updated relevant guides / skills if behaviour changed
 - [ ] CHANGELOG or commit messages describe the change clearly

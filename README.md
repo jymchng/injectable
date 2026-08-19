@@ -7,10 +7,10 @@
 
 <h1><i>injectable</i></h1>
 
-[![crates.io](https://img.shields.io/crates/v/injectable.svg)](https://crates.io/crates/injectable)
-[![docs.rs](https://docs.rs/injectable/badge.svg)](https://docs.rs/injectable)
-[![license](https://img.shields.io/crates/l/injectable.svg)](LICENSE)
-[![downloads](https://img.shields.io/crates/d/injectable.svg)](https://crates.io/crates/injectable)
+[![crates.io](https://img.shields.io/crates/v/injectable-rs.svg)](https://crates.io/crates/injectable-rs)
+[![docs.rs](https://docs.rs/injectable-rs/badge.svg)](https://docs.rs/injectable-rs)
+[![license](https://img.shields.io/crates/l/injectable-rs.svg)](LICENSE)
+[![downloads](https://img.shields.io/crates/d/injectable-rs.svg)](https://crates.io/crates/injectable-rs)
 [![build](https://github.com/jymchng/injectable/actions/workflows/ci.yaml/badge.svg)](https://github.com/jymchng/injectable/actions/workflows/ci.yml)
 [![coverage](https://img.shields.io/codecov/c/github/jymchng/injectable)](https://codecov.io/gh/jymchng/injectable)
 [![MSRV](https://img.shields.io/badge/rust-1.86%2B-orange.svg)](https://www.rust-lang.org/)
@@ -27,7 +27,7 @@ Current docs target `injectable` on Rust `1.86+`.
 - AI skills index: [skills/README.md](skills/README.md)
 
 ```rust
-use injectable::prelude::*;
+use injectable_rs::prelude::*;
 
 #[injectable]
 #[derive(Default)]
@@ -66,21 +66,21 @@ async fn main() {
 
 ```toml
 [dependencies]
-injectable = { version = "0.2", features = ["axum"] }
+injectable-rs = { version = "0.1", features = ["axum"] }
 tokio     = { version = "1", features = ["full"] }
 ```
 
 Import everything via the prelude:
 
 ```rust
-use injectable::prelude::*;
+use injectable_rs::prelude::*;
 ```
 
 ---
 
 ## Usage Map
 
-`injectable` has a small set of building blocks, but they combine in several
+`injectable-rs` has a small set of building blocks, but they combine in several
 important ways. The table below is the shortest way to choose the right one.
 
 | Situation | Recommended pattern | Typical syntax |
@@ -105,7 +105,7 @@ Use `#[injectable]` on:
 - an `impl` block for constructor injection
 
 ```rust
-use injectable::prelude::*;
+use injectable_rs::prelude::*;
 
 #[injectable]
 #[derive(Default)]
@@ -415,7 +415,7 @@ request scope when a dependency should be isolated to one request lifecycle.
 Hooks are supported on `#[injectable] impl` blocks:
 
 ```rust
-use injectable::prelude::*;
+use injectable_rs::prelude::*;
 
 pub struct ConnectionPool { /* ... */ }
 
@@ -476,8 +476,8 @@ Enable the `axum` feature and inject services directly into handlers:
 
 ```rust
 use axum::{Json, Router, extract::Path, routing::get};
-use injectable::axum::AxumState;
-use injectable::prelude::*;
+use injectable_rs::axum::AxumState;
+use injectable_rs::prelude::*;
 
 async fn get_user(
     Path(id): Path<u64>,
@@ -493,7 +493,7 @@ let app = Router::new()
 ```
 
 You can also provide your own state type by implementing
-`injectable::axum::InjectableState`.
+`injectable_rs::axum::InjectableState`.
 
 ---
 

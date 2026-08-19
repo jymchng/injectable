@@ -1,0 +1,18 @@
+[package]
+name = "injectable-rs-graph"
+readme = "README.md"
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Compile-time dependency graph validation for the injectable-rs DI framework"
+keywords = ["dependency-injection", "graph", "validation", "di"]
+categories = ["development-tools"]
+documentation = "https://docs.rs/injectable-rs-graph"
+
+[dependencies]
+thiserror.workspace = true
+inventory.workspace = true

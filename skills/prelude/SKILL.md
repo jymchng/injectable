@@ -48,7 +48,7 @@ async fn main() {
 use injectable::axum::{AxumState, InjectableState, InjectableRejection};
 
 // Manual Injectable impl (rare):
-use injectable_runtime::{Injectable, Provider};
+use injectable_rs_runtime::{Injectable, Provider};
 
 // async_trait (for manual Provider impls):
 use async_trait::async_trait;

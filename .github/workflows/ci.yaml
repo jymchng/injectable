@@ -47,7 +47,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Run Clippy (deny warnings)
-        run: cargo clippy --workspace --features injectable/axum -- -D warnings
+        run: cargo clippy --workspace --features injectable-rs/axum -- -D warnings
 
   # ── Tests ─────────────────────────────────────────────────────────────────
   test:
@@ -69,8 +69,8 @@ jobs:
       - name: Cache cargo registry
         uses: Swatinem/rust-cache@v2
 
-      - name: Build (injectable/axum)
-        run: cargo build --workspace --features injectable/axum
+      - name: Build (injectable-rs/axum)
+        run: cargo build --workspace --features injectable-rs/axum
 
       - name: Build (all features)
         run: cargo build --workspace --all-features
@@ -78,8 +78,8 @@ jobs:
       - name: Build (no default features)
         run: cargo build --workspace --no-default-features
 
-      - name: Test (injectable/axum)
-        run: cargo test --workspace --features injectable/axum
+      - name: Test (injectable-rs/axum)
+        run: cargo test --workspace --features injectable-rs/axum
 
       - name: Test (all features)
         run: cargo test --workspace --all-features
@@ -101,7 +101,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Check MSRV
-        run: cargo check --workspace --features injectable/axum
+        run: cargo check --workspace --features injectable-rs/axum
 
   # ── Documentation ─────────────────────────────────────────────────────────
   docs:
@@ -119,7 +119,7 @@ jobs:
       - name: Build docs (deny broken intra-doc links)
         env:
           RUSTDOCFLAGS: "-D rustdoc::broken_intra_doc_links -D warnings"
-        run: cargo doc --workspace --features injectable/axum --no-deps
+        run: cargo doc --workspace --features injectable-rs/axum --no-deps
 
   # ── Coverage ──────────────────────────────────────────────────────────────
   coverage:
@@ -142,7 +142,7 @@ jobs:
         run: |
           cargo tarpaulin \
             --workspace \
-            --features injectable/axum \
+            --features injectable-rs/axum \
             --out Xml \
             --timeout 300
 

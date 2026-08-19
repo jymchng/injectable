@@ -7,9 +7,9 @@ release across the full workspace.
 The repository is a Rust workspace with four crates:
 
 - `injectable` — public facade crate and examples/tests
-- `injectable-macros` — proc macros
-- `injectable-runtime` — runtime traits and types
-- `injectable-graph` — graph validation
+- `injectable-rs-macros` — proc macros
+- `injectable-rs-runtime` — runtime traits and types
+- `injectable-rs-graph` — graph validation
 
 ---
 
@@ -56,9 +56,9 @@ just doctor
 ├── justfile                   # local developer commands
 ├── guides/                    # end-user and contributor documentation
 ├── injectable/                # facade crate, examples, integration tests
-├── injectable-macros/         # proc-macro crate
-├── injectable-runtime/        # runtime support crate
-└── injectable-graph/          # graph validation crate
+├── injectable-rs-macros/         # proc-macro crate
+├── injectable-rs-runtime/        # runtime support crate
+└── injectable-rs-graph/          # graph validation crate
 ```
 
 Use the workspace root for all commands unless a guide explicitly says
@@ -72,7 +72,7 @@ otherwise.
 
 ```bash
 cargo fmt --all
-cargo check --workspace --features injectable/axum
+cargo check --workspace --features injectable-rs/axum
 ```
 
 Or with `just`:
@@ -88,10 +88,10 @@ Examples:
 
 ```bash
 # proc-macro compile tests
-cargo test -p injectable --test compile_tests
+cargo test -p injectable-rs --test compile_tests
 
 # workspace tests with axum enabled
-cargo test --workspace --features injectable/axum
+cargo test --workspace --features injectable-rs/axum
 
 # one test by substring
 just test-one compile_fail_proc_macro_errors
@@ -100,9 +100,9 @@ just test-one compile_fail_proc_macro_errors
 ### 3. Run lint + docs before opening a PR
 
 ```bash
-cargo clippy --workspace --features injectable/axum -- -D warnings
+cargo clippy --workspace --features injectable-rs/axum -- -D warnings
 RUSTDOCFLAGS="-D rustdoc::broken_intra_doc_links -D warnings" \
-  cargo doc --workspace --features injectable/axum --no-deps
+  cargo doc --workspace --features injectable-rs/axum --no-deps
 ```
 
 Or with repository helpers:
@@ -123,11 +123,11 @@ Before merging a substantial change, validate at least this set:
 
 ```bash
 # default release validation path used by CI
-cargo build --workspace --features injectable/axum
-cargo test --workspace --features injectable/axum
-cargo clippy --workspace --features injectable/axum -- -D warnings
+cargo build --workspace --features injectable-rs/axum
+cargo test --workspace --features injectable-rs/axum
+cargo clippy --workspace --features injectable-rs/axum -- -D warnings
 RUSTDOCFLAGS="-D rustdoc::broken_intra_doc_links -D warnings" \
-  cargo doc --workspace --features injectable/axum --no-deps
+  cargo doc --workspace --features injectable-rs/axum --no-deps
 ```
 
 For compatibility-sensitive changes, also run:
@@ -148,14 +148,14 @@ cargo test --workspace --no-default-features
 Run them with:
 
 ```bash
-cargo test -p injectable --test compile_tests -- --nocapture
+cargo test -p injectable-rs --test compile_tests -- --nocapture
 ```
 
 If a compile-fail fixture changed intentionally, re-record the `.stderr`
 output:
 
 ```bash
-TRYBUILD=overwrite cargo test -p injectable --test compile_tests
+TRYBUILD=overwrite cargo test -p injectable-rs --test compile_tests
 ```
 
 Guidelines:
@@ -182,7 +182,7 @@ Recommended docs command:
 
 ```bash
 RUSTDOCFLAGS="-D rustdoc::broken_intra_doc_links -D warnings" \
-  cargo doc --workspace --features injectable/axum --no-deps
+  cargo doc --workspace --features injectable-rs/axum --no-deps
 ```
 
 Avoid these common rustdoc issues:
@@ -239,9 +239,9 @@ Releases are tag-driven and publish all workspace crates in dependency order.
 
 ### Crates published
 
-1. `injectable-graph`
-2. `injectable-runtime`
-3. `injectable-macros`
+1. `injectable-rs-graph`
+2. `injectable-rs-runtime`
+3. `injectable-rs-macros`
 4. `injectable`
 
 ### Release trigger
@@ -336,7 +336,7 @@ That command runs:
 
 - formatting checks
 - clippy with warnings denied
-- tests for `injectable/axum`
+- tests for `injectable-rs/axum`
 - tests for `--all-features`
 - tests for `--no-default-features`
 - strict rustdoc build
@@ -349,19 +349,19 @@ You can also run the steps manually:
 
 ```bash
 cargo fmt --all
-cargo clippy --workspace --features injectable/axum -- -D warnings
-cargo test --workspace --features injectable/axum
+cargo clippy --workspace --features injectable-rs/axum -- -D warnings
+cargo test --workspace --features injectable-rs/axum
 RUSTDOCFLAGS="-D rustdoc::broken_intra_doc_links -D warnings" \
-  cargo doc --workspace --features injectable/axum --no-deps
+  cargo doc --workspace --features injectable-rs/axum --no-deps
 ```
 
 ### 3. Package dry-run each published crate
 
 ```bash
-cargo publish -p injectable-graph --dry-run --locked
-cargo publish -p injectable-runtime --dry-run --locked
-cargo publish -p injectable-macros --dry-run --locked
-cargo publish -p injectable --dry-run --locked
+cargo publish -p injectable-rs-graph --dry-run --locked
+cargo publish -p injectable-rs-runtime --dry-run --locked
+cargo publish -p injectable-rs-macros --dry-run --locked
+cargo publish -p injectable-rs --dry-run --locked
 ```
 
 ### 4. Review examples and guides
@@ -411,7 +411,7 @@ Runs a release gate on `ubuntu-latest`:
 - pins the compiler with `toolchain: 1.86.0`
 
 - `cargo fmt --all -- --check`
-- `cargo clippy --workspace --features injectable/axum -- -D warnings`
+- `cargo clippy --workspace --features injectable-rs/axum -- -D warnings`
 - strict rustdoc build
 - `cargo publish --dry-run --locked` for every published crate
 - tag/workspace version consistency check
@@ -500,7 +500,7 @@ CI builds docs with warnings denied. Always test with:
 
 ```bash
 RUSTDOCFLAGS="-D rustdoc::broken_intra_doc_links -D warnings" \
-  cargo doc --workspace --features injectable/axum --no-deps
+  cargo doc --workspace --features injectable-rs/axum --no-deps
 ```
 
 ### 4. Minimal versions fail unexpectedly
@@ -514,7 +514,7 @@ Check for workspace dependency skew first. Shared crates should normally use
 
 ```bash
 # Fast local loop
-cargo check --workspace --features injectable/axum
+cargo check --workspace --features injectable-rs/axum
 
 # Full validation
 just fmt
@@ -523,14 +523,14 @@ just test
 just doc-build
 
 # Compile-fail UI tests
-cargo test -p injectable --test compile_tests -- --nocapture
+cargo test -p injectable-rs --test compile_tests -- --nocapture
 
 # Release packaging check
-cargo publish -p injectable --dry-run --locked
+cargo publish -p injectable-rs --dry-run --locked
 
 # Strict docs
 RUSTDOCFLAGS="-D rustdoc::broken_intra_doc_links -D warnings" \
-  cargo doc --workspace --features injectable/axum --no-deps
+  cargo doc --workspace --features injectable-rs/axum --no-deps
 ```
 
 This workflow keeps local development fast while preserving a predictable,

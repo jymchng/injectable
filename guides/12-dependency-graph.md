@@ -70,7 +70,7 @@ If two `#[injectable
 Access the graph API directly for tooling, CI reports, or dependency analysis:
 
 ```rust
-use injectable_graph::{DependencyGraph, GraphNode};
+use injectable_rs_graph::{DependencyGraph, GraphNode};
 
 let nodes = vec![
     GraphNode::with_scope("UserService", &["UserRepository", "EmailService"], "singleton"),
@@ -123,7 +123,7 @@ if let Some(node) = graph.find_node("UserService") {
 ## Error Types
 
 ```rust
-use injectable_graph::ValidationError;
+use injectable_rs_graph::ValidationError;
 
 match error {
     ValidationError::CircularDependency { chain } => {

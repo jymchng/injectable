@@ -63,22 +63,22 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Clippy
-        run: cargo clippy --workspace --features injectable/axum -- -D warnings
+        run: cargo clippy --workspace --features injectable-rs/axum -- -D warnings
 
       - name: Tests
-        run: cargo test --workspace --features injectable/axum
+        run: cargo test --workspace --features injectable-rs/axum
 
       - name: Docs
         env:
           RUSTDOCFLAGS: "-D rustdoc::broken_intra_doc_links -D warnings"
-        run: cargo doc --workspace --features injectable/axum --no-deps
+        run: cargo doc --workspace --features injectable-rs/axum --no-deps
 
       - name: Package dry-run
         run: |
-          cargo publish -p injectable-graph --dry-run --locked
-          cargo publish -p injectable-runtime --dry-run --locked
-          cargo publish -p injectable-macros --dry-run --locked
-          cargo publish -p injectable --dry-run --locked
+          cargo publish -p injectable-rs-graph --dry-run --locked
+          cargo publish -p injectable-rs-runtime --dry-run --locked
+          cargo publish -p injectable-rs-macros --dry-run --locked
+          cargo publish -p injectable-rs --dry-run --locked
 
   # ── Publish to crates.io ──────────────────────────────────────────────────
   publish:
@@ -136,10 +136,10 @@ jobs:
             return 1
           }
 
-          publish_crate injectable-graph
-          publish_crate injectable-runtime
-          publish_crate injectable-macros
-          publish_crate injectable
+          publish_crate injectable-rs-graph
+          publish_crate injectable-rs-runtime
+          publish_crate injectable-rs-macros
+          publish_crate injectable-rs
 
   # ── GitHub Release ────────────────────────────────────────────────────────
   github-release:
@@ -161,7 +161,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: "injectable v${{ steps.version.outputs.version }}"
+          name: "injectable-rs v${{ steps.version.outputs.version }}"
           generate_release_notes: true
           draft: false
           prerelease: ${{ contains(github.ref_name, '-') }}
