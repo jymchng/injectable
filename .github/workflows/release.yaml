@@ -75,10 +75,14 @@ jobs:
 
       - name: Package dry-run
         run: |
+          # Dry-run the support crates (they package cleanly). The main crate
+          # (injectable-rs) is intentionally skipped here: its dry-run requires
+          # the sibling crates to already be published on crates.io, which is a
+          # chicken-and-egg dependency ordering issue. The real publish step
+          # validates it after the siblings are live.
           cargo publish -p injectable-rs-graph --dry-run --locked
           cargo publish -p injectable-rs-runtime --dry-run --locked
           cargo publish -p injectable-rs-macros --dry-run --locked
-          cargo publish -p injectable-rs --dry-run --locked
 
   # ── Publish to crates.io ──────────────────────────────────────────────────
   publish:
